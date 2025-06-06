@@ -1,16 +1,40 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { Car, Users, AlertTriangle } from "lucide-react"
+import { obtenerCoches } from "@/app/actions/coches"
 
-export default function HomePage() {
-  // Datos de demostración
+export default async function HomePage() {
+  const cochesData = await obtenerCoches()
+
+  // Calculate real statistics
   const stats = {
-    totalCoches: 6,
-    cochesDisponibles: 2,
-    cochesAsignados: 4,
-    totalEmpleados: 7,
-    segurosProximosVencer: 2,
-    itvsProximasVencer: 1,
+    totalCoches: cochesData.length,
+    cochesDisponibles: cochesData.filter((c: any) => c.estado === "Disponible").length,
+    cochesAsignados: cochesData.filter((c: any) => c.asignado_a !== null).length,
+    totalEmpleados: 7, // This could also be fetched from database
+    segurosProximosVencer: cochesData.filter((c: any) => {
+      if (!c.fecha_seguro) return false
+      const fechaSeguro = new Date(c.fecha_seguro)
+      const hoy = new Date()
+      const treintaDias = new Date(hoy.getTime() + 30 * 24 * 60 * 60 * 1000)
+      return fechaSeguro <= treintaDias && fechaSeguro >= hoy
+    }).length,
+    itvsProximasVencer: cochesData.filter((c: any) => {
+      if (!c.fecha_itv) return false
+      const fechaItv = new Date(c.fecha_itv)
+      const hoy = new Date()
+      const sesentaDias = new Date(hoy.getTime() + 60 * 24 * 60 * 60 * 1000)
+      return fechaItv <= sesentaDias && fechaItv >= hoy
+    }).length,
   }
+
+  // Get recent vehicles (first 3)
+  const vehiculosRecientes = cochesData.slice(0, 3).map((coche: any) => ({
+    matricula: coche.matricula,
+    marca: coche.marca,
+    modelo: coche.modelo,
+    asignadoA: coche.asignado_a,
+    estado: coche.estado,
+  }))
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
@@ -99,29 +123,32 @@ export default function HomePage() {
           <CardContent className="p-6">
             <h2 className="text-2xl font-bold mb-4">Vehículos Recientes</h2>
             <div className="space-y-3">
-              <div className="flex justify-between items-center p-3 border rounded hover:bg-gray-50">
-                <div>
-                  <h3 className="font-semibold">1234ABC - Toyota Corolla</h3>
-                  <p className="text-gray-600 text-sm">Asignado a: Carlos García</p>
+              {vehiculosRecientes.map((vehiculo: any) => (
+                <div
+                  key={vehiculo.matricula}
+                  className="flex justify-between items-center p-3 border rounded hover:bg-gray-50"
+                >
+                  <div>
+                    <h3 className="font-semibold">
+                      {vehiculo.matricula} - {vehiculo.marca} {vehiculo.modelo}
+                    </h3>
+                    <p className="text-gray-600 text-sm">
+                      {vehiculo.asignadoA ? `Asignado a: ${vehiculo.asignadoA}` : "Disponible para asignación"}
+                    </p>
+                  </div>
+                  <span
+                    className={`px-2 py-1 rounded text-sm ${
+                      vehiculo.estado === "Activo"
+                        ? "bg-green-100 text-green-800"
+                        : vehiculo.estado === "Disponible"
+                          ? "bg-blue-100 text-blue-800"
+                          : "bg-yellow-100 text-yellow-800"
+                    }`}
+                  >
+                    {vehiculo.estado}
+                  </span>
                 </div>
-                <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-sm">Activo</span>
-              </div>
-
-              <div className="flex justify-between items-center p-3 border rounded hover:bg-gray-50">
-                <div>
-                  <h3 className="font-semibold">5678DEF - Ford Focus</h3>
-                  <p className="text-gray-600 text-sm">Disponible para asignación</p>
-                </div>
-                <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm">Disponible</span>
-              </div>
-
-              <div className="flex justify-between items-center p-3 border rounded hover:bg-gray-50">
-                <div>
-                  <h3 className="font-semibold">9012GHI - Volkswagen Golf</h3>
-                  <p className="text-gray-600 text-sm">Asignado a: María López</p>
-                </div>
-                <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-sm">Alquiler</span>
-              </div>
+              ))}
             </div>
           </CardContent>
         </Card>

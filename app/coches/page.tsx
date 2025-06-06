@@ -1,83 +1,24 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Car, Plus } from "lucide-react"
 import Link from "next/link"
+import { obtenerCoches } from "@/app/actions/coches"
 
-export default function CochesPage() {
-  // Datos de demostración
-  const coches = [
-    {
-      matricula: "1234ABC",
-      marca: "Toyota",
-      modelo: "Corolla",
-      color: "Blanco",
-      kms: 25000,
-      combustible: "Gasolina",
-      asignadoA: "Carlos García",
-      donante: false,
-      alquiler: false,
-      estado: "Activo",
-    },
-    {
-      matricula: "5678DEF",
-      marca: "Ford",
-      modelo: "Focus",
-      color: "Azul",
-      kms: 35000,
-      combustible: "Gasolina",
-      asignadoA: null,
-      donante: false,
-      alquiler: false,
-      estado: "Disponible",
-    },
-    {
-      matricula: "9012GHI",
-      marca: "Volkswagen",
-      modelo: "Golf",
-      color: "Gris",
-      kms: 12000,
-      combustible: "Diesel",
-      asignadoA: "María López",
-      donante: false,
-      alquiler: true,
-      estado: "Alquiler",
-    },
-    {
-      matricula: "3456JKL",
-      marca: "Nissan",
-      modelo: "Qashqai",
-      color: "Negro",
-      kms: 45000,
-      combustible: "Diesel",
-      asignadoA: "Departamento Ventas",
-      donante: false,
-      alquiler: true,
-      estado: "Activo",
-    },
-    {
-      matricula: "7890MNO",
-      marca: "Hyundai",
-      modelo: "Tucson",
-      color: "Rojo",
-      kms: 8000,
-      combustible: "Híbrido",
-      asignadoA: null,
-      donante: false,
-      alquiler: false,
-      estado: "Disponible",
-    },
-    {
-      matricula: "1111PQR",
-      marca: "Renault",
-      modelo: "Clio",
-      color: "Blanco",
-      kms: 65000,
-      combustible: "Gasolina",
-      asignadoA: null,
-      donante: true,
-      alquiler: false,
-      estado: "Donante",
-    },
-  ]
+export default async function CochesPage() {
+  const cochesData = await obtenerCoches()
+
+  // Convert database results to match our interface
+  const coches = cochesData.map((coche: any) => ({
+    matricula: coche.matricula,
+    marca: coche.marca,
+    modelo: coche.modelo,
+    color: coche.color,
+    kms: coche.kms,
+    combustible: coche.combustible,
+    asignadoA: coche.asignado_a,
+    donante: coche.es_donante,
+    alquiler: coche.es_alquiler,
+    estado: coche.estado,
+  }))
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
