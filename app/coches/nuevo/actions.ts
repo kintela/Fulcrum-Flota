@@ -4,7 +4,14 @@ import { supabase } from "@/lib/supabase"
 import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 
-export async function crearCoche(formData: FormData) {
+export async function crearCoche(prevState: any, formData: FormData) {
+  // Verificar que formData no sea null
+  if (!formData) {
+    return {
+      error: "No se recibieron datos del formulario",
+    }
+  }
+
   try {
     // Extraer datos del formulario según la estructura real de la tabla
     const cocheData = {
@@ -46,13 +53,13 @@ export async function crearCoche(formData: FormData) {
 
     // Revalidar la página de coches para mostrar los nuevos datos
     revalidatePath("/coches")
+
+    // Redirect después de éxito
+    redirect("/coches")
   } catch (error) {
     console.error("Error en crearCoche:", error)
     return {
       error: "Error inesperado al crear el coche",
     }
   }
-
-  // Redirect fuera del try-catch
-  redirect("/coches")
 }

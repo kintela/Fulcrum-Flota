@@ -9,10 +9,27 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { crearCoche } from "./actions"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
-import { useActionState } from "react"
+import { useState } from "react"
 
 export default function NuevoCochePage() {
-  const [state, formAction, isPending] = useActionState(crearCoche, null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSubmit(formData: FormData) {
+    setIsSubmitting(true)
+    setError(null)
+
+    try {
+      const result = await crearCoche(null, formData)
+      if (result?.error) {
+        setError(result.error)
+      }
+    } catch (error) {
+      setError("Error inesperado al crear el coche")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
@@ -33,13 +50,13 @@ export default function NuevoCochePage() {
             <CardTitle>Información del Vehículo</CardTitle>
           </CardHeader>
           <CardContent>
-            {state?.error && (
+            {error && (
               <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
-                <p className="text-red-800">{state.error}</p>
+                <p className="text-red-800">{error}</p>
               </div>
             )}
 
-            <form action={formAction} className="space-y-6">
+            <form action={handleSubmit} className="space-y-6">
               {/* Información básica */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
@@ -191,8 +208,8 @@ export default function NuevoCochePage() {
                 >
                   Cancelar
                 </Link>
-                <Button type="submit" disabled={isPending} className="bg-blue-600 hover:bg-blue-700">
-                  {isPending ? "Creando..." : "Crear Coche"}
+                <Button type="submit" disabled={isSubmitting} className="bg-blue-600 hover:bg-blue-700">
+                  {isSubmitting ? "Creando..." : "Crear Coche"}
                 </Button>
               </div>
             </form>
