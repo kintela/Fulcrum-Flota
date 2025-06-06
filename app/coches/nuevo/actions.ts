@@ -27,7 +27,9 @@ export async function crearCoche(formData: FormData) {
 
     // Validaciones básicas
     if (!cocheData.matricula || !cocheData.marca || !cocheData.modelo) {
-      throw new Error("Los campos matrícula, marca y modelo son obligatorios")
+      return {
+        error: "Los campos matrícula, marca y modelo son obligatorios",
+      }
     }
 
     // Insertar en Supabase
@@ -35,18 +37,22 @@ export async function crearCoche(formData: FormData) {
 
     if (error) {
       console.error("Error al crear coche:", error)
-      throw new Error(`Error al crear el coche: ${error.message}`)
+      return {
+        error: `Error al crear el coche: ${error.message}`,
+      }
     }
 
     console.log("Coche creado exitosamente:", data)
 
     // Revalidar la página de coches para mostrar los nuevos datos
     revalidatePath("/coches")
-
-    // Redirigir a la página de coches
-    redirect("/coches")
   } catch (error) {
     console.error("Error en crearCoche:", error)
-    throw error
+    return {
+      error: "Error inesperado al crear el coche",
+    }
   }
+
+  // Redirect fuera del try-catch
+  redirect("/coches")
 }

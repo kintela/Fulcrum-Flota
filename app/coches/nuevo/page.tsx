@@ -1,3 +1,5 @@
+"use client"
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -7,8 +9,11 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { crearCoche } from "./actions"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
+import { useActionState } from "react"
 
 export default function NuevoCochePage() {
+  const [state, formAction, isPending] = useActionState(crearCoche, null)
+
   return (
     <div className="min-h-screen bg-gray-100 p-8">
       <div className="max-w-4xl mx-auto">
@@ -28,7 +33,13 @@ export default function NuevoCochePage() {
             <CardTitle>Información del Vehículo</CardTitle>
           </CardHeader>
           <CardContent>
-            <form action={crearCoche} className="space-y-6">
+            {state?.error && (
+              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
+                <p className="text-red-800">{state.error}</p>
+              </div>
+            )}
+
+            <form action={formAction} className="space-y-6">
               {/* Información básica */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
@@ -180,8 +191,8 @@ export default function NuevoCochePage() {
                 >
                   Cancelar
                 </Link>
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
-                  Crear Coche
+                <Button type="submit" disabled={isPending} className="bg-blue-600 hover:bg-blue-700">
+                  {isPending ? "Creando..." : "Crear Coche"}
                 </Button>
               </div>
             </form>
