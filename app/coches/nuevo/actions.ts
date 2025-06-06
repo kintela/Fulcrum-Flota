@@ -22,6 +22,10 @@ export async function crearCoche(formData: FormData) {
       asignadoa: (formData.get("asignadoa") as string) || null,
       alquiler: formData.get("alquiler") === "on",
       preciocompra: formData.get("preciocompra") ? Number.parseFloat(formData.get("preciocompra") as string) : null,
+      // Nuevos campos para la relación con empleados
+      empleado_id: formData.get("empleado_id") ? Number.parseInt(formData.get("empleado_id") as string) : null,
+      fecha_asignacion: (formData.get("fecha_asignacion") as string) || null,
+      observaciones_asignacion: (formData.get("observaciones_asignacion") as string) || null,
     }
 
     // Validaciones básicas
@@ -30,6 +34,29 @@ export async function crearCoche(formData: FormData) {
         success: false,
         error: "Los campos matrícula, marca y modelo son obligatorios",
       }
+    }
+
+    // Si no es alquiler y se asigna a empleado, validar que existe el empleado
+    if (!cocheData.alquiler && cocheData.empleado_id) {
+      const { data: empleado, error: empleadoError } = await supabase
+        .from("empleados")
+        .select("id")
+        .eq("id", cocheData.empleado_id)
+        .single()
+
+      if (empleadoError || !empleado) {
+        return {
+          success: false,
+          error: "El empleado seleccionado no existe",
+        }
+      }
+    }
+
+    // Si es alquiler, limpiar campos de empleado
+    if (cocheData.alquiler) {
+      cocheData.empleado_id = null
+      cocheData.fecha_asignacion = null
+      cocheData.observaciones_asignacion = null
     }
 
     // Insertar en Supabase

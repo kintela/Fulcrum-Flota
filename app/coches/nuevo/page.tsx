@@ -9,15 +9,26 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { crearCoche } from "./actions"
+import { obtenerEmpleados } from "@/app/actions/empleados"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 
 export default function NuevoCochePage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [empleados, setEmpleados] = useState<any[]>([])
+  const [esAlquiler, setEsAlquiler] = useState(false)
   const router = useRouter()
+
+  useEffect(() => {
+    async function cargarEmpleados() {
+      const data = await obtenerEmpleados()
+      setEmpleados(data)
+    }
+    cargarEmpleados()
+  }, [])
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -30,7 +41,6 @@ export default function NuevoCochePage() {
       const result = await crearCoche(formData)
 
       if (result.success) {
-        // Redirigir usando useRouter
         router.push("/coches")
       } else {
         setError(result.error || "Error al crear el coche")
@@ -172,7 +182,7 @@ export default function NuevoCochePage() {
                   </div>
 
                   <div>
-                    <Label htmlFor="asignadoa">Asignado a</Label>
+                    <Label htmlFor="asignadoa">Asignado a (texto libre)</Label>
                     <Input
                       id="asignadoa"
                       name="asignadoa"
@@ -194,11 +204,56 @@ export default function NuevoCochePage() {
                   </div>
 
                   <div className="flex items-center space-x-2">
-                    <Checkbox id="alquiler" name="alquiler" />
+                    <Checkbox
+                      id="alquiler"
+                      name="alquiler"
+                      checked={esAlquiler}
+                      onCheckedChange={(checked) => setEsAlquiler(checked as boolean)}
+                    />
                     <Label htmlFor="alquiler">Vehículo de alquiler</Label>
                   </div>
                 </div>
               </div>
+
+              {/* Asignación de empleado (solo si no es alquiler) */}
+              {!esAlquiler && (
+                <div className="border-t pt-6">
+                  <h3 className="text-lg font-semibold mb-4">Asignación de Empleado</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="empleado_id">Empleado Asignado</Label>
+                      <select
+                        id="empleado_id"
+                        name="empleado_id"
+                        className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="">Sin asignar</option>
+                        {empleados.map((empleado) => (
+                          <option key={empleado.id} value={empleado.id}>
+                            {empleado.nombre} {empleado.apellidos} - {empleado.departamento}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="fecha_asignacion">Fecha de Asignación</Label>
+                      <Input id="fecha_asignacion" name="fecha_asignacion" type="date" className="mt-1" />
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <Label htmlFor="observaciones_asignacion">Observaciones de Asignación</Label>
+                    <Textarea
+                      id="observaciones_asignacion"
+                      name="observaciones_asignacion"
+                      placeholder="Motivo de la asignación, condiciones especiales..."
+                      className="mt-1"
+                      rows={2}
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Extras */}
               <div className="border-t pt-6">
