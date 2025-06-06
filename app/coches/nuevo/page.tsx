@@ -2,7 +2,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { crearCoche } from "./actions"
@@ -52,19 +51,6 @@ export default function NuevoCochePage() {
                     <Label htmlFor="color">Color</Label>
                     <Input id="color" name="color" placeholder="Blanco" className="mt-1" />
                   </div>
-
-                  <div>
-                    <Label htmlFor="anio">Año</Label>
-                    <Input
-                      id="anio"
-                      name="anio"
-                      type="number"
-                      placeholder="2023"
-                      min="1990"
-                      max="2025"
-                      className="mt-1"
-                    />
-                  </div>
                 </div>
 
                 {/* Información técnica */}
@@ -83,62 +69,17 @@ export default function NuevoCochePage() {
 
                   <div>
                     <Label htmlFor="combustible">Tipo de Combustible</Label>
-                    <Select name="combustible">
-                      <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Selecciona el combustible" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="gasolina">Gasolina</SelectItem>
-                        <SelectItem value="diesel">Diesel</SelectItem>
-                        <SelectItem value="hibrido">Híbrido</SelectItem>
-                        <SelectItem value="electrico">Eléctrico</SelectItem>
-                        <SelectItem value="gas">Gas</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="numero_bastidor">Número de Bastidor</Label>
-                    <Input id="numero_bastidor" name="numero_bastidor" placeholder="VIN123456789" className="mt-1" />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="precio_compra">Precio de Compra (€)</Label>
-                    <Input
-                      id="precio_compra"
-                      name="precio_compra"
-                      type="number"
-                      step="0.01"
-                      placeholder="15000.00"
-                      min="0"
-                      className="mt-1"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="fecha_compra">Fecha de Compra</Label>
-                    <Input id="fecha_compra" name="fecha_compra" type="date" className="mt-1" />
-                  </div>
-                </div>
-              </div>
-
-              {/* Fechas importantes */}
-              <div className="border-t pt-6">
-                <h3 className="text-lg font-semibold mb-4">Fechas Importantes</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <Label htmlFor="fecha_seguro">Vencimiento Seguro</Label>
-                    <Input id="fecha_seguro" name="fecha_seguro" type="date" className="mt-1" />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="fecha_itv">Vencimiento ITV</Label>
-                    <Input id="fecha_itv" name="fecha_itv" type="date" className="mt-1" />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="fecha_revision">Próxima Revisión</Label>
-                    <Input id="fecha_revision" name="fecha_revision" type="date" className="mt-1" />
+                    <select
+                      name="combustible"
+                      className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">Selecciona el combustible</option>
+                      <option value="gasolina">Gasolina</option>
+                      <option value="diesel">Diesel</option>
+                      <option value="hibrido">Híbrido</option>
+                      <option value="electrico">Eléctrico</option>
+                      <option value="gas">Gas</option>
+                    </select>
                   </div>
                 </div>
               </div>
