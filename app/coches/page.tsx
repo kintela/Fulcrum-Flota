@@ -52,7 +52,7 @@ export default async function CochesPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {coches.map((coche) => (
-              <Card key={coche.id} className="hover:shadow-lg transition-shadow">
+              <Card key={coche.matricula} className="hover:shadow-lg transition-shadow">
                 <CardHeader className="pb-3">
                   <div className="flex justify-between items-start">
                     <div>
@@ -101,13 +101,13 @@ export default async function CochesPage() {
 
                   <div className="flex justify-end space-x-2">
                     <Link
-                      href={`/coches/${coche.id}`}
+                      href={`/coches/${encodeURIComponent(coche.matricula)}`}
                       className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-1 rounded text-sm"
                     >
                       Ver detalles
                     </Link>
                     <Link
-                      href={`/coches/${coche.id}/editar`}
+                      href={`/coches/${encodeURIComponent(coche.matricula)}/editar`}
                       className="bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1 rounded text-sm"
                     >
                       Editar

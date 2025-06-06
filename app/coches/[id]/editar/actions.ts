@@ -32,8 +32,8 @@ export async function editarCoche(id: string, formData: FormData) {
       }
     }
 
-    // Actualizar en Supabase
-    const { data, error } = await supabase.from("coches").update(cocheData).eq("id", id).select()
+    // Actualizar en Supabase usando matricula como clave primaria
+    const { data, error } = await supabase.from("coches").update(cocheData).eq("matricula", id).select()
 
     if (error) {
       console.error("Error al actualizar coche:", error)
@@ -63,8 +63,13 @@ export async function editarCoche(id: string, formData: FormData) {
 }
 
 export async function obtenerCoche(id: string) {
+  if (!id || id === "undefined") {
+    return null
+  }
+
   try {
-    const { data, error } = await supabase.from("coches").select("*").eq("id", id).single()
+    // Usar matricula como clave primaria
+    const { data, error } = await supabase.from("coches").select("*").eq("matricula", id).single()
 
     if (error) {
       console.error("Error al obtener coche:", error)

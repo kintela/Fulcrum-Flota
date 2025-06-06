@@ -27,14 +27,21 @@ export default function EditarCochePage({ params }: EditarCochePageProps) {
 
   useEffect(() => {
     async function cargarCoche() {
+      if (!params.id || params.id === "undefined") {
+        setError("ID de coche no válido")
+        setIsLoading(false)
+        return
+      }
+
       try {
         const data = await obtenerCoche(params.id)
         if (data) {
           setCoche(data)
         } else {
-          setError("No se encontró el coche")
+          setError(`No se encontró el coche con matrícula ${params.id}`)
         }
       } catch (error) {
+        console.error("Error al cargar coche:", error)
         setError("Error al cargar los datos del coche")
       } finally {
         setIsLoading(false)
@@ -84,8 +91,8 @@ export default function EditarCochePage({ params }: EditarCochePageProps) {
       <div className="min-h-screen bg-gray-100 p-8">
         <div className="max-w-4xl mx-auto">
           <div className="text-center">
-            <p className="text-red-600">No se encontró el coche</p>
-            <Link href="/coches" className="text-blue-600 hover:underline">
+            <p className="text-red-600">{error || "No se encontró el coche"}</p>
+            <Link href="/coches" className="text-blue-600 hover:underline mt-4 inline-block">
               Volver a la lista de coches
             </Link>
           </div>
