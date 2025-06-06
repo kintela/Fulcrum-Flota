@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,21 +12,31 @@ import { crearCoche } from "./actions"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 
 export default function NuevoCochePage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
 
-  async function handleSubmit(formData: FormData) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
     setIsSubmitting(true)
     setError(null)
 
+    const formData = new FormData(event.currentTarget)
+
     try {
-      const result = await crearCoche(null, formData)
-      if (result?.error) {
-        setError(result.error)
+      const result = await crearCoche(formData)
+
+      if (result.success) {
+        // Redirigir usando useRouter
+        router.push("/coches")
+      } else {
+        setError(result.error || "Error al crear el coche")
       }
     } catch (error) {
+      console.error("Error:", error)
       setError("Error inesperado al crear el coche")
     } finally {
       setIsSubmitting(false)
@@ -56,7 +68,7 @@ export default function NuevoCochePage() {
               </div>
             )}
 
-            <form action={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-6">
               {/* Información básica */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>

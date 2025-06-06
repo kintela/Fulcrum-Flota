@@ -1,17 +1,9 @@
 "use server"
 
 import { supabase } from "@/lib/supabase"
-import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 
-export async function crearCoche(prevState: any, formData: FormData) {
-  // Verificar que formData no sea null
-  if (!formData) {
-    return {
-      error: "No se recibieron datos del formulario",
-    }
-  }
-
+export async function crearCoche(formData: FormData) {
   try {
     // Extraer datos del formulario según la estructura real de la tabla
     const cocheData = {
@@ -35,6 +27,7 @@ export async function crearCoche(prevState: any, formData: FormData) {
     // Validaciones básicas
     if (!cocheData.matricula || !cocheData.marca || !cocheData.modelo) {
       return {
+        success: false,
         error: "Los campos matrícula, marca y modelo son obligatorios",
       }
     }
@@ -45,6 +38,7 @@ export async function crearCoche(prevState: any, formData: FormData) {
     if (error) {
       console.error("Error al crear coche:", error)
       return {
+        success: false,
         error: `Error al crear el coche: ${error.message}`,
       }
     }
@@ -54,11 +48,14 @@ export async function crearCoche(prevState: any, formData: FormData) {
     // Revalidar la página de coches para mostrar los nuevos datos
     revalidatePath("/coches")
 
-    // Redirect después de éxito
-    redirect("/coches")
+    return {
+      success: true,
+      data: data[0],
+    }
   } catch (error) {
     console.error("Error en crearCoche:", error)
     return {
+      success: false,
       error: "Error inesperado al crear el coche",
     }
   }
