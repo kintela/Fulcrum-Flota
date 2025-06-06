@@ -4,13 +4,7 @@ import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 
 async function getCoches() {
-  const { data: coches, error } = await supabase
-    .from("coches")
-    .select(`
-      *,
-      empleado:empleado_id(nombre, apellidos)
-    `)
-    .order("created_at", { ascending: false })
+  const { data: coches, error } = await supabase.from("coches").select("*").order("created_at", { ascending: false })
 
   if (error) {
     console.error("Error fetching coches:", error)
@@ -22,36 +16,6 @@ async function getCoches() {
 
 export default async function CochesPage() {
   const coches = await getCoches()
-
-  const getEstadoColor = (estado: string) => {
-    switch (estado?.toLowerCase()) {
-      case "disponible":
-        return "bg-blue-100 text-blue-800"
-      case "asignado":
-        return "bg-green-100 text-green-800"
-      case "mantenimiento":
-        return "bg-yellow-100 text-yellow-800"
-      case "fuera_servicio":
-        return "bg-red-100 text-red-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
-  }
-
-  const formatEstado = (estado: string) => {
-    switch (estado?.toLowerCase()) {
-      case "disponible":
-        return "Disponible"
-      case "asignado":
-        return "Asignado"
-      case "mantenimiento":
-        return "Mantenimiento"
-      case "fuera_servicio":
-        return "Fuera de Servicio"
-      default:
-        return estado || "Sin estado"
-    }
-  }
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
@@ -96,7 +60,6 @@ export default async function CochesPage() {
                       <p className="text-gray-600">
                         {coche.marca} {coche.modelo}
                       </p>
-                      {coche.anio && <p className="text-sm text-gray-500">Año {coche.anio}</p>}
                     </div>
                     <Car className="h-6 w-6 text-gray-400" />
                   </div>
@@ -111,34 +74,29 @@ export default async function CochesPage() {
                     )}
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-500">Kilómetros:</span>
-                      <span>{coche.kilometros?.toLocaleString() || 0} km</span>
+                      <span>{coche.kms?.toLocaleString() || 0} km</span>
                     </div>
                     {coche.combustible && (
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-500">Combustible:</span>
-                        <span className="capitalize">{coche.combustible}</span>
+                        <span>{coche.combustible}</span>
                       </div>
                     )}
-                    {coche.empleado && (
+                    {coche.asignadoa && (
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-500">Asignado a:</span>
-                        <span className="font-medium">
-                          {coche.empleado.nombre} {coche.empleado.apellidos}
-                        </span>
+                        <span className="font-medium">{coche.asignadoa}</span>
                       </div>
                     )}
                   </div>
 
                   <div className="flex flex-wrap gap-2 mb-4">
-                    {coche.es_donante && (
+                    {coche.donante && (
                       <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded text-sm">Donante</span>
                     )}
-                    {coche.es_alquiler && (
+                    {coche.alquiler && (
                       <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded text-sm">Alquiler</span>
                     )}
-                    <span className={`px-2 py-1 rounded text-sm ${getEstadoColor(coche.estado)}`}>
-                      {formatEstado(coche.estado)}
-                    </span>
                   </div>
 
                   <div className="flex justify-end space-x-2">

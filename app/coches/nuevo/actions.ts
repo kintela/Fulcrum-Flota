@@ -6,18 +6,23 @@ import { revalidatePath } from "next/cache"
 
 export async function crearCoche(formData: FormData) {
   try {
-    // Extraer solo los datos que corresponden a las columnas existentes
+    // Extraer datos del formulario según la estructura real de la tabla
     const cocheData = {
       matricula: formData.get("matricula") as string,
       marca: formData.get("marca") as string,
       modelo: formData.get("modelo") as string,
       color: (formData.get("color") as string) || null,
-      kilometros: formData.get("kilometros") ? Number.parseInt(formData.get("kilometros") as string) : 0,
-      combustible: (formData.get("combustible") as string) || null,
-      es_donante: formData.get("es_donante") === "on",
-      es_alquiler: formData.get("es_alquiler") === "on",
-      observaciones: (formData.get("observaciones") as string) || null,
-      estado: "disponible",
+      fechamatriculacion: (formData.get("fechamatriculacion") as string) || null,
+      kms: formData.get("kms") ? Number.parseInt(formData.get("kms") as string) : 0,
+      kw: formData.get("kw") ? Number.parseInt(formData.get("kw") as string) : null,
+      cv: formData.get("cv") ? Number.parseInt(formData.get("cv") as string) : null,
+      cc: formData.get("cc") ? Number.parseInt(formData.get("cc") as string) : null,
+      combustible: (formData.get("combustible") as string) || "Gasolina",
+      extras: (formData.get("extras") as string) || null,
+      donante: formData.get("donante") === "on",
+      asignadoa: (formData.get("asignadoa") as string) || null,
+      alquiler: formData.get("alquiler") === "on",
+      preciocompra: formData.get("preciocompra") ? Number.parseFloat(formData.get("preciocompra") as string) : null,
     }
 
     // Validaciones básicas

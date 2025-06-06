@@ -29,57 +29,117 @@ export default function NuevoCochePage() {
           </CardHeader>
           <CardContent>
             <form action={crearCoche} className="space-y-6">
+              {/* Información básica */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Información básica */}
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="matricula">Matrícula *</Label>
-                    <Input id="matricula" name="matricula" placeholder="1234ABC" required className="mt-1" />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="marca">Marca *</Label>
-                    <Input id="marca" name="marca" placeholder="Toyota" required className="mt-1" />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="modelo">Modelo *</Label>
-                    <Input id="modelo" name="modelo" placeholder="Corolla" required className="mt-1" />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="color">Color</Label>
-                    <Input id="color" name="color" placeholder="Blanco" className="mt-1" />
-                  </div>
+                <div>
+                  <Label htmlFor="matricula">Matrícula *</Label>
+                  <Input
+                    id="matricula"
+                    name="matricula"
+                    placeholder="1234ABC"
+                    required
+                    maxLength={20}
+                    className="mt-1"
+                  />
                 </div>
 
-                {/* Información técnica */}
-                <div className="space-y-4">
+                <div>
+                  <Label htmlFor="marca">Marca *</Label>
+                  <Input id="marca" name="marca" placeholder="Toyota" required maxLength={50} className="mt-1" />
+                </div>
+
+                <div>
+                  <Label htmlFor="modelo">Modelo *</Label>
+                  <Input id="modelo" name="modelo" placeholder="Corolla" required maxLength={50} className="mt-1" />
+                </div>
+
+                <div>
+                  <Label htmlFor="color">Color</Label>
+                  <Input id="color" name="color" placeholder="Blanco" maxLength={30} className="mt-1" />
+                </div>
+
+                <div>
+                  <Label htmlFor="fechamatriculacion">Fecha de Matriculación</Label>
+                  <Input id="fechamatriculacion" name="fechamatriculacion" type="date" className="mt-1" />
+                </div>
+
+                <div>
+                  <Label htmlFor="combustible">Combustible</Label>
+                  <select
+                    id="combustible"
+                    name="combustible"
+                    defaultValue="Gasolina"
+                    className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="Gasolina">Gasolina</option>
+                    <option value="Diesel">Diesel</option>
+                    <option value="Híbrido">Híbrido</option>
+                    <option value="Eléctrico">Eléctrico</option>
+                    <option value="GLP">GLP</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Información técnica */}
+              <div className="border-t pt-6">
+                <h3 className="text-lg font-semibold mb-4">Información Técnica</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div>
-                    <Label htmlFor="kilometros">Kilómetros</Label>
+                    <Label htmlFor="kms">Kilómetros</Label>
                     <Input
-                      id="kilometros"
-                      name="kilometros"
+                      id="kms"
+                      name="kms"
                       type="number"
-                      placeholder="25000"
+                      placeholder="0"
+                      min="0"
+                      defaultValue="0"
+                      className="mt-1"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="kw">Potencia (kW)</Label>
+                    <Input id="kw" name="kw" type="number" placeholder="75" min="0" className="mt-1" />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="cv">Potencia (CV)</Label>
+                    <Input id="cv" name="cv" type="number" placeholder="102" min="0" className="mt-1" />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="cc">Cilindrada (cc)</Label>
+                    <Input id="cc" name="cc" type="number" placeholder="1600" min="0" className="mt-1" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Información económica */}
+              <div className="border-t pt-6">
+                <h3 className="text-lg font-semibold mb-4">Información Económica</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="preciocompra">Precio de Compra (€)</Label>
+                    <Input
+                      id="preciocompra"
+                      name="preciocompra"
+                      type="number"
+                      step="0.01"
+                      placeholder="15000.00"
                       min="0"
                       className="mt-1"
                     />
                   </div>
 
                   <div>
-                    <Label htmlFor="combustible">Tipo de Combustible</Label>
-                    <select
-                      name="combustible"
-                      className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="">Selecciona el combustible</option>
-                      <option value="gasolina">Gasolina</option>
-                      <option value="diesel">Diesel</option>
-                      <option value="hibrido">Híbrido</option>
-                      <option value="electrico">Eléctrico</option>
-                      <option value="gas">Gas</option>
-                    </select>
+                    <Label htmlFor="asignadoa">Asignado a</Label>
+                    <Input
+                      id="asignadoa"
+                      name="asignadoa"
+                      placeholder="Nombre del empleado o departamento"
+                      maxLength={100}
+                      className="mt-1"
+                    />
                   </div>
                 </div>
               </div>
@@ -89,24 +149,24 @@ export default function NuevoCochePage() {
                 <h3 className="text-lg font-semibold mb-4">Opciones Especiales</h3>
                 <div className="flex flex-wrap gap-6">
                   <div className="flex items-center space-x-2">
-                    <Checkbox id="es_donante" name="es_donante" />
-                    <Label htmlFor="es_donante">Vehículo donante</Label>
+                    <Checkbox id="donante" name="donante" />
+                    <Label htmlFor="donante">Vehículo donante</Label>
                   </div>
 
                   <div className="flex items-center space-x-2">
-                    <Checkbox id="es_alquiler" name="es_alquiler" />
-                    <Label htmlFor="es_alquiler">Vehículo de alquiler</Label>
+                    <Checkbox id="alquiler" name="alquiler" />
+                    <Label htmlFor="alquiler">Vehículo de alquiler</Label>
                   </div>
                 </div>
               </div>
 
-              {/* Observaciones */}
+              {/* Extras */}
               <div className="border-t pt-6">
-                <Label htmlFor="observaciones">Observaciones</Label>
+                <Label htmlFor="extras">Extras y Equipamiento</Label>
                 <Textarea
-                  id="observaciones"
-                  name="observaciones"
-                  placeholder="Notas adicionales sobre el vehículo..."
+                  id="extras"
+                  name="extras"
+                  placeholder="Aire acondicionado, navegador, sensores de aparcamiento..."
                   className="mt-1"
                   rows={3}
                 />
