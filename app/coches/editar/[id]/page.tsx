@@ -282,20 +282,12 @@ export default function EditarCochePage({ params }: EditarCochePageProps) {
                 <h3 className="text-lg font-semibold mb-4">Opciones Especiales</h3>
                 <div className="flex flex-wrap gap-6">
                   <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="donante"
-                      checked={esDonante}
-                      onCheckedChange={(checked) => setEsDonante(checked as boolean)}
-                    />
+                    <Checkbox id="donante" checked={esDonante} onChange={(e) => setEsDonante(e.target.checked)} />
                     <Label htmlFor="donante">Vehículo donante</Label>
                   </div>
 
                   <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="alquiler"
-                      checked={esAlquiler}
-                      onCheckedChange={(checked) => setEsAlquiler(checked as boolean)}
-                    />
+                    <Checkbox id="alquiler" checked={esAlquiler} onChange={(e) => setEsAlquiler(e.target.checked)} />
                     <Label htmlFor="alquiler">Vehículo de alquiler</Label>
                   </div>
                 </div>
