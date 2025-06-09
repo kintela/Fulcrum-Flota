@@ -30,7 +30,7 @@ async function getCoches(filter?: string) {
     query = query.eq("alquiler", true)
   }
 
-  const { data: coches, error } = await query.order("created_at", { ascending: false })
+  const { data: coches, error } = await query.order("matricula", { ascending: true })
 
   if (error) {
     console.error("Error fetching coches:", error)
