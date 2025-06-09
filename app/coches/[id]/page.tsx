@@ -16,10 +16,7 @@ async function getCoche(id: string) {
         empleados (
           id,
           nombre,
-          apellidos,
-          departamento,
-          email,
-          telefono
+          apellidos
         )
       `)
       .eq("matricula", id)
@@ -186,16 +183,6 @@ export default async function CocheDetailPage({ params }: CocheDetailPageProps) 
                       {coche.empleados.nombre} {coche.empleados.apellidos}
                     </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Departamento:</span>
-                    <span>{coche.empleados.departamento}</span>
-                  </div>
-                  {coche.empleados.email && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Email:</span>
-                      <span>{coche.empleados.email}</span>
-                    </div>
-                  )}
                   {coche.fecha_asignacion && (
                     <div className="flex justify-between">
                       <span className="text-gray-500">Fecha asignación:</span>

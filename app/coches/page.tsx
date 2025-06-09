@@ -11,8 +11,7 @@ async function getCoches() {
       empleados (
         id,
         nombre,
-        apellidos,
-        departamento
+        apellidos
       )
     `)
     .order("created_at", { ascending: false })
@@ -99,12 +98,6 @@ export default async function CochesPage() {
                         <span className="font-medium">
                           {coche.empleados.nombre} {coche.empleados.apellidos}
                         </span>
-                      </div>
-                    )}
-                    {coche.empleados?.departamento && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Departamento:</span>
-                        <span>{coche.empleados.departamento}</span>
                       </div>
                     )}
                     {coche.fecha_asignacion && (

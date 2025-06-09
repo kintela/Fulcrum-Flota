@@ -299,7 +299,7 @@ export default function EditarCochePage({ params }: EditarCochePageProps) {
                         <option value="">Sin asignar</option>
                         {empleados.map((empleado) => (
                           <option key={empleado.id} value={empleado.id}>
-                            {empleado.nombre} {empleado.apellidos} - {empleado.departamento}
+                            {empleado.nombre} {empleado.apellidos}
                           </option>
                         ))}
                       </select>
