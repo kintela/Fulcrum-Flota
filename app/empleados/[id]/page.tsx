@@ -28,21 +28,7 @@ interface EmpleadoDetailPageProps {
 }
 
 export default async function EmpleadoDetailPage({ params }: EmpleadoDetailPageProps) {
-  // Si estamos en la ruta /empleados/nuevo, no intentamos cargar un empleado
-  if (params.id === "nuevo") {
-    return (
-      <div className="min-h-screen bg-gray-100 p-8">
-        <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Ruta no válida</h1>
-          <p className="text-gray-600 mb-8">Esta URL no corresponde a un empleado existente</p>
-          <Link href="/empleados" className="text-blue-600 hover:underline">
-            Volver a la lista de empleados
-          </Link>
-        </div>
-      </div>
-    )
-  }
-
+  // Eliminar esta verificación especial para "nuevo"
   const empleado = await getEmpleado(params.id)
 
   if (!empleado) {
