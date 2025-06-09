@@ -63,7 +63,9 @@ export default async function HomePage() {
   // Calcular estadísticas reales - CORREGIDO para incluir asignadoa
   const stats = {
     totalCoches: cochesArray.length,
-    cochesDisponibles: cochesArray.filter((c) => !c.alquiler && !c.empleado_id && !c.asignadoa).length,
+    cochesDisponibles: cochesArray.filter(
+      (c) => !c.alquiler && !c.empleado_id && (!c.asignadoa || c.asignadoa.trim() === ""),
+    ).length,
     cochesAsignados: cochesArray.filter((c) => c.empleado_id || (c.asignadoa && c.asignadoa.trim() !== "")).length,
     totalEmpleados: empleadosArray.length,
     // Estos valores necesitarían campos adicionales en la base de datos para ser calculados correctamente

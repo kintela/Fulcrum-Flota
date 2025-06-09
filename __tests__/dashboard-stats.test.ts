@@ -14,7 +14,9 @@ const mockSupabase = supabase as jest.Mocked<typeof supabase>
 function calculateStats(cochesArray: any[]) {
   return {
     totalCoches: cochesArray.length,
-    cochesDisponibles: cochesArray.filter((c) => !c.alquiler && !c.empleado_id && !c.asignadoa).length,
+    cochesDisponibles: cochesArray.filter(
+      (c) => !c.alquiler && !c.empleado_id && (!c.asignadoa || c.asignadoa.trim() === ""),
+    ).length,
     cochesAsignados: cochesArray.filter((c) => c.empleado_id || (c.asignadoa && c.asignadoa.trim() !== "")).length,
   }
 }
