@@ -12,8 +12,8 @@ async function getDashboardData() {
       console.error("Error fetching coches:", cochesError)
     }
 
-    // Obtener empleados
-    const { data: empleados, error: empleadosError } = await supabase.from("empleados").select("*").eq("activo", true)
+    // Obtener empleados (sin filtrar por activo ya que la columna no existe)
+    const { data: empleados, error: empleadosError } = await supabase.from("empleados").select("*")
 
     if (empleadosError) {
       console.error("Error fetching empleados:", empleadosError)

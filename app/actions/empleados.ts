@@ -4,11 +4,7 @@ import { supabase } from "@/lib/supabase"
 
 export async function obtenerEmpleados() {
   try {
-    const { data, error } = await supabase
-      .from("empleados")
-      .select("*")
-      .eq("activo", true)
-      .order("nombre", { ascending: true })
+    const { data, error } = await supabase.from("empleados").select("*").order("nombre", { ascending: true })
 
     if (error) {
       console.error("Error al obtener empleados:", error)
