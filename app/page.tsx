@@ -88,7 +88,12 @@ export default async function HomePage() {
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Total Coches</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.totalCoches}</p>
+                  <Link
+                    href="/coches"
+                    className="text-2xl font-bold text-gray-900 hover:text-blue-600 transition-colors"
+                  >
+                    {stats.totalCoches}
+                  </Link>
                 </div>
               </div>
             </CardContent>
@@ -102,7 +107,12 @@ export default async function HomePage() {
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Disponibles</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.cochesDisponibles}</p>
+                  <Link
+                    href="/coches?filter=available"
+                    className="text-2xl font-bold text-gray-900 hover:text-green-600 transition-colors"
+                  >
+                    {stats.cochesDisponibles}
+                  </Link>
                 </div>
               </div>
             </CardContent>
@@ -116,7 +126,12 @@ export default async function HomePage() {
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Asignados</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.cochesAsignados}</p>
+                  <Link
+                    href="/coches?filter=assigned"
+                    className="text-2xl font-bold text-gray-900 hover:text-orange-600 transition-colors"
+                  >
+                    {stats.cochesAsignados}
+                  </Link>
                 </div>
               </div>
             </CardContent>
@@ -130,7 +145,12 @@ export default async function HomePage() {
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Empleados</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.totalEmpleados}</p>
+                  <Link
+                    href="/empleados"
+                    className="text-2xl font-bold text-gray-900 hover:text-purple-600 transition-colors"
+                  >
+                    {stats.totalEmpleados}
+                  </Link>
                 </div>
               </div>
             </CardContent>
