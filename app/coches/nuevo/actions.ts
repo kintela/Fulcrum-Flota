@@ -36,6 +36,29 @@ export async function crearCoche(formData: FormData) {
       }
     }
 
+    // Verificar si ya existe un coche con la misma matrícula
+    const { data: cocheExistente, error: errorBusqueda } = await supabase
+      .from("coches")
+      .select("matricula")
+      .eq("matricula", cocheData.matricula)
+      .single()
+
+    if (errorBusqueda && errorBusqueda.code !== "PGRST116") {
+      // PGRST116 es "no rows found", que es lo que esperamos
+      console.error("Error al verificar matrícula duplicada:", errorBusqueda)
+      return {
+        success: false,
+        error: "Error al verificar la matrícula",
+      }
+    }
+
+    if (cocheExistente) {
+      return {
+        success: false,
+        error: `Ya existe un coche con la matrícula ${cocheData.matricula}`,
+      }
+    }
+
     // Si no es alquiler y se asigna a empleado, validar que existe el empleado
     if (!cocheData.alquiler && cocheData.empleado_id) {
       const { data: empleado, error: empleadoError } = await supabase

@@ -24,6 +24,16 @@ describe("crearCoche Server Action", () => {
   })
 
   it("crea un coche exitosamente", async () => {
+    // Mock para verificar matrícula duplicada
+    const mockSelect = jest.fn().mockReturnValue({
+      eq: jest.fn().mockReturnValue({
+        single: jest.fn().mockResolvedValue({
+          data: null,
+          error: { code: "PGRST116" }, // No rows found
+        }),
+      }),
+    })
+
     const mockInsert = jest.fn().mockReturnValue({
       select: jest.fn().mockResolvedValue({
         data: [{ id: 1, matricula: "1234ABC", marca: "Toyota", modelo: "Corolla" }],
@@ -31,9 +41,15 @@ describe("crearCoche Server Action", () => {
       }),
     })
 
-    mockSupabase.from.mockReturnValue({
-      insert: mockInsert,
-    } as any)
+    mockSupabase.from.mockImplementation((table) => {
+      if (table === "coches") {
+        return {
+          select: mockSelect,
+          insert: mockInsert,
+        } as any
+      }
+      return {} as any
+    })
 
     const formData = new FormData()
     formData.append("matricula", "1234ABC")
