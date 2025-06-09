@@ -25,8 +25,12 @@ export default function NuevoCochePage() {
 
   useEffect(() => {
     async function cargarEmpleados() {
-      const data = await obtenerEmpleados()
-      setEmpleados(data)
+      try {
+        const data = await obtenerEmpleados()
+        setEmpleados(data)
+      } catch (error) {
+        console.error("Error al cargar empleados:", error)
+      }
     }
     cargarEmpleados()
   }, [])
@@ -213,12 +217,20 @@ export default function NuevoCochePage() {
                 <h3 className="text-lg font-semibold mb-4">Opciones Especiales</h3>
                 <div className="flex flex-wrap gap-6">
                   <div className="flex items-center space-x-2">
-                    <Checkbox id="donante" checked={esDonante} onChange={(e) => setEsDonante(e.target.checked)} />
+                    <Checkbox
+                      id="donante"
+                      checked={esDonante}
+                      onCheckedChange={(checked) => setEsDonante(checked as boolean)}
+                    />
                     <Label htmlFor="donante">Vehículo donante</Label>
                   </div>
 
                   <div className="flex items-center space-x-2">
-                    <Checkbox id="alquiler" checked={esAlquiler} onChange={(e) => setEsAlquiler(e.target.checked)} />
+                    <Checkbox
+                      id="alquiler"
+                      checked={esAlquiler}
+                      onCheckedChange={(checked) => setEsAlquiler(checked as boolean)}
+                    />
                     <Label htmlFor="alquiler">Vehículo de alquiler</Label>
                   </div>
                 </div>
