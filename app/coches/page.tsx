@@ -79,11 +79,11 @@ export default async function CochesPage() {
                       </div>
                       <div className="flex flex-col items-end">
                         <Car className="h-6 w-6 text-gray-400 mb-1" />
-                        {empleadoAsignado && !coche.alquiler && (
+                        {empleadoAsignado ? (
                           <p className="text-sm text-blue-600 font-medium text-right">{empleadoAsignado}</p>
+                        ) : (
+                          <p className="text-sm text-gray-400">Sin asignar</p>
                         )}
-                        {coche.alquiler && <p className="text-sm text-purple-600 font-medium">Alquiler</p>}
-                        {!empleadoAsignado && !coche.alquiler && <p className="text-sm text-gray-400">Sin asignar</p>}
                       </div>
                     </div>
                   </CardHeader>
