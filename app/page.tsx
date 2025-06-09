@@ -73,28 +73,12 @@ export default async function HomePage() {
   // Coches disponibles: Total - Asignados
   stats.cochesDisponibles = stats.totalCoches - stats.cochesAsignados
 
-  // Debug temporal - mostrar el desglose
-  console.log("=== DEBUG ESTADÍSTICAS SIMPLIFICADO ===")
-  console.log("Total coches:", stats.totalCoches)
-  console.log("Coches con asignadoa:", stats.cochesAsignados)
-  console.log("Coches disponibles (Total - Asignados):", stats.cochesDisponibles)
-
   return (
     <div className="min-h-screen bg-gray-100 p-8">
       <div className="max-w-7xl mx-auto">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-gray-600">Resumen general de la flota</p>
-        </div>
-
-        {/* Debug temporal - mostrar en pantalla */}
-        <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-          <h3 className="font-semibold text-yellow-800 mb-2">Debug - Cálculo simplificado:</h3>
-          <div className="text-sm text-yellow-700 space-y-1">
-            <p>• Total coches: {stats.totalCoches}</p>
-            <p>• Coches con valor en 'asignadoa': {stats.cochesAsignados}</p>
-            <p>• Disponibles (Total - Asignados): {stats.cochesDisponibles}</p>
-          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-8">
