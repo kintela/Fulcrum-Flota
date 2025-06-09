@@ -60,21 +60,32 @@ export default async function HomePage() {
   const empleadosArray = empleados || []
   const cochesRecientesArray = cochesRecientes || []
 
-  // Calcular estadísticas reales - SIMPLIFICADO Y CORREGIDO
+  // Calcular estadísticas reales - CORREGIDO PARA EVITAR DOBLE CONTEO
   const stats = {
     totalCoches: cochesArray.length,
+    // Coches asignados: tienen empleado_id O tienen texto válido en asignadoa (pero NO son de alquiler)
     cochesAsignados: cochesArray.filter((c) => {
-      // Un coche está asignado si tiene empleado_id O tiene texto válido en asignadoa
-      return c.empleado_id || (c.asignadoa && c.asignadoa.trim() !== "")
+      const tieneAsignacion = c.empleado_id || (c.asignadoa && c.asignadoa.trim() !== "")
+      return tieneAsignacion && !c.alquiler // Excluir alquileres de los asignados
+    }).length,
+    // Coches disponibles: NO tienen asignación Y NO son de alquiler
+    cochesDisponibles: cochesArray.filter((c) => {
+      const noTieneAsignacion = !c.empleado_id && (!c.asignadoa || c.asignadoa.trim() === "")
+      return noTieneAsignacion && !c.alquiler
     }).length,
     totalEmpleados: empleadosArray.length,
     segurosProximosVencer: 0,
     itvsProximasVencer: 0,
   }
 
-  // Calcular disponibles como: Total - Asignados - Alquileres
+  // Debug temporal - mostrar el desglose
   const cochesAlquiler = cochesArray.filter((c) => c.alquiler).length
-  stats.cochesDisponibles = stats.totalCoches - stats.cochesAsignados - cochesAlquiler
+  console.log("=== DEBUG ESTADÍSTICAS ===")
+  console.log("Total coches:", stats.totalCoches)
+  console.log("Coches asignados (sin alquiler):", stats.cochesAsignados)
+  console.log("Coches disponibles:", stats.cochesDisponibles)
+  console.log("Coches de alquiler:", cochesAlquiler)
+  console.log("Suma:", stats.cochesAsignados + stats.cochesDisponibles + cochesAlquiler)
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
@@ -82,6 +93,20 @@ export default async function HomePage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-gray-600">Resumen general de la flota</p>
+        </div>
+
+        {/* Debug temporal - mostrar en pantalla */}
+        <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+          <h3 className="font-semibold text-yellow-800 mb-2">Debug - Desglose de coches:</h3>
+          <div className="text-sm text-yellow-700 space-y-1">
+            <p>• Total: {stats.totalCoches}</p>
+            <p>• Asignados (sin alquiler): {stats.cochesAsignados}</p>
+            <p>• Disponibles: {stats.cochesDisponibles}</p>
+            <p>• Alquileres: {cochesAlquiler}</p>
+            <p>
+              • Suma: {stats.cochesAsignados + stats.cochesDisponibles + cochesAlquiler} (debería = {stats.totalCoches})
+            </p>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-8">
