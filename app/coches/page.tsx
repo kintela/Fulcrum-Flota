@@ -118,13 +118,13 @@ export default async function CochesPage() {
 
                     <div className="flex justify-end space-x-2">
                       <Link
-                        href={`/coches/${encodeURIComponent(coche.matricula)}`}
+                        href={`/coches/detalle/${encodeURIComponent(coche.matricula)}`}
                         className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-1 rounded text-sm"
                       >
                         Ver detalles
                       </Link>
                       <Link
-                        href={`/coches/${encodeURIComponent(coche.matricula)}/editar`}
+                        href={`/coches/editar/${encodeURIComponent(coche.matricula)}`}
                         className="bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1 rounded text-sm"
                       >
                         Editar

@@ -74,7 +74,7 @@ export async function editarCoche(id: string, formData: FormData) {
 
     // Revalidar las páginas relevantes
     revalidatePath("/coches")
-    revalidatePath(`/coches/${id}`)
+    revalidatePath(`/coches/detalle/${id}`)
 
     return {
       success: true,
