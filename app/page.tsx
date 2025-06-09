@@ -60,34 +60,21 @@ export default async function HomePage() {
   const empleadosArray = empleados || []
   const cochesRecientesArray = cochesRecientes || []
 
-  // Calcular estadísticas reales - CORREGIDO para incluir asignadoa
+  // Calcular estadísticas reales - SIMPLIFICADO Y CORREGIDO
   const stats = {
     totalCoches: cochesArray.length,
-    cochesDisponibles: cochesArray.filter((c) => {
-      // Un coche está disponible si:
-      // 1. No es de alquiler
-      // 2. No tiene empleado_id asignado
-      // 3. No tiene texto válido en asignadoa (null, undefined, vacío o solo espacios)
-      const noEsAlquiler = !c.alquiler
-      const noTieneEmpleadoId = !c.empleado_id
-      const noTieneAsignadoa = !c.asignadoa || c.asignadoa.trim() === ""
-
-      return noEsAlquiler && noTieneEmpleadoId && noTieneAsignadoa
-    }).length,
     cochesAsignados: cochesArray.filter((c) => {
-      // Un coche está asignado si:
-      // 1. Tiene empleado_id O
-      // 2. Tiene texto válido en asignadoa (no vacío ni solo espacios)
-      const tieneEmpleadoId = !!c.empleado_id
-      const tieneAsignadoa = c.asignadoa && c.asignadoa.trim() !== ""
-
-      return tieneEmpleadoId || tieneAsignadoa
+      // Un coche está asignado si tiene empleado_id O tiene texto válido en asignadoa
+      return c.empleado_id || (c.asignadoa && c.asignadoa.trim() !== "")
     }).length,
     totalEmpleados: empleadosArray.length,
-    // Estos valores necesitarían campos adicionales en la base de datos para ser calculados correctamente
     segurosProximosVencer: 0,
     itvsProximasVencer: 0,
   }
+
+  // Calcular disponibles como: Total - Asignados - Alquileres
+  const cochesAlquiler = cochesArray.filter((c) => c.alquiler).length
+  stats.cochesDisponibles = stats.totalCoches - stats.cochesAsignados - cochesAlquiler
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
