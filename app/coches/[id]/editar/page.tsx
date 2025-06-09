@@ -27,6 +27,7 @@ export default function EditarCochePage({ params }: EditarCochePageProps) {
   const router = useRouter()
   const [empleados, setEmpleados] = useState<any[]>([])
   const [esAlquiler, setEsAlquiler] = useState(false)
+  const [esDonante, setEsDonante] = useState(false)
 
   useEffect(() => {
     async function cargarDatos() {
@@ -42,6 +43,7 @@ export default function EditarCochePage({ params }: EditarCochePageProps) {
         if (cocheData) {
           setCoche(cocheData)
           setEsAlquiler(cocheData.alquiler || false)
+          setEsDonante(cocheData.donante || false)
         } else {
           setError(`No se encontró el coche con matrícula ${params.id}`)
         }
@@ -64,6 +66,14 @@ export default function EditarCochePage({ params }: EditarCochePageProps) {
     setError(null)
 
     const formData = new FormData(event.currentTarget)
+
+    // Agregar los valores de los checkboxes controlados
+    if (esDonante) {
+      formData.set("donante", "on")
+    }
+    if (esAlquiler) {
+      formData.set("alquiler", "on")
+    }
 
     try {
       const result = await editarCoche(params.id, formData)
@@ -266,18 +276,12 @@ export default function EditarCochePage({ params }: EditarCochePageProps) {
                 <h3 className="text-lg font-semibold mb-4">Opciones Especiales</h3>
                 <div className="flex flex-wrap gap-6">
                   <div className="flex items-center space-x-2">
-                    <Checkbox id="donante" name="donante" defaultChecked={coche.donante || false} />
+                    <Checkbox id="donante" checked={esDonante} onChange={(e) => setEsDonante(e.target.checked)} />
                     <Label htmlFor="donante">Vehículo donante</Label>
                   </div>
 
                   <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="alquiler"
-                      name="alquiler"
-                      defaultChecked={coche.alquiler || false}
-                      checked={esAlquiler}
-                      onChange={(e) => setEsAlquiler(e.target.checked)}
-                    />
+                    <Checkbox id="alquiler" checked={esAlquiler} onChange={(e) => setEsAlquiler(e.target.checked)} />
                     <Label htmlFor="alquiler">Vehículo de alquiler</Label>
                   </div>
                 </div>

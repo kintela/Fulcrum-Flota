@@ -20,6 +20,7 @@ export default function NuevoCochePage() {
   const [error, setError] = useState<string | null>(null)
   const [empleados, setEmpleados] = useState<any[]>([])
   const [esAlquiler, setEsAlquiler] = useState(false)
+  const [esDonante, setEsDonante] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -36,6 +37,14 @@ export default function NuevoCochePage() {
     setError(null)
 
     const formData = new FormData(event.currentTarget)
+
+    // Agregar los valores de los checkboxes controlados
+    if (esDonante) {
+      formData.set("donante", "on")
+    }
+    if (esAlquiler) {
+      formData.set("alquiler", "on")
+    }
 
     try {
       const result = await crearCoche(formData)
@@ -199,17 +208,12 @@ export default function NuevoCochePage() {
                 <h3 className="text-lg font-semibold mb-4">Opciones Especiales</h3>
                 <div className="flex flex-wrap gap-6">
                   <div className="flex items-center space-x-2">
-                    <Checkbox id="donante" name="donante" />
+                    <Checkbox id="donante" checked={esDonante} onChange={(e) => setEsDonante(e.target.checked)} />
                     <Label htmlFor="donante">Vehículo donante</Label>
                   </div>
 
                   <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="alquiler"
-                      name="alquiler"
-                      checked={esAlquiler}
-                      onChange={(e) => setEsAlquiler(e.target.checked)}
-                    />
+                    <Checkbox id="alquiler" checked={esAlquiler} onChange={(e) => setEsAlquiler(e.target.checked)} />
                     <Label htmlFor="alquiler">Vehículo de alquiler</Label>
                   </div>
                 </div>
