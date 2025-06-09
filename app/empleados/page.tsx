@@ -7,9 +7,8 @@ async function getEmpleados() {
   const { data: empleados, error } = await supabase
     .from("empleados")
     .select("*")
-    // Para ordenar por apellidos primero, luego nombre:
-    .order("apellidos", { ascending: true })
     .order("nombre", { ascending: true })
+    .order("apellidos", { ascending: true })
 
   if (error) {
     console.error("Error fetching empleados:", error)
