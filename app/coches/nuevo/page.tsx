@@ -191,14 +191,19 @@ export default function NuevoCochePage() {
                   </div>
 
                   <div>
-                    <Label htmlFor="asignadoa">Asignado a (texto libre)</Label>
-                    <Input
+                    <Label htmlFor="asignadoa">Asignado a</Label>
+                    <select
                       id="asignadoa"
                       name="asignadoa"
-                      placeholder="Nombre del empleado o departamento"
-                      maxLength={100}
-                      className="mt-1"
-                    />
+                      className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">Sin asignar</option>
+                      {empleados.map((empleado) => (
+                        <option key={empleado.id} value={`${empleado.nombre} ${empleado.apellidos}`}>
+                          {empleado.nombre} {empleado.apellidos}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
               </div>
