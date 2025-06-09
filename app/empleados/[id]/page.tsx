@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ArrowLeft, User, Mail } from "lucide-react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
-import { redirect } from "next/navigation"
+import { notFound } from "next/navigation"
 
 async function getEmpleado(id: string) {
   if (!id || id === "undefined" || isNaN(Number(id))) {
@@ -29,9 +29,9 @@ interface EmpleadoDetailPageProps {
 }
 
 export default async function EmpleadoDetailPage({ params }: EmpleadoDetailPageProps) {
-  // Si el ID es "nuevo", redirigir a la página de nuevo empleado
+  // Si el ID es "nuevo", mostrar 404 para que Next.js use la ruta estática
   if (params.id === "nuevo") {
-    redirect("/empleados/nuevo")
+    notFound()
   }
 
   const empleado = await getEmpleado(params.id)
