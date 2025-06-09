@@ -63,10 +63,26 @@ export default async function HomePage() {
   // Calcular estadísticas reales - CORREGIDO para incluir asignadoa
   const stats = {
     totalCoches: cochesArray.length,
-    cochesDisponibles: cochesArray.filter(
-      (c) => !c.alquiler && !c.empleado_id && (!c.asignadoa || c.asignadoa.trim() === ""),
-    ).length,
-    cochesAsignados: cochesArray.filter((c) => c.empleado_id || (c.asignadoa && c.asignadoa.trim() !== "")).length,
+    cochesDisponibles: cochesArray.filter((c) => {
+      // Un coche está disponible si:
+      // 1. No es de alquiler
+      // 2. No tiene empleado_id asignado
+      // 3. No tiene texto válido en asignadoa (null, undefined, vacío o solo espacios)
+      const noEsAlquiler = !c.alquiler
+      const noTieneEmpleadoId = !c.empleado_id
+      const noTieneAsignadoa = !c.asignadoa || c.asignadoa.trim() === ""
+
+      return noEsAlquiler && noTieneEmpleadoId && noTieneAsignadoa
+    }).length,
+    cochesAsignados: cochesArray.filter((c) => {
+      // Un coche está asignado si:
+      // 1. Tiene empleado_id O
+      // 2. Tiene texto válido en asignadoa (no vacío ni solo espacios)
+      const tieneEmpleadoId = !!c.empleado_id
+      const tieneAsignadoa = c.asignadoa && c.asignadoa.trim() !== ""
+
+      return tieneEmpleadoId || tieneAsignadoa
+    }).length,
     totalEmpleados: empleadosArray.length,
     // Estos valores necesitarían campos adicionales en la base de datos para ser calculados correctamente
     segurosProximosVencer: 0,
