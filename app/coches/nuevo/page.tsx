@@ -208,7 +208,7 @@ export default function NuevoCochePage() {
                       id="alquiler"
                       name="alquiler"
                       checked={esAlquiler}
-                      onCheckedChange={(checked) => setEsAlquiler(checked as boolean)}
+                      onChange={(e) => setEsAlquiler(e.target.checked)}
                     />
                     <Label htmlFor="alquiler">Vehículo de alquiler</Label>
                   </div>

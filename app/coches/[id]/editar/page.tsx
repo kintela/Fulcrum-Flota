@@ -276,7 +276,7 @@ export default function EditarCochePage({ params }: EditarCochePageProps) {
                       name="alquiler"
                       defaultChecked={coche.alquiler || false}
                       checked={esAlquiler}
-                      onCheckedChange={(checked) => setEsAlquiler(checked as boolean)}
+                      onChange={(e) => setEsAlquiler(e.target.checked)}
                     />
                     <Label htmlFor="alquiler">Vehículo de alquiler</Label>
                   </div>
