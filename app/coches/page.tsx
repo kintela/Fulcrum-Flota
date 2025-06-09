@@ -20,11 +20,11 @@ async function getCoches(filter?: string) {
 
   // Aplicar filtros según el parámetro
   if (filter === "assigned") {
-    // Coches asignados (por empleado_id o asignadoa)
-    query = query.or(`empleado_id.not.is.null,asignadoa.not.is.null,and(asignadoa.neq.'')`)
+    // Coches asignados: cualquier coche que tenga valor en asignadoa (independientemente de alquiler)
+    query = query.not("asignadoa", "is", null).neq("asignadoa", "")
   } else if (filter === "available") {
-    // Coches disponibles (no asignados y no de alquiler)
-    query = query.is("empleado_id", null).is("asignadoa", null).eq("alquiler", false)
+    // Coches disponibles: sin valor en asignadoa (Total - Asignados)
+    query = query.or("asignadoa.is.null,asignadoa.eq.")
   } else if (filter === "rental") {
     // Coches de alquiler
     query = query.eq("alquiler", true)
@@ -54,7 +54,7 @@ export default async function CochesPage({ searchParams }: { searchParams: Searc
     subtitle = `Vehículos asignados a empleados (${coches.length} vehículos)`
   } else if (filter === "available") {
     title = "Coches Disponibles"
-    subtitle = `Vehículos disponibles para asignación (${coches.length} vehículos)`
+    subtitle = `Vehículos disponibles (${coches.length} vehículos)`
   } else if (filter === "rental") {
     title = "Coches de Alquiler"
     subtitle = `Vehículos de alquiler (${coches.length} vehículos)`
