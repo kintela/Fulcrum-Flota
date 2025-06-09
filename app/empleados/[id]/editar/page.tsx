@@ -25,7 +25,7 @@ export default function EditarEmpleadoPage({ params }: EditarEmpleadoPageProps) 
 
   useEffect(() => {
     async function cargarDatos() {
-      if (!params.id || params.id === "undefined") {
+      if (!params.id || params.id === "undefined" || isNaN(Number(params.id))) {
         setError("ID de empleado no válido")
         setIsLoading(false)
         return

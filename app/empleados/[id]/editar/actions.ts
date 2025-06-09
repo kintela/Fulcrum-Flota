@@ -5,6 +5,14 @@ import { revalidatePath } from "next/cache"
 
 export async function editarEmpleado(id: number, formData: FormData) {
   try {
+    // Validar que el ID sea un número válido
+    if (isNaN(id)) {
+      return {
+        success: false,
+        error: "ID de empleado no válido",
+      }
+    }
+
     // Extraer datos del formulario
     const empleadoData: any = {
       nombre: formData.get("nombre") as string,
@@ -97,7 +105,7 @@ export async function editarEmpleado(id: number, formData: FormData) {
 }
 
 export async function obtenerEmpleado(id: number) {
-  if (!id || isNaN(id)) {
+  if (isNaN(id)) {
     return null
   }
 
