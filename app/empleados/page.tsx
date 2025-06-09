@@ -29,7 +29,7 @@ export default async function EmpleadosPage() {
             <p className="text-gray-600">Administra los empleados de la empresa ({empleados.length} empleados)</p>
           </div>
           <Link
-            href="/empleados/crear"
+            href="/empleados/nuevo-empleado"
             className="flex items-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md"
           >
             <Plus className="h-5 w-5 mr-2" />
@@ -44,7 +44,7 @@ export default async function EmpleadosPage() {
               <h3 className="text-lg font-semibold text-gray-900 mb-2">No hay empleados registrados</h3>
               <p className="text-gray-600 mb-4">Comienza agregando tu primer empleado.</p>
               <Link
-                href="/empleados/crear"
+                href="/empleados/nuevo-empleado"
                 className="inline-flex items-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md"
               >
                 <Plus className="h-5 w-5 mr-2" />

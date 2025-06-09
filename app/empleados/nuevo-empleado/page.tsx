@@ -12,7 +12,7 @@ import { ArrowLeft } from "lucide-react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 
-export default function CrearEmpleadoPage() {
+export default function NuevoEmpleadoPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
