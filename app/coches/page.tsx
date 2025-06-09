@@ -71,7 +71,17 @@ export default async function CochesPage() {
                         {coche.marca} {coche.modelo}
                       </p>
                     </div>
-                    <Car className="h-6 w-6 text-gray-400" />
+                    <div className="flex flex-col items-end">
+                      <Car className="h-6 w-6 text-gray-400 mb-1" />
+                      {coche.empleados && (
+                        <p className="text-sm text-blue-600 font-medium text-right">
+                          {coche.empleados.nombre} {coche.empleados.apellidos}
+                        </p>
+                      )}
+                      {coche.alquiler && !coche.empleados && (
+                        <p className="text-sm text-purple-600 font-medium">Alquiler</p>
+                      )}
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -90,20 +100,6 @@ export default async function CochesPage() {
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-500">Combustible:</span>
                         <span>{coche.combustible}</span>
-                      </div>
-                    )}
-                    {coche.empleados && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Asignado a:</span>
-                        <span className="font-medium">
-                          {coche.empleados.nombre} {coche.empleados.apellidos}
-                        </span>
-                      </div>
-                    )}
-                    {coche.fecha_asignacion && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Fecha asignación:</span>
-                        <span>{new Date(coche.fecha_asignacion).toLocaleDateString()}</span>
                       </div>
                     )}
                   </div>
