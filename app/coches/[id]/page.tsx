@@ -20,14 +20,23 @@ async function getCoche(id: string) {
         )
       `)
       .eq("matricula", id)
-      .single()
 
     if (error) {
       console.error("Error al obtener coche:", error)
       return null
     }
 
-    return data
+    // Si no hay datos, retornar null
+    if (!data || data.length === 0) {
+      return null
+    }
+
+    // Si hay múltiples registros, tomar el primero y registrar advertencia
+    if (data.length > 1) {
+      console.warn(`Múltiples coches encontrados con matrícula ${id}, tomando el primero`)
+    }
+
+    return data[0]
   } catch (error) {
     console.error("Error en getCoche:", error)
     return null
