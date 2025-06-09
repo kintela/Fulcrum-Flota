@@ -13,6 +13,7 @@ import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { obtenerEmpleados } from "@/app/actions/empleados"
 
 interface EditarCochePageProps {
   params: { id: string }
@@ -24,9 +25,11 @@ export default function EditarCochePage({ params }: EditarCochePageProps) {
   const [error, setError] = useState<string | null>(null)
   const [coche, setCoche] = useState<any>(null)
   const router = useRouter()
+  const [empleados, setEmpleados] = useState<any[]>([])
+  const [esAlquiler, setEsAlquiler] = useState(false)
 
   useEffect(() => {
-    async function cargarCoche() {
+    async function cargarDatos() {
       if (!params.id || params.id === "undefined") {
         setError("ID de coche no válido")
         setIsLoading(false)
@@ -34,21 +37,25 @@ export default function EditarCochePage({ params }: EditarCochePageProps) {
       }
 
       try {
-        const data = await obtenerCoche(params.id)
-        if (data) {
-          setCoche(data)
+        const [cocheData, empleadosData] = await Promise.all([obtenerCoche(params.id), obtenerEmpleados()])
+
+        if (cocheData) {
+          setCoche(cocheData)
+          setEsAlquiler(cocheData.alquiler || false)
         } else {
           setError(`No se encontró el coche con matrícula ${params.id}`)
         }
+
+        setEmpleados(empleadosData)
       } catch (error) {
-        console.error("Error al cargar coche:", error)
-        setError("Error al cargar los datos del coche")
+        console.error("Error al cargar datos:", error)
+        setError("Error al cargar los datos")
       } finally {
         setIsLoading(false)
       }
     }
 
-    cargarCoche()
+    cargarDatos()
   }, [params.id])
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -264,11 +271,65 @@ export default function EditarCochePage({ params }: EditarCochePageProps) {
                   </div>
 
                   <div className="flex items-center space-x-2">
-                    <Checkbox id="alquiler" name="alquiler" defaultChecked={coche.alquiler || false} />
+                    <Checkbox
+                      id="alquiler"
+                      name="alquiler"
+                      defaultChecked={coche.alquiler || false}
+                      checked={esAlquiler}
+                      onCheckedChange={(checked) => setEsAlquiler(checked as boolean)}
+                    />
                     <Label htmlFor="alquiler">Vehículo de alquiler</Label>
                   </div>
                 </div>
               </div>
+
+              {/* Asignación de empleado (solo si no es alquiler) */}
+              {!esAlquiler && (
+                <div className="border-t pt-6">
+                  <h3 className="text-lg font-semibold mb-4">Asignación de Empleado</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="empleado_id">Empleado Asignado</Label>
+                      <select
+                        id="empleado_id"
+                        name="empleado_id"
+                        defaultValue={coche.empleado_id || ""}
+                        className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="">Sin asignar</option>
+                        {empleados.map((empleado) => (
+                          <option key={empleado.id} value={empleado.id}>
+                            {empleado.nombre} {empleado.apellidos} - {empleado.departamento}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="fecha_asignacion">Fecha de Asignación</Label>
+                      <Input
+                        id="fecha_asignacion"
+                        name="fecha_asignacion"
+                        type="date"
+                        defaultValue={coche.fecha_asignacion || ""}
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <Label htmlFor="observaciones_asignacion">Observaciones de Asignación</Label>
+                    <Textarea
+                      id="observaciones_asignacion"
+                      name="observaciones_asignacion"
+                      defaultValue={coche.observaciones_asignacion || ""}
+                      placeholder="Motivo de la asignación, condiciones especiales..."
+                      className="mt-1"
+                      rows={2}
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Extras */}
               <div className="border-t pt-6">

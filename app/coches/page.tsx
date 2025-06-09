@@ -4,7 +4,18 @@ import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 
 async function getCoches() {
-  const { data: coches, error } = await supabase.from("coches").select("*").order("created_at", { ascending: false })
+  const { data: coches, error } = await supabase
+    .from("coches")
+    .select(`
+      *,
+      empleados (
+        id,
+        nombre,
+        apellidos,
+        departamento
+      )
+    `)
+    .order("created_at", { ascending: false })
 
   if (error) {
     console.error("Error fetching coches:", error)
@@ -82,10 +93,24 @@ export default async function CochesPage() {
                         <span>{coche.combustible}</span>
                       </div>
                     )}
-                    {coche.asignadoa && (
+                    {coche.empleados && (
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-500">Asignado a:</span>
-                        <span className="font-medium">{coche.asignadoa}</span>
+                        <span className="font-medium">
+                          {coche.empleados.nombre} {coche.empleados.apellidos}
+                        </span>
+                      </div>
+                    )}
+                    {coche.empleados?.departamento && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Departamento:</span>
+                        <span>{coche.empleados.departamento}</span>
+                      </div>
+                    )}
+                    {coche.fecha_asignacion && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Fecha asignación:</span>
+                        <span>{new Date(coche.fecha_asignacion).toLocaleDateString()}</span>
                       </div>
                     )}
                   </div>
