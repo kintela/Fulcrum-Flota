@@ -60,32 +60,24 @@ export default async function HomePage() {
   const empleadosArray = empleados || []
   const cochesRecientesArray = cochesRecientes || []
 
-  // Calcular estadísticas reales - CORREGIDO PARA EVITAR DOBLE CONTEO
+  // Calcular estadísticas reales - SIMPLIFICADO
   const stats = {
     totalCoches: cochesArray.length,
-    // Coches asignados: tienen empleado_id O tienen texto válido en asignadoa (pero NO son de alquiler)
-    cochesAsignados: cochesArray.filter((c) => {
-      const tieneAsignacion = c.empleado_id || (c.asignadoa && c.asignadoa.trim() !== "")
-      return tieneAsignacion && !c.alquiler // Excluir alquileres de los asignados
-    }).length,
-    // Coches disponibles: NO tienen asignación Y NO son de alquiler
-    cochesDisponibles: cochesArray.filter((c) => {
-      const noTieneAsignacion = !c.empleado_id && (!c.asignadoa || c.asignadoa.trim() === "")
-      return noTieneAsignacion && !c.alquiler
-    }).length,
+    // Coches asignados: cualquier coche que tenga valor en asignadoa (independientemente de alquiler)
+    cochesAsignados: cochesArray.filter((c) => c.asignadoa && c.asignadoa.trim() !== "").length,
     totalEmpleados: empleadosArray.length,
     segurosProximosVencer: 0,
     itvsProximasVencer: 0,
   }
 
+  // Coches disponibles: Total - Asignados
+  stats.cochesDisponibles = stats.totalCoches - stats.cochesAsignados
+
   // Debug temporal - mostrar el desglose
-  const cochesAlquiler = cochesArray.filter((c) => c.alquiler).length
-  console.log("=== DEBUG ESTADÍSTICAS ===")
+  console.log("=== DEBUG ESTADÍSTICAS SIMPLIFICADO ===")
   console.log("Total coches:", stats.totalCoches)
-  console.log("Coches asignados (sin alquiler):", stats.cochesAsignados)
-  console.log("Coches disponibles:", stats.cochesDisponibles)
-  console.log("Coches de alquiler:", cochesAlquiler)
-  console.log("Suma:", stats.cochesAsignados + stats.cochesDisponibles + cochesAlquiler)
+  console.log("Coches con asignadoa:", stats.cochesAsignados)
+  console.log("Coches disponibles (Total - Asignados):", stats.cochesDisponibles)
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
@@ -97,15 +89,11 @@ export default async function HomePage() {
 
         {/* Debug temporal - mostrar en pantalla */}
         <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-          <h3 className="font-semibold text-yellow-800 mb-2">Debug - Desglose de coches:</h3>
+          <h3 className="font-semibold text-yellow-800 mb-2">Debug - Cálculo simplificado:</h3>
           <div className="text-sm text-yellow-700 space-y-1">
-            <p>• Total: {stats.totalCoches}</p>
-            <p>• Asignados (sin alquiler): {stats.cochesAsignados}</p>
-            <p>• Disponibles: {stats.cochesDisponibles}</p>
-            <p>• Alquileres: {cochesAlquiler}</p>
-            <p>
-              • Suma: {stats.cochesAsignados + stats.cochesDisponibles + cochesAlquiler} (debería = {stats.totalCoches})
-            </p>
+            <p>• Total coches: {stats.totalCoches}</p>
+            <p>• Coches con valor en 'asignadoa': {stats.cochesAsignados}</p>
+            <p>• Disponibles (Total - Asignados): {stats.cochesDisponibles}</p>
           </div>
         </div>
 
