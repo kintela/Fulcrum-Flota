@@ -4,53 +4,68 @@ import { supabase } from "@/lib/supabase"
 import Link from "next/link"
 
 async function getDashboardData() {
-  // Obtener estadísticas de coches
-  const { data: coches, error: cochesError } = await supabase.from("coches").select("*")
+  try {
+    // Obtener estadísticas de coches
+    const { data: coches, error: cochesError } = await supabase.from("coches").select("*")
 
-  if (cochesError) {
-    console.error("Error fetching coches:", cochesError)
-    return { coches: [], empleados: [] }
+    if (cochesError) {
+      console.error("Error fetching coches:", cochesError)
+    }
+
+    // Obtener empleados
+    const { data: empleados, error: empleadosError } = await supabase.from("empleados").select("*").eq("activo", true)
+
+    if (empleadosError) {
+      console.error("Error fetching empleados:", empleadosError)
+    }
+
+    // Obtener coches recientes
+    const { data: cochesRecientes, error: recientesError } = await supabase
+      .from("coches")
+      .select(`
+        *,
+        empleados (
+          id,
+          nombre,
+          apellidos
+        )
+      `)
+      .order("created_at", { ascending: false })
+      .limit(3)
+
+    if (recientesError) {
+      console.error("Error fetching coches recientes:", recientesError)
+    }
+
+    return {
+      coches: coches || [],
+      empleados: empleados || [],
+      cochesRecientes: cochesRecientes || [],
+    }
+  } catch (error) {
+    console.error("Error in getDashboardData:", error)
+    return {
+      coches: [],
+      empleados: [],
+      cochesRecientes: [],
+    }
   }
-
-  // Obtener empleados
-  const { data: empleados, error: empleadosError } = await supabase.from("empleados").select("*").eq("activo", true)
-
-  if (empleadosError) {
-    console.error("Error fetching empleados:", empleadosError)
-    return { coches, empleados: [] }
-  }
-
-  // Obtener coches recientes
-  const { data: cochesRecientes, error: recientesError } = await supabase
-    .from("coches")
-    .select(`
-      *,
-      empleados (
-        id,
-        nombre,
-        apellidos
-      )
-    `)
-    .order("created_at", { ascending: false })
-    .limit(3)
-
-  if (recientesError) {
-    console.error("Error fetching coches recientes:", recientesError)
-    return { coches, empleados, cochesRecientes: [] }
-  }
-
-  return { coches, empleados, cochesRecientes }
 }
 
 export default async function HomePage() {
   const { coches, empleados, cochesRecientes } = await getDashboardData()
 
+  // Asegurar que todos los arrays están definidos
+  const cochesArray = coches || []
+  const empleadosArray = empleados || []
+  const cochesRecientesArray = cochesRecientes || []
+
   // Calcular estadísticas reales
   const stats = {
-    totalCoches: coches.length,
-    cochesDisponibles: coches.filter((c) => !c.alquiler && !c.empleado_id).length,
-    cochesAsignados: coches.filter((c) => c.empleado_id).length,
-    totalEmpleados: empleados.length,
+    totalCoches: cochesArray.length,
+    cochesDisponibles: cochesArray.filter((c) => !c.alquiler && !c.empleado_id).length,
+    cochesAsignados: cochesArray.filter((c) => c.empleado_id).length,
+    totalEmpleados: empleadosArray.length,
     // Estos valores necesitarían campos adicionales en la base de datos para ser calculados correctamente
     segurosProximosVencer: 0,
     itvsProximasVencer: 0,
@@ -142,11 +157,21 @@ export default async function HomePage() {
         <Card className="mb-8">
           <CardContent className="p-6">
             <h2 className="text-2xl font-bold mb-4">Vehículos Recientes</h2>
-            {cochesRecientes.length === 0 ? (
-              <p className="text-gray-500 text-center py-4">No hay vehículos registrados</p>
+            {cochesRecientesArray.length === 0 ? (
+              <div className="text-center py-8">
+                <Car className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-500 mb-4">No hay vehículos registrados</p>
+                <Link
+                  href="/coches/nuevo"
+                  className="inline-flex items-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md"
+                >
+                  <Car className="h-5 w-5 mr-2" />
+                  Agregar Primer Vehículo
+                </Link>
+              </div>
             ) : (
               <div className="space-y-3">
-                {cochesRecientes.map((coche) => (
+                {cochesRecientesArray.map((coche) => (
                   <div
                     key={coche.matricula}
                     className="flex justify-between items-center p-3 border rounded hover:bg-gray-50"
