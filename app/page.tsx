@@ -23,13 +23,13 @@ async function getDashboardData() {
     const { data: cochesRecientes, error: recientesError } = await supabase
       .from("coches")
       .select(`
-        *,
-        empleados (
-          id,
-          nombre,
-          apellidos
-        )
-      `)
+      *,
+      empleados (
+        id,
+        nombre,
+        apellidos
+      )
+    `)
       .order("created_at", { ascending: false })
       .limit(3)
 
@@ -60,16 +60,18 @@ export default async function HomePage() {
   const empleadosArray = empleados || []
   const cochesRecientesArray = cochesRecientes || []
 
-  // Calcular estadísticas reales
+  // Calcular estadísticas reales - SIMPLIFICADO
   const stats = {
     totalCoches: cochesArray.length,
-    cochesDisponibles: cochesArray.filter((c) => !c.alquiler && !c.empleado_id).length,
-    cochesAsignados: cochesArray.filter((c) => c.empleado_id).length,
+    // Coches asignados: cualquier coche que tenga valor en asignadoa (independientemente de alquiler)
+    cochesAsignados: cochesArray.filter((c) => c.asignadoa && c.asignadoa.trim() !== "").length,
     totalEmpleados: empleadosArray.length,
-    // Estos valores necesitarían campos adicionales en la base de datos para ser calculados correctamente
     segurosProximosVencer: 0,
     itvsProximasVencer: 0,
   }
+
+  // Coches disponibles: Total - Asignados
+  stats.cochesDisponibles = stats.totalCoches - stats.cochesAsignados
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
@@ -88,7 +90,12 @@ export default async function HomePage() {
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Total Coches</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.totalCoches}</p>
+                  <Link
+                    href="/coches"
+                    className="text-2xl font-bold text-gray-900 hover:text-blue-600 transition-colors"
+                  >
+                    {stats.totalCoches}
+                  </Link>
                 </div>
               </div>
             </CardContent>
@@ -102,7 +109,12 @@ export default async function HomePage() {
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Disponibles</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.cochesDisponibles}</p>
+                  <Link
+                    href="/coches?filter=available"
+                    className="text-2xl font-bold text-gray-900 hover:text-green-600 transition-colors"
+                  >
+                    {stats.cochesDisponibles}
+                  </Link>
                 </div>
               </div>
             </CardContent>
@@ -116,7 +128,12 @@ export default async function HomePage() {
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Asignados</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.cochesAsignados}</p>
+                  <Link
+                    href="/coches?filter=assigned"
+                    className="text-2xl font-bold text-gray-900 hover:text-orange-600 transition-colors"
+                  >
+                    {stats.cochesAsignados}
+                  </Link>
                 </div>
               </div>
             </CardContent>
@@ -130,7 +147,12 @@ export default async function HomePage() {
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Empleados</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.totalEmpleados}</p>
+                  <Link
+                    href="/empleados"
+                    className="text-2xl font-bold text-gray-900 hover:text-purple-600 transition-colors"
+                  >
+                    {stats.totalEmpleados}
+                  </Link>
                 </div>
               </div>
             </CardContent>
@@ -183,21 +205,27 @@ export default async function HomePage() {
                       <p className="text-gray-600 text-sm">
                         {coche.empleados
                           ? `Asignado a: ${coche.empleados.nombre} ${coche.empleados.apellidos}`
-                          : coche.alquiler
-                            ? "Vehículo de alquiler"
-                            : "Disponible para asignación"}
+                          : coche.asignadoa && coche.asignadoa.trim() !== ""
+                            ? `Asignado a: ${coche.asignadoa}`
+                            : coche.alquiler
+                              ? "Vehículo de alquiler"
+                              : "Disponible para asignación"}
                       </p>
                     </div>
                     <span
                       className={`px-2 py-1 rounded text-sm ${
-                        coche.empleados
+                        coche.empleados || (coche.asignadoa && coche.asignadoa.trim() !== "")
                           ? "bg-green-100 text-green-800"
                           : coche.alquiler
                             ? "bg-yellow-100 text-yellow-800"
                             : "bg-blue-100 text-blue-800"
                       }`}
                     >
-                      {coche.empleados ? "Asignado" : coche.alquiler ? "Alquiler" : "Disponible"}
+                      {coche.empleados || (coche.asignadoa && coche.asignadoa.trim() !== "")
+                        ? "Asignado"
+                        : coche.alquiler
+                          ? "Alquiler"
+                          : "Disponible"}
                     </span>
                   </div>
                 ))}
