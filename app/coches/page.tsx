@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Car, Plus, Filter, Users, Calendar } from "lucide-react"
+import { Car, Plus, Filter, Users, Calendar, AlertTriangle, Clock } from "lucide-react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 
@@ -8,22 +8,50 @@ interface SearchParams {
   filter?: string
 }
 
+// Función para calcular el estado de la fecha de ITV
+function getITVStatus(date: string): { isUrgent: boolean; isOverdue: boolean; daysRemaining: number } {
+  const targetDate = new Date(date)
+  const today = new Date()
+  const diffTime = targetDate.getTime() - today.getTime()
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+
+  return {
+    isUrgent: diffDays <= 30 && diffDays >= 0, // Próxima a vencer (30 días o menos)
+    isOverdue: diffDays < 0, // Ya vencida
+    daysRemaining: diffDays,
+  }
+}
+
+// Función para formatear fecha
+function formatDate(dateString: string): string {
+  const date = new Date(dateString)
+  return date.toLocaleDateString("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  })
+}
+
 async function getCoches(filter?: string) {
-  let query = supabase.from("coches").select(`
-      *,
-      empleados (
-        id,
-        nombre,
-        apellidos
-      )
-    `)
+  // Primero obtenemos todos los empleados para crear un mapa
+  const { data: empleados } = await supabase.from("empleados").select("id, nombre, apellidos")
+
+  const empleadosMap = new Map()
+  if (empleados) {
+    empleados.forEach((emp) => {
+      empleadosMap.set(emp.id.toString(), `${emp.nombre} ${emp.apellidos}`)
+    })
+  }
+
+  // Luego obtenemos los coches sin la relación anidada
+  let query = supabase.from("coches").select("*")
 
   // Aplicar filtros según el parámetro
   if (filter === "assigned") {
-    // Coches asignados: cualquier coche que tenga valor en asignadoa (independientemente de alquiler)
+    // Coches asignados: tienen valor en asignadoa
     query = query.not("asignadoa", "is", null).neq("asignadoa", "")
   } else if (filter === "available") {
-    // Coches disponibles: sin valor en asignadoa (Total - Asignados)
+    // Coches disponibles: sin valor en asignadoa
     query = query.or("asignadoa.is.null,asignadoa.eq.")
   } else if (filter === "rental") {
     // Coches de alquiler
@@ -37,7 +65,44 @@ async function getCoches(filter?: string) {
     return []
   }
 
-  return coches || []
+  // Obtener ITVs para todos los coches - usando los nombres correctos de las columnas
+  const { data: itvs, error: itvsError } = await supabase
+    .from("itvs")
+    .select("matricula, fechaproximarevision")
+    .order("fecharevision", { ascending: false })
+
+  // Crear un mapa de próximas revisiones por matrícula
+  const proximasRevisionesMap = new Map()
+  if (itvs) {
+    itvs.forEach((itv) => {
+      if (!proximasRevisionesMap.has(itv.matricula)) {
+        proximasRevisionesMap.set(itv.matricula, itv.fechaproximarevision)
+      }
+    })
+  }
+
+  // Enriquecer los coches con los nombres de empleados y próximas revisiones
+  const cochesConEmpleados = (coches || []).map((coche) => {
+    const proximaRevision = proximasRevisionesMap.get(coche.matricula)
+
+    // Determinar el nombre del empleado asignado
+    let empleadoNombre = null
+    if (coche.asignadoa) {
+      if (typeof coche.asignadoa === "number") {
+        empleadoNombre = empleadosMap.get(coche.asignadoa.toString()) || `ID: ${coche.asignadoa}`
+      } else if (typeof coche.asignadoa === "string" && coche.asignadoa.trim() !== "") {
+        empleadoNombre = empleadosMap.get(coche.asignadoa) || coche.asignadoa
+      }
+    }
+
+    return {
+      ...coche,
+      empleadoNombre,
+      proximaRevisionITV: proximaRevision || null,
+    }
+  })
+
+  return cochesConEmpleados
 }
 
 export default async function CochesPage({ searchParams }: { searchParams: SearchParams }) {
@@ -150,10 +215,10 @@ export default async function CochesPage({ searchParams }: { searchParams: Searc
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {coches.map((coche) => {
-              // Determinar quién está asignado: empleado por relación o texto legacy
-              const empleadoAsignado = coche.empleados
-                ? `${coche.empleados.nombre} ${coche.empleados.apellidos}`
-                : coche.asignadoa || null
+              const empleadoAsignado = coche.empleadoNombre
+
+              // Calcular el estado de la ITV
+              const itvStatus = coche.proximaRevisionITV ? getITVStatus(coche.proximaRevisionITV) : null
 
               return (
                 <Card key={coche.matricula} className="hover:shadow-lg transition-shadow">
@@ -195,6 +260,29 @@ export default async function CochesPage({ searchParams }: { searchParams: Searc
                           <span>{coche.combustible}</span>
                         </div>
                       )}
+                      {/* Próxima revisión ITV - RESTAURADA */}
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Próxima ITV:</span>
+                        <div className="flex items-center">
+                          {coche.proximaRevisionITV ? (
+                            <>
+                              {itvStatus?.isOverdue && <AlertTriangle className="h-4 w-4 text-red-600 mr-1" />}
+                              {itvStatus?.isUrgent && !itvStatus?.isOverdue && (
+                                <Clock className="h-4 w-4 text-red-500 mr-1" />
+                              )}
+                              <span
+                                className={
+                                  itvStatus?.isOverdue || itvStatus?.isUrgent ? "text-red-600 font-semibold" : ""
+                                }
+                              >
+                                {formatDate(coche.proximaRevisionITV)}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-gray-400 italic">Sin datos</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
                     <div className="flex flex-wrap gap-2 mb-4">
@@ -203,6 +291,19 @@ export default async function CochesPage({ searchParams }: { searchParams: Searc
                       )}
                       {coche.alquiler && (
                         <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded text-sm">Alquiler</span>
+                      )}
+                      {/* Badges de estado ITV - RESTAURADOS */}
+                      {itvStatus?.isOverdue && (
+                        <span className="bg-red-100 text-red-800 px-2 py-1 rounded text-sm flex items-center">
+                          <AlertTriangle className="h-3 w-3 mr-1" />
+                          ITV VENCIDA
+                        </span>
+                      )}
+                      {itvStatus?.isUrgent && !itvStatus?.isOverdue && (
+                        <span className="bg-red-100 text-red-800 px-2 py-1 rounded text-sm flex items-center">
+                          <Clock className="h-3 w-3 mr-1" />
+                          ITV Urgente ({Math.abs(itvStatus.daysRemaining)} días)
+                        </span>
                       )}
                     </div>
 

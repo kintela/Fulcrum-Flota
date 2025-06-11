@@ -12,24 +12,17 @@ async function getDashboardData() {
       console.error("Error fetching coches:", cochesError)
     }
 
-    // Obtener empleados (sin filtrar por activo ya que la columna no existe)
+    // Obtener empleados
     const { data: empleados, error: empleadosError } = await supabase.from("empleados").select("*")
 
     if (empleadosError) {
       console.error("Error fetching empleados:", empleadosError)
     }
 
-    // Obtener coches recientes
+    // Obtener coches recientes (sin JOIN, solo los coches)
     const { data: cochesRecientes, error: recientesError } = await supabase
       .from("coches")
-      .select(`
-      *,
-      empleados (
-        id,
-        nombre,
-        apellidos
-      )
-    `)
+      .select("*") // Eliminamos la relación con empleados que causaba ambigüedad
       .order("created_at", { ascending: false })
       .limit(3)
 
@@ -60,11 +53,19 @@ export default async function HomePage() {
   const empleadosArray = empleados || []
   const cochesRecientesArray = cochesRecientes || []
 
+  // Crear mapa de empleados para búsqueda rápida
+  const empleadosMap = new Map()
+  empleadosArray.forEach((empleado) => {
+    empleadosMap.set(empleado.id, empleado)
+  })
+
   // Calcular estadísticas reales - SIMPLIFICADO
   const stats = {
     totalCoches: cochesArray.length,
     // Coches asignados: cualquier coche que tenga valor en asignadoa (independientemente de alquiler)
-    cochesAsignados: cochesArray.filter((c) => c.asignadoa && c.asignadoa.trim() !== "").length,
+    cochesAsignados: cochesArray.filter((c) =>
+      c.asignadoa && typeof c.asignadoa === "string" ? c.asignadoa.trim() !== "" : !!c.asignadoa,
+    ).length,
     totalEmpleados: empleadosArray.length,
     segurosProximosVencer: 0,
     itvsProximasVencer: 0,
@@ -193,42 +194,58 @@ export default async function HomePage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {cochesRecientesArray.map((coche) => (
-                  <div
-                    key={coche.matricula}
-                    className="flex justify-between items-center p-3 border rounded hover:bg-gray-50"
-                  >
-                    <div>
-                      <h3 className="font-semibold">
-                        {coche.matricula} - {coche.marca} {coche.modelo}
-                      </h3>
-                      <p className="text-gray-600 text-sm">
-                        {coche.empleados
-                          ? `Asignado a: ${coche.empleados.nombre} ${coche.empleados.apellidos}`
-                          : coche.asignadoa && coche.asignadoa.trim() !== ""
-                            ? `Asignado a: ${coche.asignadoa}`
-                            : coche.alquiler
-                              ? "Vehículo de alquiler"
-                              : "Disponible para asignación"}
-                      </p>
-                    </div>
-                    <span
-                      className={`px-2 py-1 rounded text-sm ${
-                        coche.empleados || (coche.asignadoa && coche.asignadoa.trim() !== "")
-                          ? "bg-green-100 text-green-800"
-                          : coche.alquiler
-                            ? "bg-yellow-100 text-yellow-800"
-                            : "bg-blue-100 text-blue-800"
-                      }`}
+                {cochesRecientesArray.map((coche) => {
+                  // Buscar el empleado asociado si asignadoa es un número
+                  let empleadoInfo = null
+                  if (coche.asignadoa && !isNaN(Number(coche.asignadoa))) {
+                    empleadoInfo = empleadosMap.get(Number(coche.asignadoa))
+                  }
+
+                  return (
+                    <div
+                      key={coche.matricula}
+                      className="flex justify-between items-center p-3 border rounded hover:bg-gray-50"
                     >
-                      {coche.empleados || (coche.asignadoa && coche.asignadoa.trim() !== "")
-                        ? "Asignado"
-                        : coche.alquiler
-                          ? "Alquiler"
-                          : "Disponible"}
-                    </span>
-                  </div>
-                ))}
+                      <div>
+                        <h3 className="font-semibold">
+                          {coche.matricula} - {coche.marca} {coche.modelo}
+                        </h3>
+                        <p className="text-gray-600 text-sm">
+                          {empleadoInfo
+                            ? `Asignado a: ${empleadoInfo.nombre} ${empleadoInfo.apellidos}`
+                            : coche.asignadoa && typeof coche.asignadoa === "string" && coche.asignadoa.trim() !== ""
+                              ? `Asignado a: ${coche.asignadoa}`
+                              : coche.alquiler
+                                ? "Vehículo de alquiler"
+                                : "Disponible para asignación"}
+                        </p>
+                      </div>
+                      <span
+                        className={`px-2 py-1 rounded text-sm ${
+                          empleadoInfo ||
+                          (
+                            coche.asignadoa &&
+                              ((typeof coche.asignadoa === "string" && coche.asignadoa.trim() !== "") ||
+                                typeof coche.asignadoa !== "string")
+                          )
+                            ? "bg-green-100 text-green-800"
+                            : coche.alquiler
+                              ? "bg-yellow-100 text-yellow-800"
+                              : "bg-blue-100 text-blue-800"
+                        }`}
+                      >
+                        {empleadoInfo ||
+                        (coche.asignadoa &&
+                          ((typeof coche.asignadoa === "string" && coche.asignadoa.trim() !== "") ||
+                            typeof coche.asignadoa !== "string"))
+                          ? "Asignado"
+                          : coche.alquiler
+                            ? "Alquiler"
+                            : "Disponible"}
+                      </span>
+                    </div>
+                  )
+                })}
                 <div className="text-center mt-4">
                   <Link href="/coches" className="text-blue-600 hover:underline">
                     Ver todos los vehículos

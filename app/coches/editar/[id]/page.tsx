@@ -14,6 +14,7 @@ import { ArrowLeft } from "lucide-react"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { obtenerEmpleados } from "@/app/actions/empleados"
+import { ITVManager } from "@/components/itv-manager"
 
 interface EditarCochePageProps {
   params: { id: string }
@@ -352,6 +353,11 @@ export default function EditarCochePage({ params }: EditarCochePageProps) {
                   className="mt-1"
                   rows={3}
                 />
+              </div>
+
+              {/* ITVs - Usando Accordion para evitar formularios anidados */}
+              <div className="border-t pt-6">
+                <ITVManager matricula={coche.matricula} isEditing={true} />
               </div>
 
               {/* Botones */}
