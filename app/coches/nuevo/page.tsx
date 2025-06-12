@@ -11,9 +11,10 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { crearCoche } from "./actions"
 import { obtenerEmpleados } from "@/app/actions/empleados"
 import Link from "next/link"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft } from 'lucide-react'
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { FotosManager } from "@/components/fotos-manager"
 
 export default function NuevoCochePage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -217,12 +218,20 @@ export default function NuevoCochePage() {
                 <h3 className="text-lg font-semibold mb-4">Opciones Especiales</h3>
                 <div className="flex flex-wrap gap-6">
                   <div className="flex items-center space-x-2">
-                    <Checkbox id="donante" checked={esDonante} onChange={(e) => setEsDonante(e.target.checked)} />
+                    <Checkbox
+                      id="donante"
+                      checked={esDonante}
+                      onCheckedChange={(checked) => setEsDonante(!!checked)}
+                    />
                     <Label htmlFor="donante">Vehículo donante</Label>
                   </div>
 
                   <div className="flex items-center space-x-2">
-                    <Checkbox id="alquiler" checked={esAlquiler} onChange={(e) => setEsAlquiler(e.target.checked)} />
+                    <Checkbox
+                      id="alquiler"
+                      checked={esAlquiler}
+                      onCheckedChange={(checked) => setEsAlquiler(!!checked)}
+                    />
                     <Label htmlFor="alquiler">Vehículo de alquiler</Label>
                   </div>
                 </div>
@@ -278,6 +287,11 @@ export default function NuevoCochePage() {
                   className="mt-1"
                   rows={3}
                 />
+              </div>
+
+              {/* Fotos del vehículo */}
+              <div className="border-t pt-6">
+                <FotosManager matricula="" isEditing={false} />
               </div>
 
               {/* Botones */}

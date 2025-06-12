@@ -2,6 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Car, Plus, Filter, Users, Calendar, AlertTriangle, Clock } from "lucide-react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
+import { obtenerFotosCoche } from "@/lib/storage"
+import { CarThumbnail } from "@/components/car-thumbnail"
 
 // Tipo para los parámetros de búsqueda
 interface SearchParams {
@@ -102,7 +104,31 @@ async function getCoches(filter?: string) {
     }
   })
 
-  return cochesConEmpleados
+  // Obtener primera foto para cada coche
+  const cochesConFotos = await Promise.all(
+    cochesConEmpleados.map(async (coche) => {
+      const primeraFoto = await obtenerPrimeraFoto(coche.matricula)
+      return {
+        ...coche,
+        primeraFoto,
+      }
+    }),
+  )
+
+  return cochesConFotos
+}
+
+async function obtenerPrimeraFoto(matricula: string): Promise<string | null> {
+  try {
+    const resultado = await obtenerFotosCoche(matricula)
+    if (resultado.success && resultado.fotos && resultado.fotos.length > 0) {
+      return resultado.fotos[0]
+    }
+    return null
+  } catch (error) {
+    console.error(`Error obteniendo primera foto para ${matricula}:`, error)
+    return null
+  }
 }
 
 export default async function CochesPage({ searchParams }: { searchParams: SearchParams }) {
@@ -231,13 +257,17 @@ export default async function CochesPage({ searchParams }: { searchParams: Searc
                         </p>
                       </div>
                       <div className="flex flex-col items-end">
-                        <Car className="h-6 w-6 text-gray-400 mb-1" />
+                        <CarThumbnail
+                          src={coche.primeraFoto}
+                          alt={`Foto de ${coche.matricula}`}
+                          matricula={coche.matricula}
+                        />
                         {empleadoAsignado ? (
-                          <p className="text-sm text-blue-600 font-medium text-right">{empleadoAsignado}</p>
+                          <p className="text-sm text-blue-600 font-medium text-right mt-1">{empleadoAsignado}</p>
                         ) : coche.alquiler ? (
-                          <p className="text-sm text-purple-600 font-medium">Alquiler</p>
+                          <p className="text-sm text-purple-600 font-medium mt-1">Alquiler</p>
                         ) : (
-                          <p className="text-sm text-gray-400">Sin asignar</p>
+                          <p className="text-sm text-gray-400 mt-1">Sin asignar</p>
                         )}
                       </div>
                     </div>
@@ -260,7 +290,7 @@ export default async function CochesPage({ searchParams }: { searchParams: Searc
                           <span>{coche.combustible}</span>
                         </div>
                       )}
-                      {/* Próxima revisión ITV - RESTAURADA */}
+                      {/* Próxima revisión ITV */}
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-500">Próxima ITV:</span>
                         <div className="flex items-center">
@@ -292,7 +322,7 @@ export default async function CochesPage({ searchParams }: { searchParams: Searc
                       {coche.alquiler && (
                         <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded text-sm">Alquiler</span>
                       )}
-                      {/* Badges de estado ITV - RESTAURADOS */}
+                      {/* Badges de estado ITV */}
                       {itvStatus?.isOverdue && (
                         <span className="bg-red-100 text-red-800 px-2 py-1 rounded text-sm flex items-center">
                           <AlertTriangle className="h-3 w-3 mr-1" />

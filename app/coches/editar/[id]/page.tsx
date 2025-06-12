@@ -1,7 +1,9 @@
 "use client"
 
 import type React from "react"
-
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { FotosManager } from "@/components/fotos-manager"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,8 +13,6 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { editarCoche, obtenerCoche } from "./actions"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
 import { obtenerEmpleados } from "@/app/actions/empleados"
 import { ITVManager } from "@/components/itv-manager"
 
@@ -283,12 +283,16 @@ export default function EditarCochePage({ params }: EditarCochePageProps) {
                 <h3 className="text-lg font-semibold mb-4">Opciones Especiales</h3>
                 <div className="flex flex-wrap gap-6">
                   <div className="flex items-center space-x-2">
-                    <Checkbox id="donante" checked={esDonante} onChange={(e) => setEsDonante(e.target.checked)} />
+                    <Checkbox id="donante" checked={esDonante} onCheckedChange={(checked) => setEsDonante(!!checked)} />
                     <Label htmlFor="donante">Vehículo donante</Label>
                   </div>
 
                   <div className="flex items-center space-x-2">
-                    <Checkbox id="alquiler" checked={esAlquiler} onChange={(e) => setEsAlquiler(e.target.checked)} />
+                    <Checkbox
+                      id="alquiler"
+                      checked={esAlquiler}
+                      onCheckedChange={(checked) => setEsAlquiler(!!checked)}
+                    />
                     <Label htmlFor="alquiler">Vehículo de alquiler</Label>
                   </div>
                 </div>
@@ -358,6 +362,11 @@ export default function EditarCochePage({ params }: EditarCochePageProps) {
               {/* ITVs - Usando Accordion para evitar formularios anidados */}
               <div className="border-t pt-6">
                 <ITVManager matricula={coche.matricula} isEditing={true} />
+              </div>
+
+              {/* Fotos del vehículo */}
+              <div className="border-t pt-6">
+                <FotosManager matricula={coche.matricula} isEditing={true} />
               </div>
 
               {/* Botones */}
