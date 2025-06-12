@@ -9,34 +9,33 @@ async function getCoche(id: string) {
   }
 
   try {
-    const { data, error } = await supabase
-      .from("coches")
-      .select(`
-        *,
-        empleados (
-          id,
-          nombre,
-          apellidos
-        )
-      `)
-      .eq("matricula", id)
+    // Consulta básica sin join para evitar problemas de relación
+    const { data, error } = await supabase.from("coches").select("*").eq("matricula", id).single()
 
     if (error) {
       console.error("Error al obtener coche:", error)
       return null
     }
 
-    // Si no hay datos, retornar null
-    if (!data || data.length === 0) {
-      return null
+    // Verificamos si hay un empleado asignado (ya sea por empleado_id o asignadoa)
+    const empleadoId = data.empleado_id || data.asignadoa
+
+    if (empleadoId) {
+      const { data: empleadoData, error: empleadoError } = await supabase
+        .from("empleados")
+        .select("id, nombre, apellidos")
+        .eq("id", empleadoId)
+        .single()
+
+      if (!empleadoError && empleadoData) {
+        // Añadimos los datos del empleado al objeto del coche
+        data.empleados = empleadoData
+      } else {
+        console.error("Error al obtener empleado:", empleadoError)
+      }
     }
 
-    // Si hay múltiples registros, tomar el primero y registrar advertencia
-    if (data.length > 1) {
-      console.warn(`Múltiples coches encontrados con matrícula ${id}, tomando el primero`)
-    }
-
-    return data[0]
+    return data
   } catch (error) {
     console.error("Error en getCoche:", error)
     return null
@@ -142,16 +141,16 @@ export default async function CocheDetailPage({ params }: CocheDetailPageProps) 
                 <span className="text-gray-500">Kilómetros:</span>
                 <span>{coche.kms?.toLocaleString() || 0} km</span>
               </div>
-              {coche.kw && (
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Potencia (kW):</span>
-                  <span>{coche.kw} kW</span>
-                </div>
-              )}
               {coche.cv && (
                 <div className="flex justify-between">
                   <span className="text-gray-500">Potencia (CV):</span>
                   <span>{coche.cv} CV</span>
+                </div>
+              )}
+              {coche.kw && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Potencia (kW):</span>
+                  <span>{coche.kw} kW</span>
                 </div>
               )}
               {coche.cc && (
@@ -206,7 +205,7 @@ export default async function CocheDetailPage({ params }: CocheDetailPageProps) 
               )}
 
               {coche.donante && (
-                <div className="text-center">
+                <div className="text-center mt-2">
                   <span className="bg-gray-100 text-gray-800 px-3 py-1 rounded-full text-sm">Vehículo Donante</span>
                 </div>
               )}
@@ -238,7 +237,7 @@ export default async function CocheDetailPage({ params }: CocheDetailPageProps) 
 
               {coche.asignadoa && (
                 <div>
-                  <h4 className="font-medium text-gray-900 mb-2">Asignación anterior (texto):</h4>
+                  <h4 className="font-medium text-gray-900 mb-2">ID de asignación:</h4>
                   <p className="text-gray-600 text-sm">{coche.asignadoa}</p>
                 </div>
               )}
