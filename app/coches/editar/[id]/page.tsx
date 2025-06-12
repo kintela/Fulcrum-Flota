@@ -15,20 +15,24 @@ import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 import { obtenerEmpleados } from "@/app/actions/empleados"
 import { ITVManager } from "@/components/itv-manager"
+import { obtenerTarjetasSolred, obtenerTarjetaAsignada } from "@/app/actions/solred"
+import { SolredManager } from "@/components/solred-manager"
 
 interface EditarCochePageProps {
   params: { id: string }
 }
 
 export default function EditarCochePage({ params }: EditarCochePageProps) {
+  const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [coche, setCoche] = useState<any>(null)
-  const router = useRouter()
   const [empleados, setEmpleados] = useState<any[]>([])
   const [esAlquiler, setEsAlquiler] = useState(false)
   const [esDonante, setEsDonante] = useState(false)
+  const [tarjetasSolred, setTarjetasSolred] = useState<any[]>([])
+  const [tarjetaSeleccionada, setTarjetaSeleccionada] = useState("")
 
   useEffect(() => {
     async function cargarDatos() {
@@ -39,7 +43,12 @@ export default function EditarCochePage({ params }: EditarCochePageProps) {
       }
 
       try {
-        const [cocheData, empleadosData] = await Promise.all([obtenerCoche(params.id), obtenerEmpleados()])
+        const [cocheData, empleadosData, tarjetasData, tarjetaAsignada] = await Promise.all([
+          obtenerCoche(params.id),
+          obtenerEmpleados(),
+          obtenerTarjetasSolred(),
+          obtenerTarjetaAsignada(params.id),
+        ])
 
         if (cocheData) {
           setCoche(cocheData)
@@ -50,6 +59,11 @@ export default function EditarCochePage({ params }: EditarCochePageProps) {
         }
 
         setEmpleados(empleadosData)
+        setTarjetasSolred(tarjetasData)
+
+        if (tarjetaAsignada) {
+          setTarjetaSeleccionada(tarjetaAsignada.numero_tarjeta)
+        }
       } catch (error) {
         console.error("Error al cargar datos:", error)
         setError("Error al cargar los datos")
@@ -74,6 +88,11 @@ export default function EditarCochePage({ params }: EditarCochePageProps) {
     }
     if (esAlquiler) {
       formData.set("alquiler", "on")
+    }
+
+    // Asignar la tarjeta seleccionada
+    if (tarjetaSeleccionada) {
+      formData.set("numero_tarjeta_solred", tarjetaSeleccionada)
     }
 
     try {
@@ -356,6 +375,17 @@ export default function EditarCochePage({ params }: EditarCochePageProps) {
                   placeholder="Aire acondicionado, navegador, sensores de aparcamiento..."
                   className="mt-1"
                   rows={3}
+                />
+              </div>
+
+              {/* Tarjeta SOLRED */}
+              <div className="border-t pt-6">
+                <h3 className="text-lg font-semibold mb-4">Tarjeta SOLRED</h3>
+                <SolredManager
+                  tarjetasSolred={tarjetasSolred}
+                  setTarjetasSolred={setTarjetasSolred}
+                  tarjetaSeleccionada={tarjetaSeleccionada}
+                  setTarjetaSeleccionada={setTarjetaSeleccionada}
                 />
               </div>
 

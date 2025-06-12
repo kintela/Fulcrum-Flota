@@ -2,6 +2,7 @@
 
 import { supabase } from "@/lib/supabase"
 import { revalidatePath } from "next/cache"
+import { asignarTarjetaSolred, crearTarjetaSolred } from "@/app/actions/solred"
 
 export async function crearCoche(formData: FormData) {
   try {
@@ -94,6 +95,32 @@ export async function crearCoche(formData: FormData) {
     }
 
     console.log("Coche creado exitosamente:", data)
+
+    // Gestionar tarjeta SOLRED
+    const numeroTarjetaSolred = formData.get("numero_tarjeta_solred") as string
+    const nuevaTarjetaNumero = formData.get("nueva_tarjeta_numero") as string
+    const nuevaTarjetaPin = formData.get("nueva_tarjeta_pin") as string
+    const nuevaTarjetaVencimiento = formData.get("nueva_tarjeta_vencimiento") as string
+
+    if (nuevaTarjetaNumero && nuevaTarjetaPin && nuevaTarjetaVencimiento) {
+      // Crear nueva tarjeta SOLRED
+      const resultadoCreacion = await crearTarjetaSolred(nuevaTarjetaNumero, nuevaTarjetaPin, nuevaTarjetaVencimiento)
+      if (resultadoCreacion.success) {
+        // Asignar la nueva tarjeta al coche
+        const resultadoAsignacion = await asignarTarjetaSolred(cocheData.matricula, nuevaTarjetaNumero)
+        if (!resultadoAsignacion.success) {
+          console.warn("Error al asignar nueva tarjeta SOLRED:", resultadoAsignacion.error)
+        }
+      } else {
+        console.warn("Error al crear nueva tarjeta SOLRED:", resultadoCreacion.error)
+      }
+    } else if (numeroTarjetaSolred && numeroTarjetaSolred.trim() !== "") {
+      // Asignar tarjeta existente
+      const resultadoSolred = await asignarTarjetaSolred(cocheData.matricula, numeroTarjetaSolred.trim())
+      if (!resultadoSolred.success) {
+        console.warn("Error al asignar tarjeta SOLRED:", resultadoSolred.error)
+      }
+    }
 
     // Revalidar la página de coches para mostrar los nuevos datos
     revalidatePath("/coches")

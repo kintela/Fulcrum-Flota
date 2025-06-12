@@ -11,29 +11,34 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { crearCoche } from "./actions"
 import { obtenerEmpleados } from "@/app/actions/empleados"
 import Link from "next/link"
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft } from "lucide-react"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { FotosManager } from "@/components/fotos-manager"
+import { obtenerTarjetasSolred } from "@/app/actions/solred"
+import { SolredManager } from "@/components/solred-manager"
 
 export default function NuevoCochePage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [empleados, setEmpleados] = useState<any[]>([])
+  const [tarjetasSolred, setTarjetasSolred] = useState<any[]>([])
+  const [tarjetaSeleccionada, setTarjetaSeleccionada] = useState("")
   const [esAlquiler, setEsAlquiler] = useState(false)
   const [esDonante, setEsDonante] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
-    async function cargarEmpleados() {
+    async function cargarDatos() {
       try {
-        const data = await obtenerEmpleados()
-        setEmpleados(data)
+        const [empleadosData, tarjetasData] = await Promise.all([obtenerEmpleados(), obtenerTarjetasSolred()])
+        setEmpleados(empleadosData)
+        setTarjetasSolred(tarjetasData)
       } catch (error) {
-        console.error("Error al cargar empleados:", error)
+        console.error("Error al cargar datos:", error)
       }
     }
-    cargarEmpleados()
+    cargarDatos()
   }, [])
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -49,6 +54,11 @@ export default function NuevoCochePage() {
     }
     if (esAlquiler) {
       formData.set("alquiler", "on")
+    }
+
+    // Asignar la tarjeta seleccionada
+    if (tarjetaSeleccionada) {
+      formData.set("numero_tarjeta_solred", tarjetaSeleccionada)
     }
 
     try {
@@ -218,11 +228,7 @@ export default function NuevoCochePage() {
                 <h3 className="text-lg font-semibold mb-4">Opciones Especiales</h3>
                 <div className="flex flex-wrap gap-6">
                   <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="donante"
-                      checked={esDonante}
-                      onCheckedChange={(checked) => setEsDonante(!!checked)}
-                    />
+                    <Checkbox id="donante" checked={esDonante} onCheckedChange={(checked) => setEsDonante(!!checked)} />
                     <Label htmlFor="donante">Vehículo donante</Label>
                   </div>
 
@@ -286,6 +292,17 @@ export default function NuevoCochePage() {
                   placeholder="Aire acondicionado, navegador, sensores de aparcamiento..."
                   className="mt-1"
                   rows={3}
+                />
+              </div>
+
+              {/* Tarjeta SOLRED */}
+              <div className="border-t pt-6">
+                <h3 className="text-lg font-semibold mb-4">Tarjeta SOLRED</h3>
+                <SolredManager
+                  tarjetasSolred={tarjetasSolred}
+                  setTarjetasSolred={setTarjetasSolred}
+                  tarjetaSeleccionada={tarjetaSeleccionada}
+                  setTarjetaSeleccionada={setTarjetaSeleccionada}
                 />
               </div>
 

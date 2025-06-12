@@ -1,5 +1,5 @@
 import { Card, CardContent } from "@/components/ui/card"
-import { Car, Users, AlertTriangle } from "lucide-react"
+import { Car, Users, AlertTriangle, CreditCard } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import Link from "next/link"
 import { Suspense } from "react"
@@ -41,6 +41,27 @@ async function getDashboardData() {
       console.error("Error fetching ITVs:", itvsError)
     }
 
+    // Obtener tarjetas SOLRED para calcular alertas de vencimiento
+    const { data: tarjetasSolred, error: tarjetasError } = await supabase
+      .from("solred_coches")
+      .select(`
+    *,
+    tarjetassolred (
+      numero_tarjeta,
+      fechavencimiento
+    ),
+    coches (
+      matricula,
+      marca,
+      modelo
+    )
+  `)
+      .eq("activa", true)
+
+    if (tarjetasError) {
+      console.error("Error fetching tarjetas SOLRED:", tarjetasError)
+    }
+
     // Calcular alertas de ITVs
     const today = new Date()
     const thirtyDaysFromNow = new Date()
@@ -61,6 +82,23 @@ async function getDashboardData() {
       return fechaProximaRevision >= today && fechaProximaRevision <= thirtyDaysFromNow
     })
 
+    // Calcular alertas de tarjetas SOLRED
+    const solredAlerts = (tarjetasSolred || []).filter((asignacion) => {
+      if (!asignacion.tarjetassolred?.fechavencimiento) return false
+      const fechaVencimiento = new Date(asignacion.tarjetassolred.fechavencimiento)
+      return fechaVencimiento <= thirtyDaysFromNow
+    })
+
+    const solredVencidas = solredAlerts.filter((asignacion) => {
+      const fechaVencimiento = new Date(asignacion.tarjetassolred.fechavencimiento)
+      return fechaVencimiento < today
+    })
+
+    const solredProximasVencer = solredAlerts.filter((asignacion) => {
+      const fechaVencimiento = new Date(asignacion.tarjetassolred.fechavencimiento)
+      return fechaVencimiento >= today && fechaVencimiento <= thirtyDaysFromNow
+    })
+
     return {
       coches: coches || [],
       empleados: empleados || [],
@@ -70,6 +108,12 @@ async function getDashboardData() {
         vencidas: itvVencidas.length,
         proximasVencer: itvProximasVencer.length,
         detalles: itvAlerts,
+      },
+      solredAlerts: {
+        total: solredAlerts.length,
+        vencidas: solredVencidas.length,
+        proximasVencer: solredProximasVencer.length,
+        detalles: solredAlerts,
       },
     }
   } catch (error) {
@@ -84,11 +128,27 @@ async function getDashboardData() {
         proximasVencer: 0,
         detalles: [],
       },
+      solredAlerts: {
+        total: 0,
+        vencidas: 0,
+        proximasVencer: 0,
+        detalles: [],
+      },
     }
   }
 }
 
-function DashboardStats({ coches, empleados, itvAlerts }: { coches: any[]; empleados: any[]; itvAlerts: any }) {
+function DashboardStats({
+  coches,
+  empleados,
+  itvAlerts,
+  solredAlerts,
+}: {
+  coches: any[]
+  empleados: any[]
+  itvAlerts: any
+  solredAlerts: any
+}) {
   // Calcular estadísticas de forma consistente
   const stats = {
     totalCoches: coches.length,
@@ -98,7 +158,7 @@ function DashboardStats({ coches, empleados, itvAlerts }: { coches: any[]; emple
       return true
     }).length,
     totalEmpleados: empleados.length,
-    totalAlertas: itvAlerts.total,
+    totalAlertas: itvAlerts.total + solredAlerts.total,
   }
 
   stats.cochesDisponibles = stats.totalCoches - stats.cochesAsignados
@@ -304,6 +364,115 @@ function AlertsSection({ itvAlerts, coches }: { itvAlerts: any; coches: any[] })
   )
 }
 
+function SolredAlertsSection({ solredAlerts }: { solredAlerts: any }) {
+  if (solredAlerts.total === 0) {
+    return null
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("es-ES")
+  }
+
+  const getDaysUntilDate = (dateString: string) => {
+    const today = new Date()
+    const targetDate = new Date(dateString)
+    const diffTime = targetDate.getTime() - today.getTime()
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    return diffDays
+  }
+
+  return (
+    <Card className="mb-8 border-orange-200 bg-orange-50">
+      <CardContent className="p-6">
+        <h2 className="text-xl font-bold mb-4 flex items-center text-orange-800">
+          <CreditCard className="h-5 w-5 mr-2" />
+          Alertas de Tarjetas SOLRED ({solredAlerts.total})
+        </h2>
+
+        {solredAlerts.vencidas > 0 && (
+          <div className="mb-4">
+            <h3 className="font-semibold text-red-700 mb-2">Tarjetas Vencidas ({solredAlerts.vencidas})</h3>
+            <div className="space-y-2">
+              {solredAlerts.detalles
+                .filter((asignacion: any) => new Date(asignacion.tarjetassolred.fechavencimiento) < new Date())
+                .map((asignacion: any) => {
+                  const daysOverdue = Math.abs(getDaysUntilDate(asignacion.tarjetassolred.fechavencimiento))
+                  return (
+                    <div key={asignacion.id} className="p-3 bg-red-100 border border-red-200 rounded-md">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="font-medium text-red-800">
+                            {asignacion.matricula} -{" "}
+                            {asignacion.coches
+                              ? `${asignacion.coches.marca} ${asignacion.coches.modelo}`
+                              : "Información no disponible"}
+                          </p>
+                          <p className="text-sm text-red-600">
+                            Tarjeta {asignacion.tarjetassolred.numero_tarjeta} vencida hace {daysOverdue} días (venció
+                            el {formatDate(asignacion.tarjetassolred.fechavencimiento)})
+                          </p>
+                        </div>
+                        <Link
+                          href={`/coches/detalle/${asignacion.matricula}`}
+                          className="text-red-600 hover:text-red-800 text-sm underline"
+                        >
+                          Ver detalles
+                        </Link>
+                      </div>
+                    </div>
+                  )
+                })}
+            </div>
+          </div>
+        )}
+
+        {solredAlerts.proximasVencer > 0 && (
+          <div>
+            <h3 className="font-semibold text-orange-700 mb-2">
+              Tarjetas Próximas a Vencer ({solredAlerts.proximasVencer})
+            </h3>
+            <div className="space-y-2">
+              {solredAlerts.detalles
+                .filter((asignacion: any) => {
+                  const fecha = new Date(asignacion.tarjetassolred.fechavencimiento)
+                  const today = new Date()
+                  return fecha >= today
+                })
+                .map((asignacion: any) => {
+                  const daysUntil = getDaysUntilDate(asignacion.tarjetassolred.fechavencimiento)
+                  return (
+                    <div key={asignacion.id} className="p-3 bg-orange-100 border border-orange-200 rounded-md">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="font-medium text-orange-800">
+                            {asignacion.matricula} -{" "}
+                            {asignacion.coches
+                              ? `${asignacion.coches.marca} ${asignacion.coches.modelo}`
+                              : "Información no disponible"}
+                          </p>
+                          <p className="text-sm text-orange-600">
+                            Tarjeta {asignacion.tarjetassolred.numero_tarjeta} vence en {daysUntil} días (
+                            {formatDate(asignacion.tarjetassolred.fechavencimiento)})
+                          </p>
+                        </div>
+                        <Link
+                          href={`/coches/detalle/${asignacion.matricula}`}
+                          className="text-orange-600 hover:text-orange-800 text-sm underline"
+                        >
+                          Ver detalles
+                        </Link>
+                      </div>
+                    </div>
+                  )
+                })}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 function RecentVehicles({ cochesRecientes, empleados }: { cochesRecientes: any[]; empleados: any[] }) {
   // Crear mapa de empleados para búsqueda rápida
   const empleadosMap = new Map()
@@ -395,7 +564,7 @@ function RecentVehicles({ cochesRecientes, empleados }: { cochesRecientes: any[]
 }
 
 export default async function HomePage() {
-  const { coches, empleados, cochesRecientes, itvAlerts } = await getDashboardData()
+  const { coches, empleados, cochesRecientes, itvAlerts, solredAlerts } = await getDashboardData()
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
@@ -406,11 +575,15 @@ export default async function HomePage() {
         </div>
 
         <Suspense fallback={<div>Cargando estadísticas...</div>}>
-          <DashboardStats coches={coches} empleados={empleados} itvAlerts={itvAlerts} />
+          <DashboardStats coches={coches} empleados={empleados} itvAlerts={itvAlerts} solredAlerts={solredAlerts} />
         </Suspense>
 
         <Suspense fallback={<div>Cargando alertas...</div>}>
           <AlertsSection itvAlerts={itvAlerts} coches={coches} />
+        </Suspense>
+
+        <Suspense fallback={<div>Cargando alertas SOLRED...</div>}>
+          <SolredAlertsSection solredAlerts={solredAlerts} />
         </Suspense>
 
         <Suspense fallback={<div>Cargando vehículos recientes...</div>}>

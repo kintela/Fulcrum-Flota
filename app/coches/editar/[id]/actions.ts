@@ -2,6 +2,12 @@
 
 import { supabase } from "@/lib/supabase"
 import { revalidatePath } from "next/cache"
+import {
+  asignarTarjetaSolred,
+  desasignarTarjetaSolred,
+  obtenerTarjetaAsignada,
+  crearTarjetaSolred,
+} from "@/app/actions/solred"
 
 export async function editarCoche(id: string, formData: FormData) {
   try {
@@ -72,6 +78,49 @@ export async function editarCoche(id: string, formData: FormData) {
 
     console.log("Coche actualizado exitosamente:", data)
 
+    // Gestionar tarjeta SOLRED
+    const numeroTarjetaSolred = formData.get("numero_tarjeta_solred") as string
+    const nuevaTarjetaNumero = formData.get("nueva_tarjeta_numero") as string
+    const nuevaTarjetaPin = formData.get("nueva_tarjeta_pin") as string
+    const nuevaTarjetaVencimiento = formData.get("nueva_tarjeta_vencimiento") as string
+    const tarjetaActual = await obtenerTarjetaAsignada(id)
+
+    if (nuevaTarjetaNumero && nuevaTarjetaPin && nuevaTarjetaVencimiento) {
+      // Crear nueva tarjeta SOLRED
+      const resultadoCreacion = await crearTarjetaSolred(nuevaTarjetaNumero, nuevaTarjetaPin, nuevaTarjetaVencimiento)
+      if (resultadoCreacion.success) {
+        // Desasignar tarjeta actual si existe
+        if (tarjetaActual) {
+          await desasignarTarjetaSolred(id)
+        }
+        // Asignar la nueva tarjeta al coche
+        const resultadoAsignacion = await asignarTarjetaSolred(id, nuevaTarjetaNumero)
+        if (!resultadoAsignacion.success) {
+          console.warn("Error al asignar nueva tarjeta SOLRED:", resultadoAsignacion.error)
+        }
+      } else {
+        console.warn("Error al crear nueva tarjeta SOLRED:", resultadoCreacion.error)
+      }
+    } else if (numeroTarjetaSolred && numeroTarjetaSolred.trim() !== "") {
+      // Si hay una nueva tarjeta especificada
+      if (!tarjetaActual || tarjetaActual.numero_tarjeta !== numeroTarjetaSolred.trim()) {
+        // Desasignar tarjeta actual si existe
+        if (tarjetaActual) {
+          await desasignarTarjetaSolred(id)
+        }
+        // Asignar nueva tarjeta
+        const resultadoSolred = await asignarTarjetaSolred(id, numeroTarjetaSolred.trim())
+        if (!resultadoSolred.success) {
+          console.warn("Error al asignar tarjeta SOLRED:", resultadoSolred.error)
+        }
+      }
+    } else {
+      // Si no hay tarjeta especificada, desasignar la actual si existe
+      if (tarjetaActual) {
+        await desasignarTarjetaSolred(id)
+      }
+    }
+
     // Revalidar las páginas relevantes
     revalidatePath("/coches")
     revalidatePath(`/coches/detalle/${id}`)
@@ -112,9 +161,18 @@ export async function obtenerCoche(id: string) {
       console.warn(`Múltiples coches encontrados con matrícula ${id}, tomando el primero`)
     }
 
+    // Obtener tarjeta SOLRED asignada
+    const tarjetaSolred = await obtenerTarjetaAsignada(id)
+    if (tarjetaSolred && tarjetaSolred.tarjetassolred) {
+      data[0].tarjeta_solred = tarjetaSolred.tarjetassolred
+    }
+
     return data[0]
   } catch (error) {
     console.error("Error en obtenerCoche:", error)
     return null
   }
 }
+
+// Exportación adicional para compatibilidad
+export { editarCoche as actualizarCoche }

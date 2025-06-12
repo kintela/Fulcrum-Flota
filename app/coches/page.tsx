@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Car, Plus, Filter, Users, Calendar, AlertTriangle, Clock } from "lucide-react"
+import { Car, Plus, Filter, Users, Calendar, AlertTriangle, Clock, CreditCard } from "lucide-react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 import { obtenerFotosCoche } from "@/lib/storage"
@@ -83,9 +83,32 @@ async function getCoches(filter?: string) {
     })
   }
 
-  // Enriquecer los coches con los nombres de empleados y próximas revisiones
+  // Obtener tarjetas SOLRED asignadas para todos los coches
+  const { data: tarjetasSolred, error: solredError } = await supabase
+    .from("solred_coches")
+    .select(`
+     matricula,
+     numero_tarjeta,
+     tarjetassolred (
+       numero_tarjeta,
+       pin,
+       fechavencimiento
+     )
+   `)
+    .eq("activa", true)
+
+  // Crear un mapa de tarjetas por matrícula
+  const tarjetasMap = new Map()
+  if (tarjetasSolred) {
+    tarjetasSolred.forEach((relacion) => {
+      tarjetasMap.set(relacion.matricula, relacion.tarjetassolred)
+    })
+  }
+
+  // Enriquecer los coches con los nombres de empleados, próximas revisiones y tarjetas SOLRED
   const cochesConEmpleados = (coches || []).map((coche) => {
     const proximaRevision = proximasRevisionesMap.get(coche.matricula)
+    const tarjetaSolred = tarjetasMap.get(coche.matricula)
 
     // Determinar el nombre del empleado asignado
     let empleadoNombre = null
@@ -101,6 +124,7 @@ async function getCoches(filter?: string) {
       ...coche,
       empleadoNombre,
       proximaRevisionITV: proximaRevision || null,
+      tarjetaSolred,
     }
   })
 
@@ -313,6 +337,20 @@ export default async function CochesPage({ searchParams }: { searchParams: Searc
                           )}
                         </div>
                       </div>
+                      {/* Tarjeta SOLRED */}
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Tarjeta SOLRED:</span>
+                        <div className="flex items-center">
+                          {coche.tarjetaSolred ? (
+                            <>
+                              <CreditCard className="h-4 w-4 text-blue-600 mr-1" />
+                              <span className="text-blue-600 font-semibold">PIN: {coche.tarjetaSolred.pin}</span>
+                            </>
+                          ) : (
+                            <span className="text-gray-400 italic">Sin tarjeta</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
                     <div className="flex flex-wrap gap-2 mb-4">
@@ -335,6 +373,7 @@ export default async function CochesPage({ searchParams }: { searchParams: Searc
                           ITV Urgente ({Math.abs(itvStatus.daysRemaining)} días)
                         </span>
                       )}
+                      {/* Eliminar el badge de SOLRED - ya no se muestra */}
                     </div>
 
                     <div className="flex justify-end space-x-2">
