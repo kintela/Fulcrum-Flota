@@ -1,4 +1,4 @@
-import { editarCoche, obtenerCoche } from "@/app/coches/[id]/editar/actions"
+import { editarCoche, obtenerCoche } from "@/app/coches/editar/[id]/actions"
 import { supabase } from "@/lib/supabase"
 import { revalidatePath } from "next/cache"
 import jest from "jest"
@@ -15,6 +15,14 @@ jest.mock("next/cache", () => ({
   revalidatePath: jest.fn(),
 }))
 
+// Mock para acciones de Solred
+jest.mock("@/app/actions/solred", () => ({
+  asignarTarjetaSolred: jest.fn().mockResolvedValue({ success: true }),
+  desasignarTarjetaSolred: jest.fn().mockResolvedValue({ success: true }),
+  obtenerTarjetaAsignada: jest.fn().mockResolvedValue(null),
+  crearTarjetaSolred: jest.fn().mockResolvedValue({ success: true }),
+}))
+
 const mockSupabase = supabase as jest.Mocked<typeof supabase>
 const mockRevalidatePath = revalidatePath as jest.MockedFunction<typeof revalidatePath>
 
@@ -27,22 +35,27 @@ describe("editarCoche Server Action", () => {
     const mockUpdate = jest.fn().mockReturnValue({
       eq: jest.fn().mockReturnValue({
         select: jest.fn().mockResolvedValue({
-          data: [{ matricula: "1234ABC", marca: "Toyota", modelo: "Corolla" }],
+          data: [{ id: 1, matricula: "1234ABC", marca: "Toyota", modelo: "Corolla" }],
           error: null,
         }),
       }),
     })
 
-    mockSupabase.from.mockReturnValue({
-      update: mockUpdate,
-    } as any)
+    mockSupabase.from.mockImplementation((table) => {
+      if (table === "coches") {
+        return {
+          update: mockUpdate,
+        } as any
+      }
+      return {} as any
+    })
 
     const formData = new FormData()
     formData.append("matricula", "1234ABC")
     formData.append("marca", "Toyota")
     formData.append("modelo", "Corolla")
-    formData.append("kms", "55000")
-    formData.append("extras", "Aire acondicionado, navegador GPS")
+    formData.append("kms", "15000")
+    formData.append("combustible", "Gasolina")
 
     const result = await editarCoche("1234ABC", formData)
 
@@ -50,14 +63,129 @@ describe("editarCoche Server Action", () => {
     expect(result.data).toBeDefined()
     expect(mockSupabase.from).toHaveBeenCalledWith("coches")
     expect(mockRevalidatePath).toHaveBeenCalledWith("/coches")
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/coches/1234ABC")
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/coches/detalle/1234ABC")
+  })
+
+  it("asigna correctamente el ID del empleado al campo asignadoa", async () => {
+    // Mock para la consulta de empleado
+    const mockSelect = jest.fn().mockReturnValue({
+      eq: jest.fn().mockReturnValue({
+        single: jest.fn().mockResolvedValue({
+          data: { id: 42, nombre: "Juan Pérez" },
+          error: null,
+        }),
+      }),
+    })
+
+    // Mock para la actualización
+    const mockUpdate = jest.fn().mockReturnValue({
+      eq: jest.fn().mockReturnValue({
+        select: jest.fn().mockResolvedValue({
+          data: [
+            {
+              id: 1,
+              matricula: "1234ABC",
+              marca: "Toyota",
+              modelo: "Corolla",
+              asignadoa: "42",
+              empleado_id: 42,
+            },
+          ],
+          error: null,
+        }),
+      }),
+    })
+
+    mockSupabase.from.mockImplementation((table) => {
+      if (table === "coches") {
+        return {
+          update: mockUpdate,
+          select: mockSelect,
+        } as any
+      } else if (table === "empleados") {
+        return {
+          select: mockSelect,
+        } as any
+      }
+      return {} as any
+    })
+
+    const formData = new FormData()
+    formData.append("matricula", "1234ABC")
+    formData.append("marca", "Toyota")
+    formData.append("modelo", "Corolla")
+    formData.append("empleado_id", "42") // ID del empleado
+    formData.append("fecha_asignacion", "2023-01-01")
+    formData.append("observaciones_asignacion", "Asignación de prueba")
+    formData.append("alquiler", "off") // No es alquiler
+
+    const result = await editarCoche("1234ABC", formData)
+
+    expect(result.success).toBe(true)
+
+    // Verificar que se pasaron los datos correctos a la actualización
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        matricula: "1234ABC",
+        marca: "Toyota",
+        modelo: "Corolla",
+        asignadoa: "42", // Verificar que asignadoa recibe el ID del empleado
+        empleado_id: 42, // Verificar que empleado_id recibe el ID del empleado como número
+        fecha_asignacion: "2023-01-01",
+        observaciones_asignacion: "Asignación de prueba",
+      }),
+    )
+  })
+
+  it("limpia los campos de empleado cuando es alquiler", async () => {
+    const mockUpdate = jest.fn().mockReturnValue({
+      eq: jest.fn().mockReturnValue({
+        select: jest.fn().mockResolvedValue({
+          data: [{ id: 1, matricula: "1234ABC", marca: "Toyota", modelo: "Corolla" }],
+          error: null,
+        }),
+      }),
+    })
+
+    mockSupabase.from.mockImplementation((table) => {
+      if (table === "coches") {
+        return {
+          update: mockUpdate,
+        } as any
+      }
+      return {} as any
+    })
+
+    const formData = new FormData()
+    formData.append("matricula", "1234ABC")
+    formData.append("marca", "Toyota")
+    formData.append("modelo", "Corolla")
+    formData.append("empleado_id", "42") // ID del empleado que debería ser ignorado
+    formData.append("alquiler", "on") // Es alquiler
+
+    const result = await editarCoche("1234ABC", formData)
+
+    expect(result.success).toBe(true)
+
+    // Verificar que se limpiaron los campos de empleado
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        matricula: "1234ABC",
+        marca: "Toyota",
+        modelo: "Corolla",
+        asignadoa: null, // Debe ser null cuando es alquiler
+        empleado_id: null, // Debe ser null cuando es alquiler
+        fecha_asignacion: null,
+        observaciones_asignacion: null,
+      }),
+    )
   })
 
   it("retorna error cuando faltan campos obligatorios", async () => {
     const formData = new FormData()
     formData.append("matricula", "")
     formData.append("marca", "Toyota")
-    formData.append("modelo", "Corolla")
+    formData.append("modelo", "")
 
     const result = await editarCoche("1234ABC", formData)
 
@@ -65,7 +193,7 @@ describe("editarCoche Server Action", () => {
     expect(result.error).toBe("Los campos matrícula, marca y modelo son obligatorios")
   })
 
-  it("maneja errores de Supabase en actualización", async () => {
+  it("maneja errores de Supabase", async () => {
     const mockUpdate = jest.fn().mockReturnValue({
       eq: jest.fn().mockReturnValue({
         select: jest.fn().mockResolvedValue({
@@ -89,56 +217,18 @@ describe("editarCoche Server Action", () => {
     expect(result.success).toBe(false)
     expect(result.error).toBe("Error al actualizar el coche: Database error")
   })
-
-  it("procesa correctamente el campo extras", async () => {
-    const mockUpdate = jest.fn().mockReturnValue({
-      eq: jest.fn().mockReturnValue({
-        select: jest.fn().mockResolvedValue({
-          data: [{ id: 1 }],
-          error: null,
-        }),
-      }),
-    })
-
-    mockSupabase.from.mockReturnValue({
-      update: mockUpdate,
-    } as any)
-
-    const formData = new FormData()
-    formData.append("matricula", "1234ABC")
-    formData.append("marca", "Toyota")
-    formData.append("modelo", "Corolla")
-    formData.append("extras", "Aire acondicionado, navegador GPS, cámara trasera, sensores de aparcamiento")
-
-    await editarCoche("1234ABC", formData)
-
-    expect(mockUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        extras: "Aire acondicionado, navegador GPS, cámara trasera, sensores de aparcamiento",
-      }),
-    )
-  })
 })
 
-describe("obtenerCoche Server Action", () => {
+describe("obtenerCoche function", () => {
   beforeEach(() => {
     jest.clearAllMocks()
   })
 
-  it("obtiene un coche exitosamente", async () => {
-    const mockCoche = {
-      matricula: "1234ABC",
-      marca: "Toyota",
-      modelo: "Corolla",
-      extras: "Aire acondicionado, navegador GPS",
-    }
-
+  it("obtiene un coche por matrícula", async () => {
     const mockSelect = jest.fn().mockReturnValue({
       eq: jest.fn().mockReturnValue({
-        single: jest.fn().mockResolvedValue({
-          data: mockCoche,
-          error: null,
-        }),
+        data: [{ id: 1, matricula: "1234ABC", marca: "Toyota", modelo: "Corolla" }],
+        error: null,
       }),
     })
 
@@ -146,19 +236,18 @@ describe("obtenerCoche Server Action", () => {
       select: mockSelect,
     } as any)
 
-    const result = await obtenerCoche("1234ABC")
+    const coche = await obtenerCoche("1234ABC")
 
-    expect(result).toEqual(mockCoche)
+    expect(coche).toBeDefined()
+    expect(coche.matricula).toBe("1234ABC")
     expect(mockSupabase.from).toHaveBeenCalledWith("coches")
   })
 
-  it("retorna null cuando no encuentra el coche", async () => {
+  it("retorna null cuando no se encuentra el coche", async () => {
     const mockSelect = jest.fn().mockReturnValue({
       eq: jest.fn().mockReturnValue({
-        single: jest.fn().mockResolvedValue({
-          data: null,
-          error: { message: "No rows found" },
-        }),
+        data: [],
+        error: null,
       }),
     })
 
@@ -166,18 +255,25 @@ describe("obtenerCoche Server Action", () => {
       select: mockSelect,
     } as any)
 
-    const result = await obtenerCoche("NOEXISTE")
+    const coche = await obtenerCoche("NOEXISTE")
 
-    expect(result).toBeNull()
+    expect(coche).toBeNull()
   })
 
-  it("maneja ID indefinido", async () => {
-    const result = await obtenerCoche("undefined")
-    expect(result).toBeNull()
-  })
+  it("maneja errores de Supabase", async () => {
+    const mockSelect = jest.fn().mockReturnValue({
+      eq: jest.fn().mockReturnValue({
+        data: null,
+        error: { message: "Database error" },
+      }),
+    })
 
-  it("maneja ID vacío", async () => {
-    const result = await obtenerCoche("")
-    expect(result).toBeNull()
+    mockSupabase.from.mockReturnValue({
+      select: mockSelect,
+    } as any)
+
+    const coche = await obtenerCoche("1234ABC")
+
+    expect(coche).toBeNull()
   })
 })

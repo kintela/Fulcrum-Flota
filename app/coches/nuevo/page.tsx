@@ -26,6 +26,7 @@ export default function NuevoCochePage() {
   const [tarjetaSeleccionada, setTarjetaSeleccionada] = useState("")
   const [esAlquiler, setEsAlquiler] = useState(false)
   const [esDonante, setEsDonante] = useState(false)
+  const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState<string | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -40,6 +41,12 @@ export default function NuevoCochePage() {
     }
     cargarDatos()
   }, [])
+
+  const handleEmpleadoChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value
+    setEmpleadoSeleccionado(value)
+    console.log("Empleado seleccionado:", value)
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -59,6 +66,16 @@ export default function NuevoCochePage() {
     // Asignar la tarjeta seleccionada
     if (tarjetaSeleccionada) {
       formData.set("numero_tarjeta_solred", tarjetaSeleccionada)
+    }
+
+    // Asegurarnos de que el empleado_id se envía correctamente
+    if (empleadoSeleccionado) {
+      formData.set("empleado_id", empleadoSeleccionado)
+      formData.set("asignadoa", empleadoSeleccionado) // También actualizamos asignadoa
+      console.log("Enviando empleado_id:", empleadoSeleccionado)
+    } else {
+      formData.delete("empleado_id")
+      formData.delete("asignadoa")
     }
 
     try {
@@ -152,6 +169,39 @@ export default function NuevoCochePage() {
                     <option value="GLP">GLP</option>
                   </select>
                 </div>
+
+                {/* Asignado a - Movido debajo de Fecha de Matriculación */}
+                <div>
+                  <Label htmlFor="empleado_id">Asignado a</Label>
+                  <select
+                    id="empleado_id"
+                    name="empleado_id"
+                    value={empleadoSeleccionado || ""}
+                    onChange={handleEmpleadoChange}
+                    className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">Sin asignar</option>
+                    {empleados.map((empleado) => (
+                      <option key={empleado.id} value={empleado.id}>
+                        {empleado.nombre} {empleado.apellidos}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Precio de Compra - Movido debajo de Combustible */}
+                <div>
+                  <Label htmlFor="preciocompra">Precio de Compra (€)</Label>
+                  <Input
+                    id="preciocompra"
+                    name="preciocompra"
+                    type="number"
+                    step="0.01"
+                    placeholder="15000.00"
+                    min="0"
+                    className="mt-1"
+                  />
+                </div>
               </div>
 
               {/* Información técnica */}
@@ -188,41 +238,6 @@ export default function NuevoCochePage() {
                 </div>
               </div>
 
-              {/* Información económica */}
-              <div className="border-t pt-6">
-                <h3 className="text-lg font-semibold mb-4">Información Económica</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="preciocompra">Precio de Compra (€)</Label>
-                    <Input
-                      id="preciocompra"
-                      name="preciocompra"
-                      type="number"
-                      step="0.01"
-                      placeholder="15000.00"
-                      min="0"
-                      className="mt-1"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="asignadoa">Asignado a</Label>
-                    <select
-                      id="asignadoa"
-                      name="asignadoa"
-                      className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="">Sin asignar</option>
-                      {empleados.map((empleado) => (
-                        <option key={empleado.id} value={`${empleado.nombre} ${empleado.apellidos}`}>
-                          {empleado.nombre} {empleado.apellidos}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
-
               {/* Opciones especiales */}
               <div className="border-t pt-6">
                 <h3 className="text-lg font-semibold mb-4">Opciones Especiales</h3>
@@ -243,27 +258,11 @@ export default function NuevoCochePage() {
                 </div>
               </div>
 
-              {/* Asignación de empleado (solo si no es alquiler) */}
-              {!esAlquiler && (
+              {/* Detalles de asignación (solo si no es alquiler y hay un empleado seleccionado) */}
+              {!esAlquiler && empleadoSeleccionado && (
                 <div className="border-t pt-6">
-                  <h3 className="text-lg font-semibold mb-4">Asignación de Empleado</h3>
+                  <h3 className="text-lg font-semibold mb-4">Detalles de Asignación</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="empleado_id">Empleado Asignado</Label>
-                      <select
-                        id="empleado_id"
-                        name="empleado_id"
-                        className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      >
-                        <option value="">Sin asignar</option>
-                        {empleados.map((empleado) => (
-                          <option key={empleado.id} value={empleado.id}>
-                            {empleado.nombre} {empleado.apellidos}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
                     <div>
                       <Label htmlFor="fecha_asignacion">Fecha de Asignación</Label>
                       <Input id="fecha_asignacion" name="fecha_asignacion" type="date" className="mt-1" />

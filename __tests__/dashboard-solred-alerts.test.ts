@@ -10,13 +10,16 @@ jest.mock("@/lib/supabase", () => ({
 
 const mockSupabase = supabase as jest.Mocked<typeof supabase>
 
-// Función auxiliar para calcular alertas de tarjetas SOLRED (extraída de la lógica del dashboard)
+// Update the calculateSolredAlerts function to exclude donor vehicles
 function calculateSolredAlerts(tarjetasAsignadas: any[]) {
   const today = new Date()
   const thirtyDaysFromNow = new Date()
   thirtyDaysFromNow.setDate(today.getDate() + 30)
 
   const solredAlerts = (tarjetasAsignadas || []).filter((asignacion) => {
+    // Skip donor vehicles
+    if (asignacion.coches?.donante === true) return false
+
     if (!asignacion.tarjetassolred?.fechavencimiento) return false
     const fechaVencimiento = new Date(asignacion.tarjetassolred.fechavencimiento)
     return fechaVencimiento <= thirtyDaysFromNow
@@ -336,5 +339,48 @@ describe("Dashboard SOLRED Alerts Calculation", () => {
     expect(alerts.total).toBe(4)
     expect(alerts.vencidas).toBe(2) // A001, A003
     expect(alerts.proximasVencer).toBe(2) // A002, A004
+  })
+
+  it("excludes donor vehicles from alerts even if their SOLRED cards are expired or about to expire", () => {
+    const tarjetasAsignadas = [
+      {
+        id: 1,
+        matricula: "DONOR1",
+        tarjetassolred: { numero_tarjeta: "12345678901234567", fechavencimiento: "2024-01-05" }, // Overdue
+        coches: { matricula: "DONOR1", marca: "Toyota", modelo: "Corolla", donante: true },
+      },
+      {
+        id: 2,
+        matricula: "DONOR2",
+        tarjetassolred: { numero_tarjeta: "23456789012345678", fechavencimiento: "2024-01-25" }, // About to expire
+        coches: { matricula: "DONOR2", marca: "Honda", modelo: "Civic", donante: true },
+      },
+      {
+        id: 3,
+        matricula: "NORMAL1",
+        tarjetassolred: { numero_tarjeta: "34567890123456789", fechavencimiento: "2024-01-05" }, // Overdue
+        coches: { matricula: "NORMAL1", marca: "Ford", modelo: "Focus", donante: false },
+      },
+      {
+        id: 4,
+        matricula: "NORMAL2",
+        tarjetassolred: { numero_tarjeta: "45678901234567890", fechavencimiento: "2024-01-25" }, // About to expire
+        coches: { matricula: "NORMAL2", marca: "Nissan", modelo: "Sentra", donante: false },
+      },
+    ]
+
+    const alerts = calculateSolredAlerts(tarjetasAsignadas)
+
+    // Should only include the non-donor vehicles
+    expect(alerts.total).toBe(2)
+    expect(alerts.vencidas).toBe(1)
+    expect(alerts.proximasVencer).toBe(1)
+
+    // Verify that only non-donor vehicles are included
+    const alertMatriculas = alerts.detalles.map((asignacion: any) => asignacion.matricula)
+    expect(alertMatriculas).toContain("NORMAL1")
+    expect(alertMatriculas).toContain("NORMAL2")
+    expect(alertMatriculas).not.toContain("DONOR1")
+    expect(alertMatriculas).not.toContain("DONOR2")
   })
 })

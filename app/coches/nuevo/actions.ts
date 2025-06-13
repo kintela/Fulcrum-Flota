@@ -6,6 +6,9 @@ import { asignarTarjetaSolred, crearTarjetaSolred } from "@/app/actions/solred"
 
 export async function crearCoche(formData: FormData) {
   try {
+    // Extraer el ID del empleado
+    const empleadoId = formData.get("empleado_id") as string
+
     // Extraer datos del formulario según la estructura real de la tabla
     const cocheData = {
       matricula: formData.get("matricula") as string,
@@ -20,11 +23,11 @@ export async function crearCoche(formData: FormData) {
       combustible: (formData.get("combustible") as string) || "Gasolina",
       extras: (formData.get("extras") as string) || null,
       donante: formData.get("donante") === "on",
-      asignadoa: (formData.get("asignadoa") as string) || null,
+      asignadoa: empleadoId || null,
       alquiler: formData.get("alquiler") === "on",
       preciocompra: formData.get("preciocompra") ? Number.parseFloat(formData.get("preciocompra") as string) : null,
       // Nuevos campos para la relación con empleados
-      empleado_id: formData.get("empleado_id") ? Number.parseInt(formData.get("empleado_id") as string) : null,
+      empleado_id: empleadoId ? Number.parseInt(empleadoId) : null,
       fecha_asignacion: (formData.get("fecha_asignacion") as string) || null,
       observaciones_asignacion: (formData.get("observaciones_asignacion") as string) || null,
     }
@@ -81,6 +84,7 @@ export async function crearCoche(formData: FormData) {
       cocheData.empleado_id = null
       cocheData.fecha_asignacion = null
       cocheData.observaciones_asignacion = null
+      cocheData.asignadoa = null
     }
 
     // Insertar en Supabase
@@ -93,8 +97,6 @@ export async function crearCoche(formData: FormData) {
         error: `Error al crear el coche: ${error.message}`,
       }
     }
-
-    console.log("Coche creado exitosamente:", data)
 
     // Gestionar tarjeta SOLRED
     const numeroTarjetaSolred = formData.get("numero_tarjeta_solred") as string
@@ -124,6 +126,7 @@ export async function crearCoche(formData: FormData) {
 
     // Revalidar la página de coches para mostrar los nuevos datos
     revalidatePath("/coches")
+    revalidatePath("/")
 
     return {
       success: true,

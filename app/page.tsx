@@ -31,35 +31,23 @@ async function getDashboardData() {
       console.error("Error fetching coches recientes:", recientesError)
     }
 
-    // Obtener ITVs para calcular alertas
+    // Modify the ITV query to include the vehicle information
     const { data: itvs, error: itvsError } = await supabase
       .from("itvs")
-      .select("*")
+      .select(`
+    *,
+    coches (
+      matricula,
+      marca,
+      modelo,
+      donante,
+      asignadoa
+    )
+  `)
       .order("fechaproximarevision", { ascending: true })
 
     if (itvsError) {
       console.error("Error fetching ITVs:", itvsError)
-    }
-
-    // Obtener tarjetas SOLRED para calcular alertas de vencimiento
-    const { data: tarjetasSolred, error: tarjetasError } = await supabase
-      .from("solred_coches")
-      .select(`
-    *,
-    tarjetassolred (
-      numero_tarjeta,
-      fechavencimiento
-    ),
-    coches (
-      matricula,
-      marca,
-      modelo
-    )
-  `)
-      .eq("activa", true)
-
-    if (tarjetasError) {
-      console.error("Error fetching tarjetas SOLRED:", tarjetasError)
     }
 
     // Calcular alertas de ITVs
@@ -68,6 +56,9 @@ async function getDashboardData() {
     thirtyDaysFromNow.setDate(today.getDate() + 30)
 
     const itvAlerts = (itvs || []).filter((itv) => {
+      // Skip donor vehicles
+      if (itv.coches?.donante === true) return false
+
       const fechaProximaRevision = new Date(itv.fechaproximarevision)
       return fechaProximaRevision <= thirtyDaysFromNow
     })
@@ -82,8 +73,34 @@ async function getDashboardData() {
       return fechaProximaRevision >= today && fechaProximaRevision <= thirtyDaysFromNow
     })
 
+    // Also modify the SOLRED alerts calculation to exclude donor vehicles
+    const { data: tarjetasSolred, error: tarjetasError } = await supabase
+      .from("solred_coches")
+      .select(`
+    *,
+    tarjetassolred (
+      numero_tarjeta,
+      fechavencimiento
+    ),
+    coches (
+      matricula,
+      marca,
+      modelo,
+      donante,
+      asignadoa
+    )
+  `)
+      .eq("activa", true)
+
+    if (tarjetasError) {
+      console.error("Error fetching tarjetas SOLRED:", tarjetasError)
+    }
+
     // Calcular alertas de tarjetas SOLRED
     const solredAlerts = (tarjetasSolred || []).filter((asignacion) => {
+      // Skip donor vehicles
+      if (asignacion.coches?.donante === true) return false
+
       if (!asignacion.tarjetassolred?.fechavencimiento) return false
       const fechaVencimiento = new Date(asignacion.tarjetassolred.fechavencimiento)
       return fechaVencimiento <= thirtyDaysFromNow
@@ -149,22 +166,33 @@ function DashboardStats({
   itvAlerts: any
   solredAlerts: any
 }) {
-  // Calcular estadísticas de forma consistente
+  // Contar donantes
+  const donantesCount = coches.filter((c) => c.donante === true).length
+
+  // Contar asignados (sin incluir donantes)
+  const asignadosReal = coches.filter(
+    (c) => !c.donante && c.asignadoa !== null && c.asignadoa !== undefined && c.asignadoa !== "",
+  ).length
+
+  // Contar disponibles (sin incluir donantes)
+  const disponiblesReal = coches.filter(
+    (c) => !c.donante && (c.asignadoa === null || c.asignadoa === undefined || c.asignadoa === ""),
+  ).length
+
+  const totalCoches = coches.length
+
   const stats = {
-    totalCoches: coches.length,
-    cochesAsignados: coches.filter((c) => {
-      if (!c.asignadoa) return false
-      if (typeof c.asignadoa === "string") return c.asignadoa.trim() !== ""
-      return true
-    }).length,
+    totalCoches: totalCoches,
+    cochesAsignados: asignadosReal,
+    cochesDisponibles: disponiblesReal,
     totalEmpleados: empleados.length,
+    donorVehicles: donantesCount,
     totalAlertas: itvAlerts.total + solredAlerts.total,
   }
 
-  stats.cochesDisponibles = stats.totalCoches - stats.cochesAsignados
-
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-8">
+      {/* 1. Total Coches */}
       <Card>
         <CardContent className="p-6">
           <div className="flex items-center">
@@ -181,25 +209,27 @@ function DashboardStats({
         </CardContent>
       </Card>
 
+      {/* 2. Donantes */}
       <Card>
         <CardContent className="p-6">
           <div className="flex items-center">
-            <div className="p-3 rounded-lg bg-green-50">
-              <Car className="h-6 w-6 text-green-600" />
+            <div className="p-3 rounded-lg bg-amber-50">
+              <Car className="h-6 w-6 text-amber-600" />
             </div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Disponibles</p>
+              <p className="text-sm font-medium text-gray-600">Donantes</p>
               <Link
-                href="/coches?filter=available"
-                className="text-2xl font-bold text-gray-900 hover:text-green-600 transition-colors"
+                href="/coches?filter=donor"
+                className="text-2xl font-bold text-gray-900 hover:text-amber-600 transition-colors"
               >
-                {stats.cochesDisponibles}
+                {stats.donorVehicles}
               </Link>
             </div>
           </div>
         </CardContent>
       </Card>
 
+      {/* 3. Asignados */}
       <Card>
         <CardContent className="p-6">
           <div className="flex items-center">
@@ -219,6 +249,27 @@ function DashboardStats({
         </CardContent>
       </Card>
 
+      {/* 4. Disponibles */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center">
+            <div className="p-3 rounded-lg bg-green-50">
+              <Car className="h-6 w-6 text-green-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Disponibles</p>
+              <Link
+                href="/coches?filter=available"
+                className="text-2xl font-bold text-gray-900 hover:text-green-600 transition-colors"
+              >
+                {stats.cochesDisponibles}
+              </Link>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 5. Empleados */}
       <Card>
         <CardContent className="p-6">
           <div className="flex items-center">
@@ -238,6 +289,7 @@ function DashboardStats({
         </CardContent>
       </Card>
 
+      {/* 6. Alertas ITV */}
       <Card>
         <CardContent className="p-6">
           <div className="flex items-center">
@@ -257,7 +309,7 @@ function DashboardStats({
   )
 }
 
-function AlertsSection({ itvAlerts, coches }: { itvAlerts: any; coches: any[] }) {
+function AlertsSection({ itvAlerts, coches, empleados }: { itvAlerts: any; coches: any[]; empleados: any[] }) {
   if (itvAlerts.total === 0) {
     return null
   }
@@ -266,6 +318,12 @@ function AlertsSection({ itvAlerts, coches }: { itvAlerts: any; coches: any[] })
   const cochesMap = new Map()
   coches.forEach((coche) => {
     cochesMap.set(coche.matricula, coche)
+  })
+
+  // Crear mapa de empleados para búsqueda rápida
+  const empleadosMap = new Map()
+  empleados.forEach((empleado) => {
+    empleadosMap.set(empleado.id, empleado)
   })
 
   const formatDate = (dateString: string) => {
@@ -278,6 +336,24 @@ function AlertsSection({ itvAlerts, coches }: { itvAlerts: any; coches: any[] })
     const diffTime = targetDate.getTime() - today.getTime()
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
     return diffDays
+  }
+
+  // Función para obtener información del empleado asignado
+  const getEmpleadoInfo = (coche: any) => {
+    if (!coche || !coche.asignadoa) return null
+
+    // Si asignadoa es un número o string numérico, buscar en el mapa de empleados
+    const empleadoId = Number(coche.asignadoa)
+    if (!isNaN(empleadoId)) {
+      return empleadosMap.get(empleadoId)
+    }
+
+    // Si es un string no numérico, devolverlo directamente
+    if (typeof coche.asignadoa === "string" && coche.asignadoa.trim() !== "") {
+      return { nombre: coche.asignadoa, apellidos: "" }
+    }
+
+    return null
   }
 
   return (
@@ -295,14 +371,21 @@ function AlertsSection({ itvAlerts, coches }: { itvAlerts: any; coches: any[] })
               {itvAlerts.detalles
                 .filter((itv: any) => new Date(itv.fechaproximarevision) < new Date())
                 .map((itv: any) => {
-                  const coche = cochesMap.get(itv.matricula)
+                  const coche = cochesMap.get(itv.matricula) || itv.coches
                   const daysOverdue = Math.abs(getDaysUntilDate(itv.fechaproximarevision))
+                  const empleadoInfo = getEmpleadoInfo(coche)
+
                   return (
                     <div key={itv.id} className="p-3 bg-red-100 border border-red-200 rounded-md">
                       <div className="flex justify-between items-center">
                         <div>
                           <p className="font-medium text-red-800">
                             {itv.matricula} - {coche ? `${coche.marca} ${coche.modelo}` : "Información no disponible"}
+                            {empleadoInfo && (
+                              <span className="ml-2 text-red-700 font-normal">
+                                (Asignado a: {empleadoInfo.nombre} {empleadoInfo.apellidos})
+                              </span>
+                            )}
                           </p>
                           <p className="text-sm text-red-600">
                             ITV vencida hace {daysOverdue} días (venció el {formatDate(itv.fechaproximarevision)})
@@ -333,14 +416,21 @@ function AlertsSection({ itvAlerts, coches }: { itvAlerts: any; coches: any[] })
                   return fecha >= today
                 })
                 .map((itv: any) => {
-                  const coche = cochesMap.get(itv.matricula)
+                  const coche = cochesMap.get(itv.matricula) || itv.coches
                   const daysUntil = getDaysUntilDate(itv.fechaproximarevision)
+                  const empleadoInfo = getEmpleadoInfo(coche)
+
                   return (
                     <div key={itv.id} className="p-3 bg-yellow-100 border border-yellow-200 rounded-md">
                       <div className="flex justify-between items-center">
                         <div>
                           <p className="font-medium text-yellow-800">
                             {itv.matricula} - {coche ? `${coche.marca} ${coche.modelo}` : "Información no disponible"}
+                            {empleadoInfo && (
+                              <span className="ml-2 text-yellow-700 font-normal">
+                                (Asignado a: {empleadoInfo.nombre} {empleadoInfo.apellidos})
+                              </span>
+                            )}
                           </p>
                           <p className="text-sm text-yellow-600">
                             ITV en {daysUntil} días ({formatDate(itv.fechaproximarevision)})
@@ -364,10 +454,16 @@ function AlertsSection({ itvAlerts, coches }: { itvAlerts: any; coches: any[] })
   )
 }
 
-function SolredAlertsSection({ solredAlerts }: { solredAlerts: any }) {
+function SolredAlertsSection({ solredAlerts, empleados }: { solredAlerts: any; empleados: any[] }) {
   if (solredAlerts.total === 0) {
     return null
   }
+
+  // Crear mapa de empleados para búsqueda rápida
+  const empleadosMap = new Map()
+  empleados.forEach((empleado) => {
+    empleadosMap.set(empleado.id, empleado)
+  })
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("es-ES")
@@ -379,6 +475,24 @@ function SolredAlertsSection({ solredAlerts }: { solredAlerts: any }) {
     const diffTime = targetDate.getTime() - today.getTime()
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
     return diffDays
+  }
+
+  // Función para obtener información del empleado asignado
+  const getEmpleadoInfo = (coche: any) => {
+    if (!coche || !coche.asignadoa) return null
+
+    // Si asignadoa es un número o string numérico, buscar en el mapa de empleados
+    const empleadoId = Number(coche.asignadoa)
+    if (!isNaN(empleadoId)) {
+      return empleadosMap.get(empleadoId)
+    }
+
+    // Si es un string no numérico, devolverlo directamente
+    if (typeof coche.asignadoa === "string" && coche.asignadoa.trim() !== "") {
+      return { nombre: coche.asignadoa, apellidos: "" }
+    }
+
+    return null
   }
 
   return (
@@ -397,6 +511,8 @@ function SolredAlertsSection({ solredAlerts }: { solredAlerts: any }) {
                 .filter((asignacion: any) => new Date(asignacion.tarjetassolred.fechavencimiento) < new Date())
                 .map((asignacion: any) => {
                   const daysOverdue = Math.abs(getDaysUntilDate(asignacion.tarjetassolred.fechavencimiento))
+                  const empleadoInfo = getEmpleadoInfo(asignacion.coches)
+
                   return (
                     <div key={asignacion.id} className="p-3 bg-red-100 border border-red-200 rounded-md">
                       <div className="flex justify-between items-center">
@@ -406,6 +522,11 @@ function SolredAlertsSection({ solredAlerts }: { solredAlerts: any }) {
                             {asignacion.coches
                               ? `${asignacion.coches.marca} ${asignacion.coches.modelo}`
                               : "Información no disponible"}
+                            {empleadoInfo && (
+                              <span className="ml-2 text-red-700 font-normal">
+                                (Asignado a: {empleadoInfo.nombre} {empleadoInfo.apellidos})
+                              </span>
+                            )}
                           </p>
                           <p className="text-sm text-red-600">
                             Tarjeta {asignacion.tarjetassolred.numero_tarjeta} vencida hace {daysOverdue} días (venció
@@ -440,6 +561,8 @@ function SolredAlertsSection({ solredAlerts }: { solredAlerts: any }) {
                 })
                 .map((asignacion: any) => {
                   const daysUntil = getDaysUntilDate(asignacion.tarjetassolred.fechavencimiento)
+                  const empleadoInfo = getEmpleadoInfo(asignacion.coches)
+
                   return (
                     <div key={asignacion.id} className="p-3 bg-orange-100 border border-orange-200 rounded-md">
                       <div className="flex justify-between items-center">
@@ -449,6 +572,11 @@ function SolredAlertsSection({ solredAlerts }: { solredAlerts: any }) {
                             {asignacion.coches
                               ? `${asignacion.coches.marca} ${asignacion.coches.modelo}`
                               : "Información no disponible"}
+                            {empleadoInfo && (
+                              <span className="ml-2 text-orange-700 font-normal">
+                                (Asignado a: {empleadoInfo.nombre} {empleadoInfo.apellidos})
+                              </span>
+                            )}
                           </p>
                           <p className="text-sm text-orange-600">
                             Tarjeta {asignacion.tarjetassolred.numero_tarjeta} vence en {daysUntil} días (
@@ -579,11 +707,11 @@ export default async function HomePage() {
         </Suspense>
 
         <Suspense fallback={<div>Cargando alertas...</div>}>
-          <AlertsSection itvAlerts={itvAlerts} coches={coches} />
+          <AlertsSection itvAlerts={itvAlerts} coches={coches} empleados={empleados} />
         </Suspense>
 
         <Suspense fallback={<div>Cargando alertas SOLRED...</div>}>
-          <SolredAlertsSection solredAlerts={solredAlerts} />
+          <SolredAlertsSection solredAlerts={solredAlerts} empleados={empleados} />
         </Suspense>
 
         <Suspense fallback={<div>Cargando vehículos recientes...</div>}>

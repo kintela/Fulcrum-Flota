@@ -12,6 +12,8 @@ import {
 export async function editarCoche(id: string, formData: FormData) {
   try {
     // Extraer datos del formulario
+    const empleadoId = formData.get("empleado_id") as string
+
     const cocheData = {
       matricula: formData.get("matricula") as string,
       marca: formData.get("marca") as string,
@@ -25,11 +27,11 @@ export async function editarCoche(id: string, formData: FormData) {
       combustible: (formData.get("combustible") as string) || "Gasolina",
       extras: (formData.get("extras") as string) || null,
       donante: formData.get("donante") === "on",
-      asignadoa: (formData.get("asignadoa") as string) || null,
+      asignadoa: empleadoId || null,
       alquiler: formData.get("alquiler") === "on",
       preciocompra: formData.get("preciocompra") ? Number.parseFloat(formData.get("preciocompra") as string) : null,
       // Nuevos campos para la relación con empleados
-      empleado_id: formData.get("empleado_id") ? Number.parseInt(formData.get("empleado_id") as string) : null,
+      empleado_id: empleadoId ? Number.parseInt(empleadoId) : null,
       fecha_asignacion: (formData.get("fecha_asignacion") as string) || null,
       observaciones_asignacion: (formData.get("observaciones_asignacion") as string) || null,
     }
@@ -63,6 +65,7 @@ export async function editarCoche(id: string, formData: FormData) {
       cocheData.empleado_id = null
       cocheData.fecha_asignacion = null
       cocheData.observaciones_asignacion = null
+      cocheData.asignadoa = null
     }
 
     // Actualizar en Supabase usando matricula como clave primaria
@@ -75,8 +78,6 @@ export async function editarCoche(id: string, formData: FormData) {
         error: `Error al actualizar el coche: ${error.message}`,
       }
     }
-
-    console.log("Coche actualizado exitosamente:", data)
 
     // Gestionar tarjeta SOLRED
     const numeroTarjetaSolred = formData.get("numero_tarjeta_solred") as string
@@ -124,6 +125,7 @@ export async function editarCoche(id: string, formData: FormData) {
     // Revalidar las páginas relevantes
     revalidatePath("/coches")
     revalidatePath(`/coches/detalle/${id}`)
+    revalidatePath("/")
 
     return {
       success: true,
