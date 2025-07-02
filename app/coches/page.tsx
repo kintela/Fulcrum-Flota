@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Car, Plus, Filter, Users, Calendar, AlertTriangle, Clock } from "lucide-react"
+import { Car, Plus, Filter, Users, Calendar, AlertTriangle, Clock, CreditCard, Truck } from "lucide-react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 import { obtenerFotosCoche } from "@/lib/storage"
@@ -35,99 +35,183 @@ function formatDate(dateString: string): string {
 }
 
 async function getCoches(filter?: string) {
-  // Primero obtenemos todos los empleados para crear un mapa
-  const { data: empleados } = await supabase.from("empleados").select("id, nombre, apellidos")
+  try {
+    // Primero obtenemos todos los empleados para crear un mapa
+    const { data: empleados } = await supabase.from("empleados").select("id, nombre, apellidos")
 
-  const empleadosMap = new Map()
-  if (empleados) {
-    empleados.forEach((emp) => {
-      empleadosMap.set(emp.id.toString(), `${emp.nombre} ${emp.apellidos}`)
-    })
-  }
-
-  // Luego obtenemos los coches sin la relación anidada
-  let query = supabase.from("coches").select("*")
-
-  // Aplicar filtros según el parámetro
-  if (filter === "assigned") {
-    // Coches asignados: tienen valor en asignadoa
-    query = query.not("asignadoa", "is", null).neq("asignadoa", "")
-  } else if (filter === "available") {
-    // Coches disponibles: sin valor en asignadoa
-    query = query.or("asignadoa.is.null,asignadoa.eq.")
-  } else if (filter === "rental") {
-    // Coches de alquiler
-    query = query.eq("alquiler", true)
-  }
-
-  const { data: coches, error } = await query.order("matricula", { ascending: true })
-
-  if (error) {
-    console.error("Error fetching coches:", error)
-    return []
-  }
-
-  // Obtener ITVs para todos los coches - usando los nombres correctos de las columnas
-  const { data: itvs, error: itvsError } = await supabase
-    .from("itvs")
-    .select("matricula, fechaproximarevision")
-    .order("fecharevision", { ascending: false })
-
-  // Crear un mapa de próximas revisiones por matrícula
-  const proximasRevisionesMap = new Map()
-  if (itvs) {
-    itvs.forEach((itv) => {
-      if (!proximasRevisionesMap.has(itv.matricula)) {
-        proximasRevisionesMap.set(itv.matricula, itv.fechaproximarevision)
-      }
-    })
-  }
-
-  // Enriquecer los coches con los nombres de empleados y próximas revisiones
-  const cochesConEmpleados = (coches || []).map((coche) => {
-    const proximaRevision = proximasRevisionesMap.get(coche.matricula)
-
-    // Determinar el nombre del empleado asignado
-    let empleadoNombre = null
-    if (coche.asignadoa) {
-      if (typeof coche.asignadoa === "number") {
-        empleadoNombre = empleadosMap.get(coche.asignadoa.toString()) || `ID: ${coche.asignadoa}`
-      } else if (typeof coche.asignadoa === "string" && coche.asignadoa.trim() !== "") {
-        empleadoNombre = empleadosMap.get(coche.asignadoa) || coche.asignadoa
-      }
+    const empleadosMap = new Map()
+    if (empleados) {
+      empleados.forEach((emp) => {
+        empleadosMap.set(emp.id.toString(), `${emp.nombre} ${emp.apellidos}`)
+      })
     }
 
-    return {
-      ...coche,
-      empleadoNombre,
-      proximaRevisionITV: proximaRevision || null,
-    }
-  })
+    // Obtenemos TODOS los coches sin filtros iniciales para evitar problemas de conversión de tipos
+    const { data: coches, error } = await supabase.from("coches").select("*").order("matricula", { ascending: true })
 
-  // Obtener primera foto para cada coche
-  const cochesConFotos = await Promise.all(
-    cochesConEmpleados.map(async (coche) => {
-      const primeraFoto = await obtenerPrimeraFoto(coche.matricula)
+    if (error) {
+      console.error("Error fetching coches:", error)
+      return []
+    }
+
+    // Aplicamos los filtros en JavaScript en lugar de SQL para evitar problemas de conversión
+    let cochesFiltrados = [...(coches || [])]
+
+    if (filter === "assigned") {
+      // Coches asignados: tienen valor en asignadoa y no son donantes
+      cochesFiltrados = cochesFiltrados.filter(
+        (coche) =>
+          coche.asignadoa !== null &&
+          coche.asignadoa !== undefined &&
+          coche.asignadoa !== "" &&
+          coche.donante === false,
+      )
+    } else if (filter === "available") {
+      // Coches disponibles: sin valor en asignadoa y no son donantes
+      cochesFiltrados = cochesFiltrados.filter(
+        (coche) =>
+          (coche.asignadoa === null || coche.asignadoa === undefined || coche.asignadoa === "") &&
+          coche.donante === false,
+      )
+    } else if (filter === "rental") {
+      // Coches de alquiler
+      cochesFiltrados = cochesFiltrados.filter((coche) => coche.alquiler === true)
+    } else if (filter === "donor") {
+      // Coches donantes
+      cochesFiltrados = cochesFiltrados.filter((coche) => coche.donante === true)
+    }
+
+    // Obtener ITVs para todos los coches - usando los nombres correctos de las columnas
+    const { data: itvs } = await supabase
+      .from("itvs")
+      .select("matricula, fechaproximarevision")
+      .order("fecharevision", { ascending: false })
+
+    // Crear un mapa de próximas revisiones por matrícula
+    const proximasRevisionesMap = new Map()
+    if (itvs) {
+      itvs.forEach((itv) => {
+        if (!proximasRevisionesMap.has(itv.matricula)) {
+          proximasRevisionesMap.set(itv.matricula, itv.fechaproximarevision)
+        }
+      })
+    }
+
+    // Obtener tarjetas SOLRED asignadas para todos los coches
+    const { data: tarjetasSolred } = await supabase
+      .from("solred_coches")
+      .select(`
+        matricula,
+        numero_tarjeta,
+        tarjetassolred (
+          numero_tarjeta,
+          pin,
+          fechavencimiento
+        )
+      `)
+      .eq("activa", true)
+
+    // Crear un mapa de tarjetas por matrícula
+    const tarjetasMap = new Map()
+    if (tarjetasSolred) {
+      tarjetasSolred.forEach((relacion) => {
+        tarjetasMap.set(relacion.matricula, relacion.tarjetassolred)
+      })
+    }
+
+    // Obtener tarjetas ViaT asignadas para todos los coches
+    const { data: tarjetasViat } = await supabase.from("viat_empleados").select(`
+        empleado_id,
+        viat_id,
+        viats (
+          id,
+          fechacaducidad
+        )
+      `)
+
+    // Crear un mapa de tarjetas ViaT por empleado
+    const viatMap = new Map()
+    if (tarjetasViat) {
+      tarjetasViat.forEach((relacion) => {
+        viatMap.set(relacion.empleado_id.toString(), relacion.viats)
+      })
+    }
+
+    // Obtener seguros activos para todos los coches
+    const { data: segurosActivos } = await supabase.from("seguros").select("*").eq("activo", true)
+
+    // Crear un mapa de seguros por matrícula
+    const segurosMap = new Map()
+    if (segurosActivos) {
+      segurosActivos.forEach((seguro) => {
+        segurosMap.set(seguro.matricula, seguro)
+      })
+    }
+
+    // Enriquecer los coches con los nombres de empleados, próximas revisiones, tarjetas SOLRED y ViaT
+    const cochesConEmpleados = cochesFiltrados.map((coche) => {
+      const proximaRevision = proximasRevisionesMap.get(coche.matricula)
+      const tarjetaSolred = tarjetasMap.get(coche.matricula)
+      const seguroActivo = segurosMap.get(coche.matricula)
+
+      // Determinar el nombre del empleado asignado y su tarjeta ViaT
+      let empleadoNombre = null
+      let tarjetaViat = null
+
+      // Solo procesamos asignadoa si no es null, undefined o cadena vacía
+      if (coche.asignadoa !== null && coche.asignadoa !== undefined && coche.asignadoa !== "") {
+        // Si es un número, usamos directamente
+        if (typeof coche.asignadoa === "number") {
+          empleadoNombre = empleadosMap.get(coche.asignadoa.toString()) || `ID: ${coche.asignadoa}`
+          tarjetaViat = viatMap.get(coche.asignadoa.toString())
+        }
+        // Si es string, intentamos buscar en el mapa o usamos el valor directamente
+        else if (typeof coche.asignadoa === "string") {
+          // Intentamos convertir a número si parece ser un ID
+          if (/^\d+$/.test(coche.asignadoa)) {
+            empleadoNombre = empleadosMap.get(coche.asignadoa) || `ID: ${coche.asignadoa}`
+            tarjetaViat = viatMap.get(coche.asignadoa)
+          } else {
+            // Si no es un número, usamos el texto directamente
+            empleadoNombre = coche.asignadoa
+          }
+        }
+      }
+
       return {
         ...coche,
-        primeraFoto,
+        empleadoNombre,
+        proximaRevisionITV: proximaRevision || null,
+        tarjetaSolred,
+        tarjetaViat,
+        seguroActivo,
       }
-    }),
-  )
+    })
 
-  return cochesConFotos
-}
+    // Obtener primera foto para cada coche
+    const cochesConFotos = await Promise.all(
+      cochesConEmpleados.map(async (coche) => {
+        let primeraFoto = null
+        try {
+          const resultado = await obtenerFotosCoche(coche.matricula)
+          if (resultado.success && resultado.fotos && resultado.fotos.length > 0) {
+            primeraFoto = resultado.fotos[0]
+          }
+        } catch (error) {
+          // Silenciar errores de fotos para no interrumpir la carga de la página
+        }
 
-async function obtenerPrimeraFoto(matricula: string): Promise<string | null> {
-  try {
-    const resultado = await obtenerFotosCoche(matricula)
-    if (resultado.success && resultado.fotos && resultado.fotos.length > 0) {
-      return resultado.fotos[0]
-    }
-    return null
+        return {
+          ...coche,
+          primeraFoto,
+        }
+      }),
+    )
+
+    return cochesConFotos
   } catch (error) {
-    console.error(`Error obteniendo primera foto para ${matricula}:`, error)
-    return null
+    console.error("Error en getCoches:", error)
+    return []
   }
 }
 
@@ -149,6 +233,9 @@ export default async function CochesPage({ searchParams }: { searchParams: Searc
   } else if (filter === "rental") {
     title = "Coches de Alquiler"
     subtitle = `Vehículos de alquiler (${coches.length} vehículos)`
+  } else if (filter === "donor") {
+    title = "Coches Donantes"
+    subtitle = `Vehículos donantes para piezas (${coches.length} vehículos)`
   }
 
   return (
@@ -202,6 +289,13 @@ export default async function CochesPage({ searchParams }: { searchParams: Searc
             >
               <Calendar className="h-4 w-4 mr-1.5" />
               Ver alquileres
+            </Link>
+            <Link
+              href="/coches?filter=donor"
+              className="bg-amber-100 hover:bg-amber-200 text-amber-800 px-3 py-1.5 rounded-md text-sm flex items-center"
+            >
+              <Car className="h-4 w-4 mr-1.5" />
+              Ver donantes
             </Link>
           </div>
         )}
@@ -313,11 +407,67 @@ export default async function CochesPage({ searchParams }: { searchParams: Searc
                           )}
                         </div>
                       </div>
+                      {/* Tarjeta SOLRED */}
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Tarjeta SOLRED:</span>
+                        <div className="flex items-center">
+                          {coche.tarjetaSolred ? (
+                            <>
+                              <CreditCard className="h-4 w-4 text-blue-600 mr-1" />
+                              <span className="text-blue-600 font-semibold">PIN: {coche.tarjetaSolred.pin}</span>
+                            </>
+                          ) : (
+                            <span className="text-gray-400 italic">Sin tarjeta</span>
+                          )}
+                        </div>
+                      </div>
+                      {/* Tarjeta ViaT */}
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Tarjeta ViaT:</span>
+                        <div className="flex items-center">
+                          {coche.tarjetaViat ? (
+                            <>
+                              <Truck className="h-4 w-4 text-green-600 mr-1" />
+                              <span className="text-green-600 font-semibold">{coche.tarjetaViat.id}</span>
+                            </>
+                          ) : (
+                            <span className="text-gray-400 italic">Sin tarjeta</span>
+                          )}
+                        </div>
+                      </div>
+                      {/* Seguro */}
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Seguro:</span>
+                        <div className="flex items-center">
+                          {coche.seguroActivo ? (
+                            <div className="text-right">
+                              <div className="flex items-center">
+                                <span
+                                  className={
+                                    new Date(coche.seguroActivo.fecha_vencimiento) < new Date()
+                                      ? "text-red-600 font-semibold"
+                                      : "text-blue-600 font-semibold"
+                                  }
+                                >
+                                  {formatDate(coche.seguroActivo.fecha_vencimiento)}
+                                </span>
+                              </div>
+                              {coche.seguroActivo.telefono_asistencia1 && (
+                                <span className="text-xs text-gray-600">
+                                  Tel: {coche.seguroActivo.telefono_asistencia1}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 italic">Sin seguro</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
                     <div className="flex flex-wrap gap-2 mb-4">
                       {coche.donante && (
-                        <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded text-sm">Donante</span>
+                        <span className="bg-amber-100 text-amber-800 px-2 py-1 rounded text-sm">Donante</span>
                       )}
                       {coche.alquiler && (
                         <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded text-sm">Alquiler</span>

@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { ArrowLeft, Car, Calendar, User, Wrench } from 'lucide-react'
+import { ArrowLeft, Car, Calendar, User, Wrench, CreditCard } from "lucide-react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 import { FotosManager } from "@/components/fotos-manager"
@@ -34,6 +34,25 @@ async function getCoche(id: string) {
       } else {
         console.error("Error al obtener empleado:", empleadoError)
       }
+    }
+
+    // Obtener información de la tarjeta SOLRED
+    const { data: solredData, error: solredError } = await supabase
+      .from("solred_coches")
+      .select(`
+        numero_tarjeta,
+        tarjetassolred (
+          numero_tarjeta,
+          pin,
+          fechavencimiento
+        )
+      `)
+      .eq("matricula", id)
+      .eq("activa", true)
+      .single()
+
+    if (!solredError && solredData) {
+      data.tarjeta_solred = solredData
     }
 
     return data
@@ -212,6 +231,34 @@ export default async function CocheDetailPage({ params }: CocheDetailPageProps) 
               )}
             </CardContent>
           </Card>
+
+          {/* Tarjeta SOLRED */}
+          {coche.tarjeta_solred && coche.tarjeta_solred.tarjetassolred && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <CreditCard className="h-5 w-5 mr-2" />
+                  Tarjeta SOLRED
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Número de Tarjeta:</span>
+                  <span>{coche.tarjeta_solred.numero_tarjeta}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">PIN:</span>
+                  <span className="font-medium">{coche.tarjeta_solred.tarjetassolred.pin}</span>
+                </div>
+                {coche.tarjeta_solred.tarjetassolred.fechavencimiento && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Fecha de Vencimiento:</span>
+                    <span>{new Date(coche.tarjeta_solred.tarjetassolred.fechavencimiento).toLocaleDateString()}</span>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Extras y observaciones */}
           <Card>

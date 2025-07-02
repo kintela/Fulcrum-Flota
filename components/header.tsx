@@ -22,7 +22,7 @@ export default function Header() {
           <div className="flex items-center">
             <div className="flex-shrink-0 flex items-center">
               <Car className="h-8 w-8 text-blue-600" />
-              <span className="ml-2 text-xl font-bold text-gray-900">Gestión de Flota Fulcrum</span>
+              <span className="ml-2 text-xl font-bold text-gray-900">Flota Fulcrum</span>
             </div>
           </div>
 

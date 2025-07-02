@@ -10,13 +10,16 @@ jest.mock("@/lib/supabase", () => ({
 
 const mockSupabase = supabase as jest.Mocked<typeof supabase>
 
-// Función auxiliar para calcular alertas de ITV (extraída de la lógica del dashboard)
+// Update the calculateITVAlerts function to exclude donor vehicles
 function calculateITVAlerts(itvs: any[]) {
   const today = new Date()
   const thirtyDaysFromNow = new Date()
   thirtyDaysFromNow.setDate(today.getDate() + 30)
 
   const itvAlerts = (itvs || []).filter((itv) => {
+    // Skip donor vehicles
+    if (itv.coches?.donante === true) return false
+
     const fechaProximaRevision = new Date(itv.fechaproximarevision)
     return fechaProximaRevision <= thirtyDaysFromNow
   })
@@ -217,5 +220,48 @@ describe("Dashboard ITV Alerts Calculation", () => {
     // Should only process the valid date
     expect(alerts.total).toBe(1)
     expect(alerts.detalles[0].matricula).toBe("VALID")
+  })
+
+  it("excludes donor vehicles from alerts even if their ITV is overdue or about to expire", () => {
+    const itvs = [
+      {
+        id: 1,
+        matricula: "DONOR1",
+        fechaproximarevision: "2024-01-05", // Overdue
+        coches: { matricula: "DONOR1", donante: true },
+      },
+      {
+        id: 2,
+        matricula: "DONOR2",
+        fechaproximarevision: "2024-01-25", // About to expire
+        coches: { matricula: "DONOR2", donante: true },
+      },
+      {
+        id: 3,
+        matricula: "NORMAL1",
+        fechaproximarevision: "2024-01-05", // Overdue
+        coches: { matricula: "NORMAL1", donante: false },
+      },
+      {
+        id: 4,
+        matricula: "NORMAL2",
+        fechaproximarevision: "2024-01-25", // About to expire
+        coches: { matricula: "NORMAL2", donante: false },
+      },
+    ]
+
+    const alerts = calculateITVAlerts(itvs)
+
+    // Should only include the non-donor vehicles
+    expect(alerts.total).toBe(2)
+    expect(alerts.vencidas).toBe(1)
+    expect(alerts.proximasVencer).toBe(1)
+
+    // Verify that only non-donor vehicles are included
+    const alertMatriculas = alerts.detalles.map((itv: any) => itv.matricula)
+    expect(alertMatriculas).toContain("NORMAL1")
+    expect(alertMatriculas).toContain("NORMAL2")
+    expect(alertMatriculas).not.toContain("DONOR1")
+    expect(alertMatriculas).not.toContain("DONOR2")
   })
 })
