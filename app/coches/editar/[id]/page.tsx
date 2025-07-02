@@ -1,45 +1,55 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
-import { toast } from "@/hooks/use-toast"
+import { Textarea } from "@/components/ui/textarea"
+import { ArrowLeft, Car, Save } from "lucide-react"
 import {
-  obtenerCoche,
   editarCoche,
+  obtenerCoche,
   guardarSeccionBasica,
   guardarSeccionAlquiler,
   guardarSeccionAsignacion,
 } from "./actions"
-import { supabase } from "@/lib/supabase"
+import { obtenerEmpleados } from "@/app/actions/empleados"
 import { SolredManager } from "@/components/solred-manager"
 import { ViatManager } from "@/components/viat-manager"
-import { ItvManager } from "@/components/itv-manager"
+import { ITVManager } from "@/components/itv-manager"
 import { SeguroManager } from "@/components/seguro-manager"
 import { FotosManager } from "@/components/fotos-manager"
 
-interface Coche {
+interface Empleado {
   id: number
+  nombre: string
+  apellidos: string
+  activo: boolean
+}
+
+interface Coche {
   matricula: string
   marca: string
   modelo: string
-  color: string
-  combustible: string
-  fecha_matriculacion: string
+  color?: string
+  fechamatriculacion?: string
   kms: number
-  precio_compra: number
-  fecha_compra: string
-  observaciones?: string
-  vehiculo_alquiler: boolean
+  kw?: number
+  cv?: number
+  cc?: number
+  combustible: string
+  extras?: string
+  donante: boolean
+  asignadoa?: string
+  alquiler: boolean
+  preciocompra?: number
   empleado_id?: number
+  fecha_asignacion?: string
+  observaciones_asignacion?: string
   fecha_inicio?: string
   fecha_fin?: string
   importe_anual?: number
@@ -47,486 +57,433 @@ interface Coche {
   kms_anuales?: number
 }
 
-interface Empleado {
-  id: number
-  nombre: string
-  apellidos: string
-}
-
 export default function EditarCochePage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const [coche, setCoche] = useState<Coche | null>(null)
   const [empleados, setEmpleados] = useState<Empleado[]>([])
-  const [isAlquiler, setIsAlquiler] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savingBasica, setSavingBasica] = useState(false)
   const [savingAlquiler, setSavingAlquiler] = useState(false)
   const [savingAsignacion, setSavingAsignacion] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [isAlquiler, setIsAlquiler] = useState(false)
 
   useEffect(() => {
-    async function cargarDatos() {
-      try {
-        // Cargar datos del coche
-        const cocheData = await obtenerCoche(params.id)
-        if (cocheData) {
-          setCoche(cocheData)
-          setIsAlquiler(cocheData.vehiculo_alquiler)
-        }
-
-        // Cargar empleados
-        const { data: empleadosData, error } = await supabase
-          .from("empleados")
-          .select("id, nombre, apellidos")
-          .order("nombre")
-
-        if (error) {
-          console.error("Error al cargar empleados:", error)
-        } else {
-          setEmpleados(empleadosData || [])
-        }
-      } catch (error) {
-        console.error("Error al cargar datos:", error)
-        toast({
-          title: "Error",
-          description: "Error al cargar los datos del coche",
-          variant: "destructive",
-        })
-      } finally {
-        setLoading(false)
-      }
-    }
-
     cargarDatos()
   }, [params.id])
 
-  const recargarCoche = async () => {
-    const cocheData = await obtenerCoche(params.id)
-    if (cocheData) {
+  useEffect(() => {
+    if (coche) {
+      setIsAlquiler(coche.alquiler)
+    }
+  }, [coche])
+
+  const cargarDatos = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+
+      // Cargar datos del coche
+      const cocheData = await obtenerCoche(params.id)
+      if (!cocheData) {
+        setError("Coche no encontrado")
+        return
+      }
+
       setCoche(cocheData)
-      setIsAlquiler(cocheData.vehiculo_alquiler)
+
+      // Cargar empleados
+      const empleadosData = await obtenerEmpleados()
+      setEmpleados(empleadosData)
+    } catch (error) {
+      console.error("Error al cargar datos:", error)
+      setError("Error al cargar los datos del coche")
+    } finally {
+      setLoading(false)
     }
   }
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
     setSaving(true)
+    setError(null)
 
     try {
-      const formData = new FormData(event.currentTarget)
-      const result = await editarCoche(formData)
+      const formData = new FormData(e.currentTarget)
+      const resultado = await editarCoche(params.id, formData)
 
-      if (result.success) {
-        toast({
-          title: "Éxito",
-          description: result.message,
-        })
+      if (resultado.success) {
         router.push("/coches")
       } else {
-        toast({
-          title: "Error",
-          description: result.message,
-          variant: "destructive",
-        })
+        setError(resultado.error || "Error al actualizar el coche")
       }
     } catch (error) {
-      console.error("Error:", error)
-      toast({
-        title: "Error",
-        description: "Error al actualizar el coche",
-        variant: "destructive",
-      })
+      console.error("Error al guardar:", error)
+      setError("Error inesperado al guardar el coche")
     } finally {
       setSaving(false)
     }
   }
 
-  const handleGuardarBasica = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+  const handleAlquilerChange = (checked: boolean) => {
+    setIsAlquiler(checked)
+  }
+
+  const handleGuardarBasica = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
     setSavingBasica(true)
+    setError(null)
 
     try {
-      const formData = new FormData(event.currentTarget)
-      const result = await guardarSeccionBasica(formData)
+      const formData = new FormData(e.currentTarget)
+      const resultado = await guardarSeccionBasica(params.id, formData)
 
-      if (result.success) {
-        toast({
-          title: "Éxito",
-          description: result.message,
-        })
-        await recargarCoche()
+      if (resultado.success) {
+        // Recargar datos para reflejar cambios
+        await cargarDatos()
       } else {
-        toast({
-          title: "Error",
-          description: result.message,
-          variant: "destructive",
-        })
+        setError(resultado.error || "Error al guardar información básica")
       }
     } catch (error) {
-      console.error("Error:", error)
-      toast({
-        title: "Error",
-        description: "Error al guardar la información básica",
-        variant: "destructive",
-      })
+      console.error("Error al guardar:", error)
+      setError("Error inesperado al guardar")
     } finally {
       setSavingBasica(false)
     }
   }
 
-  const handleGuardarAlquiler = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+  const handleGuardarAlquiler = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
     setSavingAlquiler(true)
+    setError(null)
 
     try {
-      const formData = new FormData(event.currentTarget)
-      const result = await guardarSeccionAlquiler(formData)
+      const formData = new FormData(e.currentTarget)
+      const resultado = await guardarSeccionAlquiler(params.id, formData)
 
-      if (result.success) {
-        toast({
-          title: "Éxito",
-          description: result.message,
-        })
-        await recargarCoche()
+      if (resultado.success) {
+        await cargarDatos()
       } else {
-        toast({
-          title: "Error",
-          description: result.message,
-          variant: "destructive",
-        })
+        setError(resultado.error || "Error al guardar datos del alquiler")
       }
     } catch (error) {
-      console.error("Error:", error)
-      toast({
-        title: "Error",
-        description: "Error al guardar los datos del alquiler",
-        variant: "destructive",
-      })
+      console.error("Error al guardar:", error)
+      setError("Error inesperado al guardar")
     } finally {
       setSavingAlquiler(false)
     }
   }
 
-  const handleGuardarAsignacion = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+  const handleGuardarAsignacion = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
     setSavingAsignacion(true)
+    setError(null)
 
     try {
-      const formData = new FormData(event.currentTarget)
-      const result = await guardarSeccionAsignacion(formData)
+      const formData = new FormData(e.currentTarget)
+      const resultado = await guardarSeccionAsignacion(params.id, formData)
 
-      if (result.success) {
-        toast({
-          title: "Éxito",
-          description: result.message,
-        })
-        await recargarCoche()
+      if (resultado.success) {
+        await cargarDatos()
       } else {
-        toast({
-          title: "Error",
-          description: result.message,
-          variant: "destructive",
-        })
+        setError(resultado.error || "Error al guardar asignación")
       }
     } catch (error) {
-      console.error("Error:", error)
-      toast({
-        title: "Error",
-        description: "Error al guardar la asignación",
-        variant: "destructive",
-      })
+      console.error("Error al guardar:", error)
+      setError("Error inesperado al guardar")
     } finally {
       setSavingAsignacion(false)
     }
   }
 
   if (loading) {
-    return <div className="p-6">Cargando...</div>
+    return (
+      <div className="container mx-auto p-6">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p>Cargando datos del coche...</p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
-  if (!coche) {
-    return <div className="p-6">Coche no encontrado</div>
+  if (error && !coche) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <p className="text-red-600 mb-4">{error}</p>
+            <Button onClick={() => router.push("/coches")} variant="outline">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Volver a Coches
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
   }
+
+  if (!coche) return null
 
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Editar Coche</h1>
-        <Button variant="outline" onClick={() => router.back()}>
-          Volver
-        </Button>
+        <div className="flex items-center space-x-4">
+          <Button onClick={() => router.push("/coches")} variant="outline" size="sm">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Volver
+          </Button>
+          <div className="flex items-center space-x-2">
+            <Car className="h-6 w-6 text-blue-600" />
+            <h1 className="text-2xl font-bold">Editar Coche - {coche.matricula}</h1>
+          </div>
+        </div>
       </div>
 
-      {/* Información Básica */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Información Básica</CardTitle>
-          <form onSubmit={handleGuardarBasica}>
-            <input type="hidden" name="id" value={coche.id} />
-            <input type="hidden" name="matricula" value={coche.matricula} />
-            <input type="hidden" name="marca" value={coche.marca} />
-            <input type="hidden" name="modelo" value={coche.modelo} />
-            <input type="hidden" name="color" value={coche.color} />
-            <input type="hidden" name="combustible" value={coche.combustible} />
-            <input type="hidden" name="fecha_matriculacion" value={coche.fecha_matriculacion} />
-            <input type="hidden" name="kms" value={coche.kms} />
-            <input type="hidden" name="precio_compra" value={coche.precio_compra} />
-            <input type="hidden" name="fecha_compra" value={coche.fecha_compra} />
-            <input type="hidden" name="observaciones" value={coche.observaciones || ""} />
+      {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">{error}</div>}
+
+      <form onSubmit={handleGuardarBasica} className="space-y-6">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Información Básica</CardTitle>
             <Button type="submit" size="sm" disabled={savingBasica}>
+              <Save className="mr-2 h-4 w-4" />
               {savingBasica ? "Guardando..." : "Guardar"}
             </Button>
-          </form>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="matricula">Matrícula</Label>
-              <Input id="matricula" name="matricula" defaultValue={coche.matricula} required />
-            </div>
-            <div>
-              <Label htmlFor="marca">Marca</Label>
-              <Input id="marca" name="marca" defaultValue={coche.marca} required />
-            </div>
-            <div>
-              <Label htmlFor="modelo">Modelo</Label>
-              <Input id="modelo" name="modelo" defaultValue={coche.modelo} required />
-            </div>
-            <div>
-              <Label htmlFor="color">Color</Label>
-              <Input id="color" name="color" defaultValue={coche.color} required />
-            </div>
-            <div>
-              <Label htmlFor="combustible">Combustible</Label>
-              <Select name="combustible" defaultValue={coche.combustible}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona combustible" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="gasolina">Gasolina</SelectItem>
-                  <SelectItem value="diesel">Diésel</SelectItem>
-                  <SelectItem value="hibrido">Híbrido</SelectItem>
-                  <SelectItem value="electrico">Eléctrico</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="fecha_matriculacion">Fecha de Matriculación</Label>
-              <Input
-                id="fecha_matriculacion"
-                name="fecha_matriculacion"
-                type="date"
-                defaultValue={coche.fecha_matriculacion}
-                required
-              />
-            </div>
-            <div>
-              <Label htmlFor="kms">Kilómetros</Label>
-              <Input id="kms" name="kms" type="number" defaultValue={coche.kms} required />
-            </div>
-            <div>
-              <Label htmlFor="precio_compra">Precio de Compra (€)</Label>
-              <Input
-                id="precio_compra"
-                name="precio_compra"
-                type="number"
-                step="0.01"
-                defaultValue={coche.precio_compra}
-                required
-              />
-            </div>
-            <div>
-              <Label htmlFor="fecha_compra">Fecha de Compra</Label>
-              <Input id="fecha_compra" name="fecha_compra" type="date" defaultValue={coche.fecha_compra} required />
-            </div>
-          </div>
-          <div>
-            <Label htmlFor="observaciones">Observaciones</Label>
-            <Textarea id="observaciones" name="observaciones" defaultValue={coche.observaciones || ""} rows={3} />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Datos del Alquiler */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Datos del Alquiler</CardTitle>
-          <form onSubmit={handleGuardarAlquiler}>
-            <input type="hidden" name="id" value={coche.id} />
-            <input type="hidden" name="matricula" value={coche.matricula} />
-            <input type="hidden" name="vehiculo_alquiler" value={isAlquiler ? "on" : "off"} />
-            <input type="hidden" name="fecha_inicio" value={coche.fecha_inicio || ""} />
-            <input type="hidden" name="fecha_fin" value={coche.fecha_fin || ""} />
-            <input type="hidden" name="importe_anual" value={coche.importe_anual || ""} />
-            <input type="hidden" name="compania" value={coche.compania || ""} />
-            <input type="hidden" name="kms_anuales" value={coche.kms_anuales || ""} />
-            <Button type="submit" size="sm" disabled={savingAlquiler}>
-              {savingAlquiler ? "Guardando..." : "Guardar"}
-            </Button>
-          </form>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="vehiculo_alquiler"
-              name="vehiculo_alquiler"
-              checked={isAlquiler}
-              onCheckedChange={(checked) => setIsAlquiler(checked as boolean)}
-            />
-            <Label htmlFor="vehiculo_alquiler">Vehículo de Alquiler</Label>
-          </div>
-
-          {isAlquiler && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <div>
-                <Label htmlFor="fecha_inicio">Fecha Inicio</Label>
-                <Input id="fecha_inicio" name="fecha_inicio" type="date" defaultValue={coche.fecha_inicio || ""} />
+                <Label htmlFor="matricula">Matrícula *</Label>
+                <Input id="matricula" name="matricula" defaultValue={coche.matricula} required className="uppercase" />
               </div>
               <div>
-                <Label htmlFor="fecha_fin">Fecha Fin</Label>
-                <Input id="fecha_fin" name="fecha_fin" type="date" defaultValue={coche.fecha_fin || ""} />
+                <Label htmlFor="marca">Marca *</Label>
+                <Input id="marca" name="marca" defaultValue={coche.marca} required />
               </div>
               <div>
-                <Label htmlFor="importe_anual">Importe Anual (€)</Label>
+                <Label htmlFor="modelo">Modelo *</Label>
+                <Input id="modelo" name="modelo" defaultValue={coche.modelo} required />
+              </div>
+              <div>
+                <Label htmlFor="color">Color</Label>
+                <Input id="color" name="color" defaultValue={coche.color || ""} />
+              </div>
+              <div>
+                <Label htmlFor="fechamatriculacion">Fecha Matriculación</Label>
                 <Input
-                  id="importe_anual"
-                  name="importe_anual"
+                  id="fechamatriculacion"
+                  name="fechamatriculacion"
+                  type="date"
+                  defaultValue={coche.fechamatriculacion || ""}
+                />
+              </div>
+              <div>
+                <Label htmlFor="kms">Kilómetros</Label>
+                <Input id="kms" name="kms" type="number" min="0" defaultValue={coche.kms || 0} />
+              </div>
+              <div>
+                <Label htmlFor="kw">Potencia (kW)</Label>
+                <Input id="kw" name="kw" type="number" min="0" defaultValue={coche.kw || ""} />
+              </div>
+              <div>
+                <Label htmlFor="cv">Potencia (CV)</Label>
+                <Input id="cv" name="cv" type="number" min="0" defaultValue={coche.cv || ""} />
+              </div>
+              <div>
+                <Label htmlFor="cc">Cilindrada (cc)</Label>
+                <Input id="cc" name="cc" type="number" min="0" defaultValue={coche.cc || ""} />
+              </div>
+              <div>
+                <Label htmlFor="combustible">Combustible</Label>
+                <select
+                  id="combustible"
+                  name="combustible"
+                  defaultValue={coche.combustible || "Gasolina"}
+                  className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="Gasolina">Gasolina</option>
+                  <option value="Diesel">Diesel</option>
+                  <option value="Hibrido">Híbrido</option>
+                  <option value="Electrico">Eléctrico</option>
+                  <option value="GLP">GLP</option>
+                  <option value="GNC">GNC</option>
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="preciocompra">Precio Compra (€)</Label>
+                <Input
+                  id="preciocompra"
+                  name="preciocompra"
                   type="number"
+                  min="0"
                   step="0.01"
-                  defaultValue={coche.importe_anual || ""}
+                  defaultValue={coche.preciocompra || ""}
                 />
-              </div>
-              <div>
-                <Label htmlFor="compania">Compañía</Label>
-                <Input
-                  id="compania"
-                  name="compania"
-                  placeholder="Nombre de la compañía de alquiler"
-                  defaultValue={coche.compania || "N/A"}
-                />
-              </div>
-              <div>
-                <Label htmlFor="kms_anuales">Kilómetros Anuales</Label>
-                <Input id="kms_anuales" name="kms_anuales" type="number" defaultValue={coche.kms_anuales || "0"} />
               </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
 
-      {/* Asignación de Empleado */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Asignación de Empleado</CardTitle>
-          <form onSubmit={handleGuardarAsignacion}>
-            <input type="hidden" name="id" value={coche.id} />
-            <input type="hidden" name="empleado_id" value={coche.empleado_id || ""} />
+            <div>
+              <Label htmlFor="extras">Extras</Label>
+              <Textarea
+                id="extras"
+                name="extras"
+                defaultValue={coche.extras || ""}
+                placeholder="Describe los extras del vehículo..."
+                rows={3}
+              />
+            </div>
+
+            <div className="flex items-center space-x-6">
+              <div className="flex items-center space-x-2">
+                <Checkbox id="donante" name="donante" defaultChecked={coche.donante} />
+                <Label htmlFor="donante">Vehículo donante</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="alquiler"
+                  name="alquiler"
+                  defaultChecked={coche.alquiler}
+                  onCheckedChange={handleAlquilerChange}
+                />
+                <Label htmlFor="alquiler">Vehículo de alquiler</Label>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </form>
+
+      {isAlquiler && (
+        <form onSubmit={handleGuardarAlquiler}>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Datos del Alquiler</CardTitle>
+              <Button type="submit" size="sm" disabled={savingAlquiler}>
+                <Save className="mr-2 h-4 w-4" />
+                {savingAlquiler ? "Guardando..." : "Guardar"}
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <input type="hidden" name="alquiler" value={isAlquiler ? "on" : ""} />
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="fecha_inicio">Fecha Inicio</Label>
+                  <Input id="fecha_inicio" name="fecha_inicio" type="date" defaultValue={coche.fecha_inicio || ""} />
+                </div>
+                <div>
+                  <Label htmlFor="fecha_fin">Fecha Fin</Label>
+                  <Input id="fecha_fin" name="fecha_fin" type="date" defaultValue={coche.fecha_fin || ""} />
+                </div>
+                <div>
+                  <Label htmlFor="importe_anual">Importe Anual (€)</Label>
+                  <Input
+                    id="importe_anual"
+                    name="importe_anual"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    defaultValue={coche.importe_anual || ""}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="compania">Compañía</Label>
+                  <Input
+                    id="compania"
+                    name="compania"
+                    defaultValue={coche.compania || ""}
+                    placeholder="Nombre de la compañía de alquiler"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="kms_anuales">Kilómetros Anuales</Label>
+                  <Input
+                    id="kms_anuales"
+                    name="kms_anuales"
+                    type="number"
+                    min="0"
+                    defaultValue={coche.kms_anuales || ""}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </form>
+      )}
+
+      <form onSubmit={handleGuardarAsignacion}>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Asignación de Empleado</CardTitle>
             <Button type="submit" size="sm" disabled={savingAsignacion}>
+              <Save className="mr-2 h-4 w-4" />
               {savingAsignacion ? "Guardando..." : "Guardar"}
             </Button>
-          </form>
-        </CardHeader>
-        <CardContent>
-          <div>
-            <Label htmlFor="empleado_id">Empleado Asignado</Label>
-            <Select name="empleado_id" defaultValue={coche.empleado_id?.toString() || "0"}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecciona un empleado" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="0">Sin asignar</SelectItem>
-                {empleados.map((empleado) => (
-                  <SelectItem key={empleado.id} value={empleado.id.toString()}>
-                    {empleado.nombre} {empleado.apellidos}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div>
+                <Label htmlFor="empleado_id">Empleado Asignado</Label>
+                <select
+                  id="empleado_id"
+                  name="empleado_id"
+                  defaultValue={coche.empleado_id?.toString() || "0"}
+                  className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="0">Sin asignar</option>
+                  {empleados
+                    .filter((emp) => emp.activo)
+                    .map((empleado) => (
+                      <option key={empleado.id} value={empleado.id.toString()}>
+                        {empleado.nombre} {empleado.apellidos}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="fecha_asignacion">Fecha Asignación</Label>
+                <Input
+                  id="fecha_asignacion"
+                  name="fecha_asignacion"
+                  type="date"
+                  defaultValue={coche.fecha_asignacion || ""}
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="observaciones_asignacion">Observaciones de Asignación</Label>
+              <Textarea
+                id="observaciones_asignacion"
+                name="observaciones_asignacion"
+                defaultValue={coche.observaciones_asignacion || ""}
+                placeholder="Observaciones sobre la asignación..."
+                rows={2}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      </form>
 
-      {/* Gestión de Fotos */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Fotos del Vehículo</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <FotosManager matricula={coche.matricula} />
-        </CardContent>
-      </Card>
+      <SolredManager matricula={coche.matricula} isEditing={true} />
 
-      {/* Gestión SOLRED */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Gestión SOLRED</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <SolredManager matricula={coche.matricula} />
-        </CardContent>
-      </Card>
+      <ViatManager empleadoId={coche.empleado_id} showEmployeeAssignment={false} isEditing={true} />
 
-      {/* Gestión ViaT */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Gestión ViaT</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ViatManager matricula={coche.matricula} />
-        </CardContent>
-      </Card>
+      <ITVManager matricula={coche.matricula} isEditing={true} />
 
-      {/* Gestión ITV */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Gestión ITV</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ItvManager matricula={coche.matricula} />
-        </CardContent>
-      </Card>
+      <SeguroManager matricula={coche.matricula} isEditing={true} />
 
-      {/* Gestión Seguros */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Gestión de Seguros</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <SeguroManager matricula={coche.matricula} />
-        </CardContent>
-      </Card>
+      <FotosManager matricula={coche.matricula} isEditing={true} />
 
-      {/* Formulario principal para guardar todo */}
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <input type="hidden" name="id" value={coche.id} />
-        <input type="hidden" name="matricula" value={coche.matricula} />
-        <input type="hidden" name="marca" value={coche.marca} />
-        <input type="hidden" name="modelo" value={coche.modelo} />
-        <input type="hidden" name="color" value={coche.color} />
-        <input type="hidden" name="combustible" value={coche.combustible} />
-        <input type="hidden" name="fecha_matriculacion" value={coche.fecha_matriculacion} />
-        <input type="hidden" name="kms" value={coche.kms} />
-        <input type="hidden" name="precio_compra" value={coche.precio_compra} />
-        <input type="hidden" name="fecha_compra" value={coche.fecha_compra} />
-        <input type="hidden" name="observaciones" value={coche.observaciones || ""} />
-        <input type="hidden" name="vehiculo_alquiler" value={isAlquiler ? "on" : "off"} />
-        <input type="hidden" name="empleado_id" value={coche.empleado_id || ""} />
-        {isAlquiler && (
-          <>
-            <input type="hidden" name="fecha_inicio" value={coche.fecha_inicio || ""} />
-            <input type="hidden" name="fecha_fin" value={coche.fecha_fin || ""} />
-            <input type="hidden" name="importe_anual" value={coche.importe_anual || ""} />
-            <input type="hidden" name="compania" value={coche.compania || "N/A"} />
-            <input type="hidden" name="kms_anuales" value={coche.kms_anuales || "0"} />
-          </>
-        )}
-
-        <div className="flex gap-4">
-          <Button type="submit" disabled={saving}>
-            {saving ? "Guardando..." : "Guardar Todo"}
-          </Button>
-          <Button type="button" variant="outline" onClick={() => router.back()}>
+      <form onSubmit={handleSubmit}>
+        <div className="flex justify-end space-x-4">
+          <Button type="button" variant="outline" onClick={() => router.push("/coches")} disabled={saving}>
             Cancelar
+          </Button>
+          <Button type="submit" disabled={saving}>
+            <Save className="mr-2 h-4 w-4" />
+            {saving ? "Guardando..." : "Guardar Todo"}
           </Button>
         </div>
       </form>

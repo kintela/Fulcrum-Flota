@@ -3,29 +3,9 @@
 import { supabase } from "@/lib/supabase"
 import { revalidatePath } from "next/cache"
 
-interface Coche {
-  id: number
-  matricula: string
-  marca: string
-  modelo: string
-  color: string
-  combustible: string
-  fecha_matriculacion: string
-  kms: number
-  precio_compra: number
-  fecha_compra: string
-  observaciones?: string
-  vehiculo_alquiler: boolean
-  empleado_id?: number
-  fecha_inicio?: string
-  fecha_fin?: string
-  importe_anual?: number
-  compania?: string
-  kms_anuales?: number
-}
-
-export async function obtenerCoche(id: string): Promise<Coche | null> {
+export async function obtenerCoche(id: string) {
   try {
+    // Obtener datos del coche
     const { data: coche, error: cocheError } = await supabase.from("coches").select("*").eq("id", id).single()
 
     if (cocheError) {
@@ -33,63 +13,80 @@ export async function obtenerCoche(id: string): Promise<Coche | null> {
       return null
     }
 
-    // Si es vehículo de alquiler, obtener también los datos del alquiler
-    if (coche.vehiculo_alquiler) {
-      const { data: alquiler, error: alquilerError } = await supabase
-        .from("alquileres")
-        .select("*")
-        .eq("matricula", coche.matricula)
-        .single()
+    // Obtener datos del alquiler si existe
+    const { data: alquiler, error: alquilerError } = await supabase
+      .from("alquileres")
+      .select("*")
+      .eq("matricula", coche.matricula)
+      .single()
 
-      if (!alquilerError && alquiler) {
-        return {
-          ...coche,
-          fecha_inicio: alquiler.fecha_inicio,
-          fecha_fin: alquiler.fecha_fin,
-          importe_anual: alquiler.importe_anual,
-          compania: alquiler.compania,
-          kms_anuales: alquiler.kms_anuales,
-        }
-      }
+    // Combinar datos (no es error si no hay datos de alquiler)
+    const cocheCompleto = {
+      ...coche,
+      fecha_inicio: alquiler?.fecha_inicio || null,
+      fecha_fin: alquiler?.fecha_fin || null,
+      importe_anual: alquiler?.importe_anual || null,
+      compania: alquiler?.compania || null,
+      kms_anuales: alquiler?.kms_anuales || null,
     }
 
-    return coche
+    return cocheCompleto
   } catch (error) {
-    console.error("Error:", error)
+    console.error("Error inesperado:", error)
     return null
   }
 }
 
-export async function editarCoche(formData: FormData) {
+export async function editarCoche(id: string, formData: FormData) {
   try {
-    const id = formData.get("id") as string
-    const vehiculoAlquiler = formData.get("vehiculo_alquiler") === "on"
+    const matricula = formData.get("matricula") as string
+    const marca = formData.get("marca") as string
+    const modelo = formData.get("modelo") as string
+    const color = formData.get("color") as string
+    const fechamatriculacion = formData.get("fechamatriculacion") as string
+    const kms = Number.parseInt(formData.get("kms") as string) || 0
+    const kw = formData.get("kw") ? Number.parseInt(formData.get("kw") as string) : null
+    const cv = formData.get("cv") ? Number.parseInt(formData.get("cv") as string) : null
+    const cc = formData.get("cc") ? Number.parseInt(formData.get("cc") as string) : null
+    const combustible = formData.get("combustible") as string
+    const extras = formData.get("extras") as string
+    const donante = formData.get("donante") === "on"
+    const alquiler = formData.get("alquiler") === "on"
+    const preciocompra = formData.get("preciocompra") ? Number.parseFloat(formData.get("preciocompra") as string) : null
+    const empleado_id = formData.get("empleado_id") ? Number.parseInt(formData.get("empleado_id") as string) : null
+    const fecha_asignacion = formData.get("fecha_asignacion") as string
+    const observaciones_asignacion = formData.get("observaciones_asignacion") as string
 
-    const cocheData = {
-      matricula: formData.get("matricula") as string,
-      marca: formData.get("marca") as string,
-      modelo: formData.get("modelo") as string,
-      color: formData.get("color") as string,
-      combustible: formData.get("combustible") as string,
-      fecha_matriculacion: formData.get("fecha_matriculacion") as string,
-      kms: Number.parseInt(formData.get("kms") as string),
-      precio_compra: Number.parseFloat(formData.get("precio_compra") as string),
-      fecha_compra: formData.get("fecha_compra") as string,
-      observaciones: (formData.get("observaciones") as string) || "",
-      vehiculo_alquiler: vehiculoAlquiler,
-      empleado_id: formData.get("empleado_id") ? Number.parseInt(formData.get("empleado_id") as string) : null,
+    // Actualizar datos del coche
+    const cocheData: any = {
+      matricula: matricula.toUpperCase(),
+      marca,
+      modelo,
+      color: color || null,
+      fechamatriculacion: fechamatriculacion || null,
+      kms,
+      kw,
+      cv,
+      cc,
+      combustible,
+      extras: extras || null,
+      donante,
+      alquiler,
+      preciocompra,
+      empleado_id: empleado_id === 0 ? null : empleado_id,
+      fecha_asignacion: fecha_asignacion || null,
+      observaciones_asignacion: observaciones_asignacion || null,
     }
 
-    // Actualizar el coche
     const { error: cocheError } = await supabase.from("coches").update(cocheData).eq("id", id)
 
     if (cocheError) {
       console.error("Error al actualizar coche:", cocheError)
-      throw new Error("Error al actualizar el coche")
+      return { success: false, error: "Error al actualizar el coche" }
     }
 
-    // Manejar datos del alquiler
-    if (vehiculoAlquiler) {
+    // Gestionar datos del alquiler
+    if (alquiler) {
       const fechaInicio = formData.get("fecha_inicio") as string
       const fechaFin = formData.get("fecha_fin") as string
       const importeAnual = formData.get("importe_anual") as string
@@ -97,105 +94,127 @@ export async function editarCoche(formData: FormData) {
       const kmsAnuales = formData.get("kms_anuales") as string
 
       const alquilerData = {
-        matricula: cocheData.matricula,
-        fecha_inicio: fechaInicio && fechaInicio.trim() !== "" ? fechaInicio : null,
-        fecha_fin: fechaFin && fechaFin.trim() !== "" ? fechaFin : null,
+        matricula: matricula.toUpperCase(),
+        fecha_inicio: fechaInicio || null,
+        fecha_fin: fechaFin || null,
         importe_anual: importeAnual && importeAnual.trim() !== "" ? Number.parseFloat(importeAnual) : null,
-        compania: compania && compania.trim() !== "" ? compania : null,
+        compania: compania || null,
         kms_anuales: kmsAnuales && kmsAnuales.trim() !== "" ? Number.parseInt(kmsAnuales) : null,
       }
 
       // Verificar si ya existe un registro de alquiler
-      const { data: existingAlquiler } = await supabase
+      const { data: existingAlquiler, error: checkError } = await supabase
         .from("alquileres")
-        .select("*")
-        .eq("matricula", cocheData.matricula)
+        .select("id")
+        .eq("matricula", matricula.toUpperCase())
         .single()
+
+      if (checkError && checkError.code !== "PGRST116") {
+        console.error("Error al verificar alquiler:", checkError)
+        return { success: false, error: "Error al verificar datos de alquiler" }
+      }
 
       if (existingAlquiler) {
         // Actualizar registro existente
-        const { error: alquilerError } = await supabase
+        const { error: updateError } = await supabase
           .from("alquileres")
           .update(alquilerData)
-          .eq("matricula", cocheData.matricula)
+          .eq("matricula", matricula.toUpperCase())
 
-        if (alquilerError) {
-          console.error("Error al actualizar datos de alquiler:", alquilerError)
-          throw new Error("Error al actualizar los datos del alquiler")
+        if (updateError) {
+          console.error("Error al actualizar datos de alquiler:", updateError)
+          return { success: false, error: "Error al actualizar datos de alquiler: " + updateError.message }
         }
       } else {
         // Crear nuevo registro
-        const { error: alquilerError } = await supabase.from("alquileres").insert([alquilerData])
+        const { error: insertError } = await supabase.from("alquileres").insert(alquilerData)
 
-        if (alquilerError) {
-          console.error("Error al crear datos de alquiler:", alquilerError)
-          throw new Error("Error al crear los datos del alquiler")
+        if (insertError) {
+          console.error("Error al crear datos de alquiler:", insertError)
+          return { success: false, error: "Error al crear datos de alquiler: " + insertError.message }
         }
       }
     } else {
-      // Si ya no es vehículo de alquiler, eliminar datos del alquiler
-      await supabase.from("alquileres").delete().eq("matricula", cocheData.matricula)
+      // Si ya no es de alquiler, eliminar datos de alquiler
+      const { error: deleteError } = await supabase.from("alquileres").delete().eq("matricula", matricula.toUpperCase())
+
+      if (deleteError) {
+        console.error("Error al eliminar datos de alquiler:", deleteError)
+        // No fallar completamente por esto
+      }
     }
 
     revalidatePath("/coches")
-    revalidatePath(`/coches/editar/${id}`)
     return { success: true, message: "Coche actualizado exitosamente" }
   } catch (error) {
-    console.error("Error:", error)
-    return { success: false, message: "Error al actualizar el coche" }
+    console.error("Error inesperado:", error)
+    return { success: false, error: "Error inesperado al actualizar el coche" }
   }
 }
 
-export async function guardarSeccionBasica(formData: FormData) {
+export async function guardarSeccionBasica(id: string, formData: FormData) {
   try {
-    const id = formData.get("id") as string
+    const matricula = formData.get("matricula") as string
+    const marca = formData.get("marca") as string
+    const modelo = formData.get("modelo") as string
+    const color = formData.get("color") as string
+    const fechamatriculacion = formData.get("fechamatriculacion") as string
+    const kms = Number.parseInt(formData.get("kms") as string) || 0
+    const kw = formData.get("kw") ? Number.parseInt(formData.get("kw") as string) : null
+    const cv = formData.get("cv") ? Number.parseInt(formData.get("cv") as string) : null
+    const cc = formData.get("cc") ? Number.parseInt(formData.get("cc") as string) : null
+    const combustible = formData.get("combustible") as string
+    const extras = formData.get("extras") as string
+    const donante = formData.get("donante") === "on"
+    const alquiler = formData.get("alquiler") === "on"
+    const preciocompra = formData.get("preciocompra") ? Number.parseFloat(formData.get("preciocompra") as string) : null
 
-    const cocheData = {
-      matricula: formData.get("matricula") as string,
-      marca: formData.get("marca") as string,
-      modelo: formData.get("modelo") as string,
-      color: formData.get("color") as string,
-      combustible: formData.get("combustible") as string,
-      fecha_matriculacion: formData.get("fecha_matriculacion") as string,
-      kms: Number.parseInt(formData.get("kms") as string),
-      precio_compra: Number.parseFloat(formData.get("precio_compra") as string),
-      fecha_compra: formData.get("fecha_compra") as string,
-      observaciones: (formData.get("observaciones") as string) || "",
+    const cocheData: any = {
+      matricula: matricula.toUpperCase(),
+      marca,
+      modelo,
+      color: color || null,
+      fechamatriculacion: fechamatriculacion || null,
+      kms,
+      kw,
+      cv,
+      cc,
+      combustible,
+      extras: extras || null,
+      donante,
+      alquiler,
+      preciocompra,
     }
 
     const { error } = await supabase.from("coches").update(cocheData).eq("id", id)
 
     if (error) {
-      console.error("Error al guardar sección básica:", error)
-      throw new Error("Error al guardar la información básica")
+      console.error("Error al guardar información básica:", error)
+      return { success: false, error: "Error al guardar la información básica" }
     }
 
-    revalidatePath(`/coches/editar/${id}`)
+    revalidatePath("/coches")
     return { success: true, message: "Información básica guardada exitosamente" }
   } catch (error) {
-    console.error("Error:", error)
-    return { success: false, message: "Error al guardar la información básica" }
+    console.error("Error inesperado:", error)
+    return { success: false, error: "Error inesperado al guardar" }
   }
 }
 
-export async function guardarSeccionAlquiler(formData: FormData) {
+export async function guardarSeccionAlquiler(id: string, formData: FormData) {
   try {
-    const id = formData.get("id") as string
-    const vehiculoAlquiler = formData.get("vehiculo_alquiler") === "on"
     const matricula = formData.get("matricula") as string
+    const alquiler = formData.get("alquiler") === "on"
 
-    // Actualizar el campo vehiculo_alquiler en la tabla coches
-    const { error: cocheError } = await supabase
-      .from("coches")
-      .update({ vehiculo_alquiler: vehiculoAlquiler })
-      .eq("id", id)
+    // Actualizar el campo alquiler en la tabla coches
+    const { error: cocheError } = await supabase.from("coches").update({ alquiler }).eq("id", id)
 
     if (cocheError) {
-      console.error("Error al actualizar vehículo alquiler:", cocheError)
-      throw new Error("Error al actualizar el estado del alquiler")
+      console.error("Error al actualizar campo alquiler:", cocheError)
+      return { success: false, error: "Error al actualizar el estado de alquiler" }
     }
 
-    if (vehiculoAlquiler) {
+    if (alquiler) {
       const fechaInicio = formData.get("fecha_inicio") as string
       const fechaFin = formData.get("fecha_fin") as string
       const importeAnual = formData.get("importe_anual") as string
@@ -203,70 +222,87 @@ export async function guardarSeccionAlquiler(formData: FormData) {
       const kmsAnuales = formData.get("kms_anuales") as string
 
       const alquilerData = {
-        matricula: matricula,
-        fecha_inicio: fechaInicio && fechaInicio.trim() !== "" ? fechaInicio : null,
-        fecha_fin: fechaFin && fechaFin.trim() !== "" ? fechaFin : null,
+        matricula: matricula.toUpperCase(),
+        fecha_inicio: fechaInicio || null,
+        fecha_fin: fechaFin || null,
         importe_anual: importeAnual && importeAnual.trim() !== "" ? Number.parseFloat(importeAnual) : null,
-        compania: compania && compania.trim() !== "" ? compania : null,
+        compania: compania || null,
         kms_anuales: kmsAnuales && kmsAnuales.trim() !== "" ? Number.parseInt(kmsAnuales) : null,
       }
 
       // Verificar si ya existe un registro de alquiler
-      const { data: existingAlquiler } = await supabase
+      const { data: existingAlquiler, error: checkError } = await supabase
         .from("alquileres")
-        .select("*")
-        .eq("matricula", matricula)
+        .select("id")
+        .eq("matricula", matricula.toUpperCase())
         .single()
+
+      if (checkError && checkError.code !== "PGRST116") {
+        console.error("Error al verificar alquiler:", checkError)
+        return { success: false, error: "Error al verificar datos de alquiler" }
+      }
 
       if (existingAlquiler) {
         // Actualizar registro existente
-        const { error: alquilerError } = await supabase
+        const { error: updateError } = await supabase
           .from("alquileres")
           .update(alquilerData)
-          .eq("matricula", matricula)
+          .eq("matricula", matricula.toUpperCase())
 
-        if (alquilerError) {
-          console.error("Error al actualizar datos de alquiler:", alquilerError)
-          throw new Error("Error al actualizar los datos del alquiler")
+        if (updateError) {
+          console.error("Error al actualizar datos de alquiler:", updateError)
+          return { success: false, error: "Error al actualizar datos de alquiler: " + updateError.message }
         }
       } else {
         // Crear nuevo registro
-        const { error: alquilerError } = await supabase.from("alquileres").insert([alquilerData])
+        const { error: insertError } = await supabase.from("alquileres").insert(alquilerData)
 
-        if (alquilerError) {
-          console.error("Error al crear datos de alquiler:", alquilerError)
-          throw new Error("Error al crear los datos del alquiler")
+        if (insertError) {
+          console.error("Error al crear datos de alquiler:", insertError)
+          return { success: false, error: "Error al crear datos de alquiler: " + insertError.message }
         }
       }
     } else {
-      // Si ya no es vehículo de alquiler, eliminar datos del alquiler
-      await supabase.from("alquileres").delete().eq("matricula", matricula)
+      // Si ya no es de alquiler, eliminar datos de alquiler
+      const { error: deleteError } = await supabase.from("alquileres").delete().eq("matricula", matricula.toUpperCase())
+
+      if (deleteError) {
+        console.error("Error al eliminar datos de alquiler:", deleteError)
+        // No fallar completamente por esto
+      }
     }
 
-    revalidatePath(`/coches/editar/${id}`)
+    revalidatePath("/coches")
     return { success: true, message: "Datos del alquiler guardados exitosamente" }
   } catch (error) {
-    console.error("Error:", error)
-    return { success: false, message: "Error al guardar los datos del alquiler" }
+    console.error("Error inesperado:", error)
+    return { success: false, error: "Error inesperado al guardar" }
   }
 }
 
-export async function guardarSeccionAsignacion(formData: FormData) {
+export async function guardarSeccionAsignacion(id: string, formData: FormData) {
   try {
-    const id = formData.get("id") as string
-    const empleadoId = formData.get("empleado_id") ? Number.parseInt(formData.get("empleado_id") as string) : null
+    const empleado_id = formData.get("empleado_id") ? Number.parseInt(formData.get("empleado_id") as string) : null
+    const fecha_asignacion = formData.get("fecha_asignacion") as string
+    const observaciones_asignacion = formData.get("observaciones_asignacion") as string
 
-    const { error } = await supabase.from("coches").update({ empleado_id: empleadoId }).eq("id", id)
+    const asignacionData = {
+      empleado_id: empleado_id === 0 ? null : empleado_id,
+      fecha_asignacion: fecha_asignacion || null,
+      observaciones_asignacion: observaciones_asignacion || null,
+    }
+
+    const { error } = await supabase.from("coches").update(asignacionData).eq("id", id)
 
     if (error) {
       console.error("Error al guardar asignación:", error)
-      throw new Error("Error al guardar la asignación")
+      return { success: false, error: "Error al guardar la asignación" }
     }
 
-    revalidatePath(`/coches/editar/${id}`)
+    revalidatePath("/coches")
     return { success: true, message: "Asignación guardada exitosamente" }
   } catch (error) {
-    console.error("Error:", error)
-    return { success: false, message: "Error al guardar la asignación" }
+    console.error("Error inesperado:", error)
+    return { success: false, error: "Error inesperado al guardar" }
   }
 }
