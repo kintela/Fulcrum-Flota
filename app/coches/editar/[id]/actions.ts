@@ -50,15 +50,19 @@ export async function editarCoche(id: string, formData: FormData) {
 
     // Gestionar datos del alquiler
     if (cocheData.alquiler) {
+      const fechaInicio = formData.get("fecha_inicio") as string
+      const fechaFin = formData.get("fecha_fin") as string
+      const importeAnual = formData.get("importe_anual") as string
+      const compania = formData.get("compania") as string
+      const kmsAnuales = formData.get("kms_anuales") as string
+
       const datosAlquiler = {
         matricula: id,
-        fecha_inicio: (formData.get("fecha_inicio") as string) || null,
-        fecha_fin: (formData.get("fecha_fin") as string) || null,
-        importe_anual: formData.get("importe_anual")
-          ? Number.parseFloat(formData.get("importe_anual") as string)
-          : null,
-        compania: (formData.get("compania") as string) || null,
-        kms_anuales: formData.get("kms_anuales") ? Number.parseInt(formData.get("kms_anuales") as string) : null,
+        fecha_inicio: fechaInicio && fechaInicio.trim() !== "" ? fechaInicio : null,
+        fecha_fin: fechaFin && fechaFin.trim() !== "" ? fechaFin : null,
+        importe_anual: importeAnual && importeAnual.trim() !== "" ? Number.parseFloat(importeAnual) : null,
+        compania: compania && compania.trim() !== "" ? compania : null,
+        kms_anuales: kmsAnuales && kmsAnuales.trim() !== "" ? Number.parseInt(kmsAnuales) : null,
       }
 
       // Verificar si ya existe un registro de alquiler para esta matrícula
