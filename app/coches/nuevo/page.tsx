@@ -208,39 +208,6 @@ export default function NuevoCochePage() {
                     min="0"
                   />
                 </div>
-
-                {/* Asignado a - Movido debajo de Fecha de Matriculación */}
-                <div>
-                  <Label htmlFor="empleado_id">Asignado a</Label>
-                  <select
-                    id="empleado_id"
-                    name="empleado_id"
-                    value={empleadoSeleccionado || ""}
-                    onChange={handleEmpleadoChange}
-                    className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">Sin asignar</option>
-                    {empleados.map((empleado) => (
-                      <option key={empleado.id} value={empleado.id}>
-                        {empleado.nombre} {empleado.apellidos}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Precio de Compra - Movido debajo de Combustible */}
-                <div>
-                  <Label htmlFor="preciocompra">Precio de Compra (€)</Label>
-                  <Input
-                    id="preciocompra"
-                    name="preciocompra"
-                    type="number"
-                    step="0.01"
-                    placeholder="15000.00"
-                    min="0"
-                    className="mt-1"
-                  />
-                </div>
               </div>
 
               <div>

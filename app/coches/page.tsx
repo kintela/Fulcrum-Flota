@@ -485,7 +485,6 @@ export default async function CochesPage({ searchParams }: { searchParams: Searc
                           ITV Urgente ({Math.abs(itvStatus.daysRemaining)} días)
                         </span>
                       )}
-                      {/* Eliminar el badge de SOLRED - ya no se muestra */}
                     </div>
 
                     <div className="flex justify-end space-x-2">

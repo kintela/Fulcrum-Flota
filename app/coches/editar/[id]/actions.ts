@@ -168,12 +168,6 @@ export async function obtenerCoche(matricula: string) {
       data[0].tarjeta_solred = tarjetaSolred.tarjetassolred
     }
 
-    // Obtener tarjeta SOLRED asignada
-    const tarjetaSolred = await obtenerTarjetaAsignada(id)
-    if (tarjetaSolred && tarjetaSolred.tarjetassolred) {
-      data[0].tarjeta_solred = tarjetaSolred.tarjetassolred
-    }
-
     return data[0]
   } catch (error) {
     console.error("Error en obtenerCoche:", error)
