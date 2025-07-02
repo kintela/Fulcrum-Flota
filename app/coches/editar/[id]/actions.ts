@@ -48,6 +48,54 @@ export async function editarCoche(id: string, formData: FormData) {
       }
     }
 
+    // Gestionar datos del alquiler
+    if (cocheData.alquiler) {
+      const datosAlquiler = {
+        matricula: id,
+        fecha_inicio: (formData.get("fecha_inicio") as string) || null,
+        fecha_fin: (formData.get("fecha_fin") as string) || null,
+        importe_anual: formData.get("importe_anual")
+          ? Number.parseFloat(formData.get("importe_anual") as string)
+          : null,
+        compania: (formData.get("compania") as string) || null,
+        kms_anuales: formData.get("kms_anuales") ? Number.parseInt(formData.get("kms_anuales") as string) : null,
+      }
+
+      // Verificar si ya existe un registro de alquiler para esta matrícula
+      const { data: alquilerExistente, error: errorBusqueda } = await supabase
+        .from("alquileres")
+        .select("matricula")
+        .eq("matricula", id)
+        .single()
+
+      if (errorBusqueda && errorBusqueda.code !== "PGRST116") {
+        console.error("Error al buscar alquiler existente:", errorBusqueda)
+      }
+
+      if (alquilerExistente) {
+        // Actualizar registro existente
+        const { error: errorActualizar } = await supabase.from("alquileres").update(datosAlquiler).eq("matricula", id)
+
+        if (errorActualizar) {
+          console.error("Error al actualizar datos de alquiler:", errorActualizar)
+        }
+      } else {
+        // Crear nuevo registro
+        const { error: errorCrear } = await supabase.from("alquileres").insert([datosAlquiler])
+
+        if (errorCrear) {
+          console.error("Error al crear datos de alquiler:", errorCrear)
+        }
+      }
+    } else {
+      // Si no es alquiler, eliminar datos de alquiler si existen
+      const { error: errorEliminar } = await supabase.from("alquileres").delete().eq("matricula", id)
+
+      if (errorEliminar) {
+        console.error("Error al eliminar datos de alquiler:", errorEliminar)
+      }
+    }
+
     // Obtener el valor actual de asignadoa para usar en ViaT
     const { data: cocheActual, error: errorCoche } = await supabase
       .from("coches")
@@ -160,6 +208,26 @@ export async function obtenerCoche(matricula: string) {
     // Si hay múltiples registros, tomar el primero y registrar advertencia
     if (data.length > 1) {
       console.warn(`Múltiples coches encontrados con matrícula ${matricula}, tomando el primero`)
+    }
+
+    // Obtener datos del alquiler si existen
+    const { data: datosAlquiler, error: errorAlquiler } = await supabase
+      .from("alquileres")
+      .select("*")
+      .eq("matricula", matricula)
+      .single()
+
+    if (errorAlquiler && errorAlquiler.code !== "PGRST116") {
+      console.error("Error al obtener datos de alquiler:", errorAlquiler)
+    }
+
+    // Combinar datos del coche con datos del alquiler
+    if (datosAlquiler) {
+      data[0].fecha_inicio = datosAlquiler.fecha_inicio
+      data[0].fecha_fin = datosAlquiler.fecha_fin
+      data[0].importe_anual = datosAlquiler.importe_anual
+      data[0].compania = datosAlquiler.compania
+      data[0].kms_anuales = datosAlquiler.kms_anuales
     }
 
     // Obtener tarjeta SOLRED asignada

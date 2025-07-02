@@ -19,6 +19,12 @@ interface CocheData {
   extras?: string
   viat_id?: number | null
   observaciones_viat?: string
+  alquiler?: boolean
+  fecha_inicio_alquiler?: string
+  fecha_fin_alquiler?: string
+  importe_anual?: string
+  compania?: string
+  kms_anuales?: string
 }
 
 export async function crearCoche(cocheData: CocheData) {
@@ -67,6 +73,7 @@ export async function crearCoche(cocheData: CocheData) {
       precio_compra: cocheData.precio_compra || null,
       observaciones: cocheData.observaciones || null,
       extras: cocheData.extras || null,
+      alquiler: cocheData.alquiler || false,
       activo: true,
     }
 
@@ -82,6 +89,33 @@ export async function crearCoche(cocheData: CocheData) {
       return {
         success: false,
         error: `Error al crear el coche: ${errorCoche.message}`,
+      }
+    }
+
+    // Si es un vehículo de alquiler, insertar datos en la tabla alquileres
+    if (
+      cocheData.alquiler &&
+      (cocheData.fecha_inicio_alquiler ||
+        cocheData.fecha_fin_alquiler ||
+        cocheData.importe_anual ||
+        cocheData.compania ||
+        cocheData.kms_anuales)
+    ) {
+      const datosAlquiler = {
+        matricula: cocheData.matricula.toUpperCase(),
+        fecha_inicio: cocheData.fecha_inicio_alquiler || null,
+        fecha_fin: cocheData.fecha_fin_alquiler || null,
+        importe_anual: cocheData.importe_anual ? Number.parseFloat(cocheData.importe_anual) : null,
+        compania: cocheData.compania || null,
+        kms_anuales: cocheData.kms_anuales ? Number.parseInt(cocheData.kms_anuales) : null,
+      }
+
+      const { error: errorAlquiler } = await supabase.from("alquileres").insert([datosAlquiler])
+
+      if (errorAlquiler) {
+        console.error("Error al crear datos de alquiler:", errorAlquiler)
+        // No fallar la creación del coche por esto, solo advertir
+        console.warn("El coche se creó pero no se pudieron guardar los datos del alquiler")
       }
     }
 
