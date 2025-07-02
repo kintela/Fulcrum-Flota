@@ -36,7 +36,7 @@ async function getDashboardData() {
       .from("itvs")
       .select(`
     *,
-    coches (
+    coches!inner (
       matricula,
       marca,
       modelo,
@@ -78,11 +78,11 @@ async function getDashboardData() {
       .from("solred_coches")
       .select(`
     *,
-    tarjetassolred (
+    tarjetassolred!inner (
       numero_tarjeta,
       fechavencimiento
     ),
-    coches (
+    coches!inner (
       matricula,
       marca,
       modelo,

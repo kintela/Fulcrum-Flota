@@ -3,126 +3,114 @@
 import type React from "react"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { FotosManager } from "@/components/fotos-manager"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Textarea } from "@/components/ui/textarea"
+import { ArrowLeft, Car, Save } from "lucide-react"
 import { editarCoche, obtenerCoche } from "./actions"
-import Link from "next/link"
-import { ArrowLeft } from "lucide-react"
 import { obtenerEmpleados } from "@/app/actions/empleados"
-import { ITVManager } from "@/components/itv-manager"
-import { obtenerTarjetasSolred, obtenerTarjetaAsignada } from "@/app/actions/solred"
 import { SolredManager } from "@/components/solred-manager"
+import { ViatManager } from "@/components/viat-manager"
+import { ITVManager } from "@/components/itv-manager"
+import { SeguroManager } from "@/components/seguro-manager"
+import { FotosManager } from "@/components/fotos-manager"
 
-interface EditarCochePageProps {
-  params: { id: string }
+interface Empleado {
+  id: number
+  nombre: string
+  apellidos: string
+  activo: boolean
 }
 
-export default function EditarCochePage({ params }: EditarCochePageProps) {
+interface Coche {
+  matricula: string
+  marca: string
+  modelo: string
+  color?: string
+  fechamatriculacion?: string
+  kms: number
+  kw?: number
+  cv?: number
+  cc?: number
+  combustible: string
+  extras?: string
+  donante: boolean
+  asignadoa?: string
+  alquiler: boolean
+  preciocompra?: number
+  empleado_id?: number
+  fecha_asignacion?: string
+  observaciones_asignacion?: string
+}
+
+export default function EditarCochePage({ params }: { params: { id: string } }) {
   const router = useRouter()
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
+  const [coche, setCoche] = useState<Coche | null>(null)
+  const [empleados, setEmpleados] = useState<Empleado[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [coche, setCoche] = useState<any>(null)
-  const [empleados, setEmpleados] = useState<any[]>([])
-  const [esAlquiler, setEsAlquiler] = useState(false)
-  const [esDonante, setEsDonante] = useState(false)
-  const [tarjetasSolred, setTarjetasSolred] = useState<any[]>([])
-  const [tarjetaSeleccionada, setTarjetaSeleccionada] = useState("")
-  const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState<string | null>(null)
 
   useEffect(() => {
-    async function cargarDatos() {
-      if (!params.id || params.id === "undefined") {
-        setError("ID de coche no válido")
-        setIsLoading(false)
-        return
-      }
-
-      try {
-        const [cocheData, empleadosData, tarjetasData, tarjetaAsignada] = await Promise.all([
-          obtenerCoche(params.id),
-          obtenerEmpleados(),
-          obtenerTarjetasSolred(),
-          obtenerTarjetaAsignada(params.id),
-        ])
-
-        if (cocheData) {
-          setCoche(cocheData)
-          setEsAlquiler(cocheData.alquiler || false)
-          setEsDonante(cocheData.donante || false)
-          setEmpleadoSeleccionado(cocheData.empleado_id ? String(cocheData.empleado_id) : null)
-        } else {
-          setError(`No se encontró el coche con matrícula ${params.id}`)
-        }
-
-        setEmpleados(empleadosData)
-        setTarjetasSolred(tarjetasData)
-
-        if (tarjetaAsignada) {
-          setTarjetaSeleccionada(tarjetaAsignada.numero_tarjeta)
-        }
-      } catch (error) {
-        console.error("Error al cargar datos:", error)
-        setError("Error al cargar los datos")
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
     cargarDatos()
   }, [params.id])
 
-  const handleEmpleadoChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value
-    setEmpleadoSeleccionado(value)
+  const cargarDatos = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+
+      // Cargar datos del coche
+      const cocheData = await obtenerCoche(params.id)
+      if (!cocheData) {
+        setError("Coche no encontrado")
+        return
+      }
+
+      setCoche(cocheData)
+
+      // Cargar empleados
+      const empleadosData = await obtenerEmpleados()
+      setEmpleados(empleadosData)
+    } catch (error) {
+      console.error("Error al cargar datos:", error)
+      setError("Error al cargar los datos del coche")
+    } finally {
+      setLoading(false)
+    }
   }
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setIsSubmitting(true)
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setSaving(true)
     setError(null)
 
-    const formData = new FormData(event.currentTarget)
-
-    // Agregar los valores de los checkboxes controlados
-    if (esDonante) {
-      formData.set("donante", "on")
-    }
-    if (esAlquiler) {
-      formData.set("alquiler", "on")
-    }
-
-    // Asignar la tarjeta seleccionada
-    if (tarjetaSeleccionada) {
-      formData.set("numero_tarjeta_solred", tarjetaSeleccionada)
-    }
-
     try {
-      const result = await editarCoche(params.id, formData)
+      const formData = new FormData(e.currentTarget)
+      const resultado = await editarCoche(params.id, formData)
 
-      if (result.success) {
+      if (resultado.success) {
         router.push("/coches")
       } else {
-        setError(result.error || "Error al actualizar el coche")
+        setError(resultado.error || "Error al actualizar el coche")
       }
     } catch (error) {
-      console.error("Error:", error)
-      setError("Error inesperado al actualizar el coche")
+      console.error("Error al guardar:", error)
+      setError("Error inesperado al guardar el coche")
     } finally {
-      setIsSubmitting(false)
+      setSaving(false)
     }
   }
 
-  if (isLoading) {
+  if (loading) {
     return (
-      <div className="min-h-screen bg-gray-100 p-8">
-        <div className="max-w-4xl mx-auto">
+      <div className="container mx-auto p-6">
+        <div className="flex items-center justify-center min-h-[400px]">
           <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
             <p>Cargando datos del coche...</p>
           </div>
         </div>
@@ -130,278 +118,209 @@ export default function EditarCochePage({ params }: EditarCochePageProps) {
     )
   }
 
-  if (!coche) {
+  if (error && !coche) {
     return (
-      <div className="min-h-screen bg-gray-100 p-8">
-        <div className="max-w-4xl mx-auto">
+      <div className="container mx-auto p-6">
+        <div className="flex items-center justify-center min-h-[400px]">
           <div className="text-center">
-            <p className="text-red-600">{error || "No se encontró el coche"}</p>
-            <Link href="/coches" className="text-blue-600 hover:underline mt-4 inline-block">
-              Volver a la lista de coches
-            </Link>
+            <p className="text-red-600 mb-4">{error}</p>
+            <Button onClick={() => router.push("/coches")} variant="outline">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Volver a Coches
+            </Button>
           </div>
         </div>
       </div>
     )
   }
 
+  if (!coche) return null
+
   return (
-    <div className="min-h-screen bg-gray-100 p-8">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex items-center mb-8">
-          <Link href="/coches" className="flex items-center text-gray-600 hover:text-gray-900 mr-4">
-            <ArrowLeft className="h-5 w-5 mr-2" />
-            Volver a Coches
-          </Link>
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Editar Coche</h1>
-            <p className="text-gray-600">Modifica los datos del vehículo {coche.matricula}</p>
+    <div className="container mx-auto p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <Button onClick={() => router.push("/coches")} variant="outline" size="sm">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Volver
+          </Button>
+          <div className="flex items-center space-x-2">
+            <Car className="h-6 w-6 text-blue-600" />
+            <h1 className="text-2xl font-bold">Editar Coche - {coche.matricula}</h1>
           </div>
         </div>
+      </div>
+
+      {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">{error}</div>}
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Información Básica</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div>
+                <Label htmlFor="matricula">Matrícula *</Label>
+                <Input id="matricula" name="matricula" defaultValue={coche.matricula} required className="uppercase" />
+              </div>
+              <div>
+                <Label htmlFor="marca">Marca *</Label>
+                <Input id="marca" name="marca" defaultValue={coche.marca} required />
+              </div>
+              <div>
+                <Label htmlFor="modelo">Modelo *</Label>
+                <Input id="modelo" name="modelo" defaultValue={coche.modelo} required />
+              </div>
+              <div>
+                <Label htmlFor="color">Color</Label>
+                <Input id="color" name="color" defaultValue={coche.color || ""} />
+              </div>
+              <div>
+                <Label htmlFor="fechamatriculacion">Fecha Matriculación</Label>
+                <Input
+                  id="fechamatriculacion"
+                  name="fechamatriculacion"
+                  type="date"
+                  defaultValue={coche.fechamatriculacion || ""}
+                />
+              </div>
+              <div>
+                <Label htmlFor="kms">Kilómetros</Label>
+                <Input id="kms" name="kms" type="number" min="0" defaultValue={coche.kms || 0} />
+              </div>
+              <div>
+                <Label htmlFor="kw">Potencia (kW)</Label>
+                <Input id="kw" name="kw" type="number" min="0" defaultValue={coche.kw || ""} />
+              </div>
+              <div>
+                <Label htmlFor="cv">Potencia (CV)</Label>
+                <Input id="cv" name="cv" type="number" min="0" defaultValue={coche.cv || ""} />
+              </div>
+              <div>
+                <Label htmlFor="cc">Cilindrada (cc)</Label>
+                <Input id="cc" name="cc" type="number" min="0" defaultValue={coche.cc || ""} />
+              </div>
+              <div>
+                <Label htmlFor="combustible">Combustible</Label>
+                <select
+                  id="combustible"
+                  name="combustible"
+                  defaultValue={coche.combustible || "Gasolina"}
+                  className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="Gasolina">Gasolina</option>
+                  <option value="Diesel">Diesel</option>
+                  <option value="Hibrido">Híbrido</option>
+                  <option value="Electrico">Eléctrico</option>
+                  <option value="GLP">GLP</option>
+                  <option value="GNC">GNC</option>
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="preciocompra">Precio Compra (€)</Label>
+                <Input
+                  id="preciocompra"
+                  name="preciocompra"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  defaultValue={coche.preciocompra || ""}
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="extras">Extras</Label>
+              <Textarea
+                id="extras"
+                name="extras"
+                defaultValue={coche.extras || ""}
+                placeholder="Describe los extras del vehículo..."
+                rows={3}
+              />
+            </div>
+
+            <div className="flex items-center space-x-6">
+              <div className="flex items-center space-x-2">
+                <Checkbox id="donante" name="donante" defaultChecked={coche.donante} />
+                <Label htmlFor="donante">Vehículo donante</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox id="alquiler" name="alquiler" defaultChecked={coche.alquiler} />
+                <Label htmlFor="alquiler">Vehículo de alquiler</Label>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Información del Vehículo</CardTitle>
+            <CardTitle>Asignación de Empleado</CardTitle>
           </CardHeader>
-          <CardContent>
-            {error && (
-              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
-                <p className="text-red-800">{error}</p>
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Información básica */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <Label htmlFor="matricula">Matrícula *</Label>
-                  <Input
-                    id="matricula"
-                    name="matricula"
-                    defaultValue={coche.matricula || ""}
-                    required
-                    maxLength={20}
-                    className="mt-1"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="marca">Marca *</Label>
-                  <Input
-                    id="marca"
-                    name="marca"
-                    defaultValue={coche.marca || ""}
-                    required
-                    maxLength={50}
-                    className="mt-1"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="modelo">Modelo *</Label>
-                  <Input
-                    id="modelo"
-                    name="modelo"
-                    defaultValue={coche.modelo || ""}
-                    required
-                    maxLength={50}
-                    className="mt-1"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="color">Color</Label>
-                  <Input id="color" name="color" defaultValue={coche.color || ""} maxLength={30} className="mt-1" />
-                </div>
-
-                <div>
-                  <Label htmlFor="fechamatriculacion">Fecha de Matriculación</Label>
-                  <Input
-                    id="fechamatriculacion"
-                    name="fechamatriculacion"
-                    type="date"
-                    defaultValue={coche.fechamatriculacion || ""}
-                    className="mt-1"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="combustible">Combustible</Label>
-                  <select
-                    id="combustible"
-                    name="combustible"
-                    defaultValue={coche.combustible || "Gasolina"}
-                    className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="Gasolina">Gasolina</option>
-                    <option value="Diesel">Diesel</option>
-                    <option value="Híbrido">Híbrido</option>
-                    <option value="Eléctrico">Eléctrico</option>
-                    <option value="GLP">GLP</option>
-                  </select>
-                </div>
-
-                {/* Asignado a - Movido debajo de Fecha de Matriculación */}
-                <div>
-                  <Label htmlFor="empleado_id">Asignado a</Label>
-                  <select
-                    id="empleado_id"
-                    name="empleado_id"
-                    value={empleadoSeleccionado || ""}
-                    onChange={handleEmpleadoChange}
-                    className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">Sin asignar</option>
-                    {empleados.map((empleado) => (
-                      <option key={empleado.id} value={empleado.id}>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div>
+                <Label htmlFor="empleado_id">Empleado Asignado</Label>
+                <select
+                  id="empleado_id"
+                  name="empleado_id"
+                  defaultValue={coche.empleado_id?.toString() || "0"}
+                  className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="0">Sin asignar</option>
+                  {empleados
+                    .filter((emp) => emp.activo)
+                    .map((empleado) => (
+                      <option key={empleado.id} value={empleado.id.toString()}>
                         {empleado.nombre} {empleado.apellidos}
                       </option>
                     ))}
-                  </select>
-                </div>
-
-                {/* Precio de Compra - Movido debajo de Combustible */}
-                <div>
-                  <Label htmlFor="preciocompra">Precio de Compra (€)</Label>
-                  <Input
-                    id="preciocompra"
-                    name="preciocompra"
-                    type="number"
-                    step="0.01"
-                    defaultValue={coche.preciocompra || ""}
-                    min="0"
-                    className="mt-1"
-                  />
-                </div>
+                </select>
               </div>
-
-              {/* Información técnica */}
-              <div className="border-t pt-6">
-                <h3 className="text-lg font-semibold mb-4">Información Técnica</h3>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div>
-                    <Label htmlFor="kms">Kilómetros</Label>
-                    <Input id="kms" name="kms" type="number" defaultValue={coche.kms || 0} min="0" className="mt-1" />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="kw">Potencia (kW)</Label>
-                    <Input id="kw" name="kw" type="number" defaultValue={coche.kw || ""} min="0" className="mt-1" />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="cv">Potencia (CV)</Label>
-                    <Input id="cv" name="cv" type="number" defaultValue={coche.cv || ""} min="0" className="mt-1" />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="cc">Cilindrada (cc)</Label>
-                    <Input id="cc" name="cc" type="number" defaultValue={coche.cc || ""} min="0" className="mt-1" />
-                  </div>
-                </div>
-              </div>
-
-              {/* Opciones especiales */}
-              <div className="border-t pt-6">
-                <h3 className="text-lg font-semibold mb-4">Opciones Especiales</h3>
-                <div className="flex flex-wrap gap-6">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox id="donante" checked={esDonante} onCheckedChange={(checked) => setEsDonante(!!checked)} />
-                    <Label htmlFor="donante">Vehículo donante</Label>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="alquiler"
-                      checked={esAlquiler}
-                      onCheckedChange={(checked) => setEsAlquiler(!!checked)}
-                    />
-                    <Label htmlFor="alquiler">Vehículo de alquiler</Label>
-                  </div>
-                </div>
-              </div>
-
-              {/* Detalles de asignación (solo si no es alquiler) */}
-              {!esAlquiler && empleadoSeleccionado && (
-                <div className="border-t pt-6">
-                  <h3 className="text-lg font-semibold mb-4">Detalles de Asignación</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="fecha_asignacion">Fecha de Asignación</Label>
-                      <Input
-                        id="fecha_asignacion"
-                        name="fecha_asignacion"
-                        type="date"
-                        defaultValue={coche.fecha_asignacion || ""}
-                        className="mt-1"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mt-4">
-                    <Label htmlFor="observaciones_asignacion">Observaciones de Asignación</Label>
-                    <Textarea
-                      id="observaciones_asignacion"
-                      name="observaciones_asignacion"
-                      defaultValue={coche.observaciones_asignacion || ""}
-                      placeholder="Motivo de la asignación, condiciones especiales..."
-                      className="mt-1"
-                      rows={2}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Extras */}
-              <div className="border-t pt-6">
-                <Label htmlFor="extras">Extras y Equipamiento</Label>
-                <Textarea
-                  id="extras"
-                  name="extras"
-                  defaultValue={coche.extras || ""}
-                  placeholder="Aire acondicionado, navegador, sensores de aparcamiento..."
-                  className="mt-1"
-                  rows={3}
+              <div>
+                <Label htmlFor="fecha_asignacion">Fecha Asignación</Label>
+                <Input
+                  id="fecha_asignacion"
+                  name="fecha_asignacion"
+                  type="date"
+                  defaultValue={coche.fecha_asignacion || ""}
                 />
               </div>
-
-              {/* Tarjeta SOLRED */}
-              <div className="border-t pt-6">
-                <h3 className="text-lg font-semibold mb-4">Tarjeta SOLRED</h3>
-                <SolredManager
-                  tarjetasSolred={tarjetasSolred}
-                  setTarjetasSolred={setTarjetasSolred}
-                  tarjetaSeleccionada={tarjetaSeleccionada}
-                  setTarjetaSeleccionada={setTarjetaSeleccionada}
-                />
-              </div>
-
-              {/* ITVs - Usando Accordion para evitar formularios anidados */}
-              <div className="border-t pt-6">
-                <ITVManager matricula={coche.matricula} isEditing={true} />
-              </div>
-
-              {/* Fotos del vehículo */}
-              <div className="border-t pt-6">
-                <FotosManager matricula={coche.matricula} isEditing={true} />
-              </div>
-
-              {/* Botones */}
-              <div className="flex justify-end space-x-4 pt-6">
-                <Link
-                  href="/coches"
-                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-                >
-                  Cancelar
-                </Link>
-                <Button type="submit" disabled={isSubmitting} className="bg-blue-600 hover:bg-blue-700">
-                  {isSubmitting ? "Guardando..." : "Guardar Cambios"}
-                </Button>
-              </div>
-            </form>
+            </div>
+            <div>
+              <Label htmlFor="observaciones_asignacion">Observaciones de Asignación</Label>
+              <Textarea
+                id="observaciones_asignacion"
+                name="observaciones_asignacion"
+                defaultValue={coche.observaciones_asignacion || ""}
+                placeholder="Observaciones sobre la asignación..."
+                rows={2}
+              />
+            </div>
           </CardContent>
         </Card>
-      </div>
+
+        <SolredManager matricula={coche.matricula} isEditing={true} />
+
+        <ViatManager empleadoId={coche.empleado_id} showEmployeeAssignment={false} isEditing={true} />
+
+        <ITVManager matricula={coche.matricula} isEditing={true} />
+
+        <SeguroManager matricula={coche.matricula} isEditing={true} />
+
+        <FotosManager matricula={coche.matricula} isEditing={true} />
+
+        <div className="flex justify-end space-x-4">
+          <Button type="button" variant="outline" onClick={() => router.push("/coches")} disabled={saving}>
+            Cancelar
+          </Button>
+          <Button type="submit" disabled={saving}>
+            <Save className="mr-2 h-4 w-4" />
+            {saving ? "Guardando..." : "Guardar Cambios"}
+          </Button>
+        </div>
+      </form>
     </div>
   )
 }

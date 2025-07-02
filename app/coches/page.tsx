@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Car, Plus, Filter, Users, Calendar, AlertTriangle, Clock, CreditCard } from "lucide-react"
+import { Car, Plus, Filter, Users, Calendar, AlertTriangle, Clock, CreditCard, Truck } from "lucide-react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 import { obtenerFotosCoche } from "@/lib/storage"
@@ -119,25 +119,58 @@ async function getCoches(filter?: string) {
       })
     }
 
-    // Enriquecer los coches con los nombres de empleados, próximas revisiones y tarjetas SOLRED
+    // Obtener tarjetas ViaT asignadas para todos los coches
+    const { data: tarjetasViat } = await supabase.from("viat_empleados").select(`
+        empleado_id,
+        viat_id,
+        viats (
+          id,
+          fechacaducidad
+        )
+      `)
+
+    // Crear un mapa de tarjetas ViaT por empleado
+    const viatMap = new Map()
+    if (tarjetasViat) {
+      tarjetasViat.forEach((relacion) => {
+        viatMap.set(relacion.empleado_id.toString(), relacion.viats)
+      })
+    }
+
+    // Obtener seguros activos para todos los coches
+    const { data: segurosActivos } = await supabase.from("seguros").select("*").eq("activo", true)
+
+    // Crear un mapa de seguros por matrícula
+    const segurosMap = new Map()
+    if (segurosActivos) {
+      segurosActivos.forEach((seguro) => {
+        segurosMap.set(seguro.matricula, seguro)
+      })
+    }
+
+    // Enriquecer los coches con los nombres de empleados, próximas revisiones, tarjetas SOLRED y ViaT
     const cochesConEmpleados = cochesFiltrados.map((coche) => {
       const proximaRevision = proximasRevisionesMap.get(coche.matricula)
       const tarjetaSolred = tarjetasMap.get(coche.matricula)
+      const seguroActivo = segurosMap.get(coche.matricula)
 
-      // Determinar el nombre del empleado asignado
+      // Determinar el nombre del empleado asignado y su tarjeta ViaT
       let empleadoNombre = null
+      let tarjetaViat = null
 
       // Solo procesamos asignadoa si no es null, undefined o cadena vacía
       if (coche.asignadoa !== null && coche.asignadoa !== undefined && coche.asignadoa !== "") {
         // Si es un número, usamos directamente
         if (typeof coche.asignadoa === "number") {
           empleadoNombre = empleadosMap.get(coche.asignadoa.toString()) || `ID: ${coche.asignadoa}`
+          tarjetaViat = viatMap.get(coche.asignadoa.toString())
         }
         // Si es string, intentamos buscar en el mapa o usamos el valor directamente
         else if (typeof coche.asignadoa === "string") {
           // Intentamos convertir a número si parece ser un ID
           if (/^\d+$/.test(coche.asignadoa)) {
             empleadoNombre = empleadosMap.get(coche.asignadoa) || `ID: ${coche.asignadoa}`
+            tarjetaViat = viatMap.get(coche.asignadoa)
           } else {
             // Si no es un número, usamos el texto directamente
             empleadoNombre = coche.asignadoa
@@ -150,6 +183,8 @@ async function getCoches(filter?: string) {
         empleadoNombre,
         proximaRevisionITV: proximaRevision || null,
         tarjetaSolred,
+        tarjetaViat,
+        seguroActivo,
       }
     })
 
@@ -383,6 +418,48 @@ export default async function CochesPage({ searchParams }: { searchParams: Searc
                             </>
                           ) : (
                             <span className="text-gray-400 italic">Sin tarjeta</span>
+                          )}
+                        </div>
+                      </div>
+                      {/* Tarjeta ViaT */}
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Tarjeta ViaT:</span>
+                        <div className="flex items-center">
+                          {coche.tarjetaViat ? (
+                            <>
+                              <Truck className="h-4 w-4 text-green-600 mr-1" />
+                              <span className="text-green-600 font-semibold">{coche.tarjetaViat.id}</span>
+                            </>
+                          ) : (
+                            <span className="text-gray-400 italic">Sin tarjeta</span>
+                          )}
+                        </div>
+                      </div>
+                      {/* Seguro */}
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Seguro:</span>
+                        <div className="flex items-center">
+                          {coche.seguroActivo ? (
+                            <div className="text-right">
+                              <div className="flex items-center">
+                                <span
+                                  className={
+                                    new Date(coche.seguroActivo.fecha_vencimiento) < new Date()
+                                      ? "text-red-600 font-semibold"
+                                      : "text-blue-600 font-semibold"
+                                  }
+                                >
+                                  {formatDate(coche.seguroActivo.fecha_vencimiento)}
+                                </span>
+                              </div>
+                              {coche.seguroActivo.telefono_asistencia1 && (
+                                <span className="text-xs text-gray-600">
+                                  Tel: {coche.seguroActivo.telefono_asistencia1}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 italic">Sin seguro</span>
                           )}
                         </div>
                       </div>

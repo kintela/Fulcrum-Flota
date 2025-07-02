@@ -8,12 +8,10 @@ import {
   obtenerTarjetaAsignada,
   crearTarjetaSolred,
 } from "@/app/actions/solred"
+import { asignarTarjetaViat } from "@/app/actions/viats"
 
 export async function editarCoche(id: string, formData: FormData) {
   try {
-    // Extraer datos del formulario
-    const empleadoId = formData.get("empleado_id") as string
-
     const cocheData = {
       matricula: formData.get("matricula") as string,
       marca: formData.get("marca") as string,
@@ -27,13 +25,8 @@ export async function editarCoche(id: string, formData: FormData) {
       combustible: (formData.get("combustible") as string) || "Gasolina",
       extras: (formData.get("extras") as string) || null,
       donante: formData.get("donante") === "on",
-      asignadoa: empleadoId || null,
       alquiler: formData.get("alquiler") === "on",
       preciocompra: formData.get("preciocompra") ? Number.parseFloat(formData.get("preciocompra") as string) : null,
-      // Nuevos campos para la relación con empleados
-      empleado_id: empleadoId ? Number.parseInt(empleadoId) : null,
-      fecha_asignacion: (formData.get("fecha_asignacion") as string) || null,
-      observaciones_asignacion: (formData.get("observaciones_asignacion") as string) || null,
     }
 
     // Validaciones básicas
@@ -42,30 +35,6 @@ export async function editarCoche(id: string, formData: FormData) {
         success: false,
         error: "Los campos matrícula, marca y modelo son obligatorios",
       }
-    }
-
-    // Si no es alquiler y se asigna a empleado, validar que existe el empleado
-    if (!cocheData.alquiler && cocheData.empleado_id) {
-      const { data: empleado, error: empleadoError } = await supabase
-        .from("empleados")
-        .select("id")
-        .eq("id", cocheData.empleado_id)
-        .single()
-
-      if (empleadoError || !empleado) {
-        return {
-          success: false,
-          error: "El empleado seleccionado no existe",
-        }
-      }
-    }
-
-    // Si es alquiler, limpiar campos de empleado
-    if (cocheData.alquiler) {
-      cocheData.empleado_id = null
-      cocheData.fecha_asignacion = null
-      cocheData.observaciones_asignacion = null
-      cocheData.asignadoa = null
     }
 
     // Actualizar en Supabase usando matricula como clave primaria
@@ -77,6 +46,17 @@ export async function editarCoche(id: string, formData: FormData) {
         success: false,
         error: `Error al actualizar el coche: ${error.message}`,
       }
+    }
+
+    // Obtener el valor actual de asignadoa para usar en ViaT
+    const { data: cocheActual, error: errorCoche } = await supabase
+      .from("coches")
+      .select("asignadoa")
+      .eq("matricula", id)
+      .single()
+
+    if (errorCoche) {
+      console.error("Error al obtener datos del coche:", errorCoche)
     }
 
     // Gestionar tarjeta SOLRED
@@ -122,6 +102,25 @@ export async function editarCoche(id: string, formData: FormData) {
       }
     }
 
+    // Gestionar tarjeta ViaT usando el valor de asignadoa del coche
+    if (cocheActual?.asignadoa) {
+      const viatId = formData.get("viat_id") as string
+      const observacionesViat = formData.get("observaciones_viat") as string
+
+      if (viatId && viatId !== "") {
+        // Asignar tarjeta ViaT al empleado usando el asignadoa del coche
+        const resultadoViat = await asignarTarjetaViat(
+          Number.parseInt(cocheActual.asignadoa),
+          Number.parseInt(viatId),
+          observacionesViat || "",
+        )
+
+        if (!resultadoViat.success) {
+          console.warn("Error al asignar tarjeta ViaT:", resultadoViat.error)
+        }
+      }
+    }
+
     // Revalidar las páginas relevantes
     revalidatePath("/coches")
     revalidatePath(`/coches/detalle/${id}`)
@@ -140,13 +139,13 @@ export async function editarCoche(id: string, formData: FormData) {
   }
 }
 
-export async function obtenerCoche(id: string) {
-  if (!id || id === "undefined") {
+export async function obtenerCoche(matricula: string) {
+  if (!matricula || matricula === "undefined") {
     return null
   }
 
   try {
-    const { data, error } = await supabase.from("coches").select("*").eq("matricula", id)
+    const { data, error } = await supabase.from("coches").select("*").eq("matricula", matricula)
 
     if (error) {
       console.error("Error al obtener coche:", error)
@@ -160,7 +159,13 @@ export async function obtenerCoche(id: string) {
 
     // Si hay múltiples registros, tomar el primero y registrar advertencia
     if (data.length > 1) {
-      console.warn(`Múltiples coches encontrados con matrícula ${id}, tomando el primero`)
+      console.warn(`Múltiples coches encontrados con matrícula ${matricula}, tomando el primero`)
+    }
+
+    // Obtener tarjeta SOLRED asignada
+    const tarjetaSolred = await obtenerTarjetaAsignada(matricula)
+    if (tarjetaSolred && tarjetaSolred.tarjetassolred) {
+      data[0].tarjeta_solred = tarjetaSolred.tarjetassolred
     }
 
     // Obtener tarjeta SOLRED asignada

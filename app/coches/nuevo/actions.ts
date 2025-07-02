@@ -2,37 +2,28 @@
 
 import { supabase } from "@/lib/supabase"
 import { revalidatePath } from "next/cache"
-import { asignarTarjetaSolred, crearTarjetaSolred } from "@/app/actions/solred"
+import { asignarTarjetaViat } from "@/app/actions/viats"
 
-export async function crearCoche(formData: FormData) {
+interface CocheData {
+  matricula: string
+  marca: string
+  modelo: string
+  color?: string
+  año?: number | null
+  kilometros?: number | null
+  combustible: string
+  empleado_id?: number | null
+  fecha_compra?: string
+  precio_compra?: number | null
+  observaciones?: string
+  extras?: string
+  viat_id?: number | null
+  observaciones_viat?: string
+}
+
+export async function crearCoche(cocheData: CocheData) {
   try {
-    // Extraer el ID del empleado
-    const empleadoId = formData.get("empleado_id") as string
-
-    // Extraer datos del formulario según la estructura real de la tabla
-    const cocheData = {
-      matricula: formData.get("matricula") as string,
-      marca: formData.get("marca") as string,
-      modelo: formData.get("modelo") as string,
-      color: (formData.get("color") as string) || null,
-      fechamatriculacion: (formData.get("fechamatriculacion") as string) || null,
-      kms: formData.get("kms") ? Number.parseInt(formData.get("kms") as string) : 0,
-      kw: formData.get("kw") ? Number.parseInt(formData.get("kw") as string) : null,
-      cv: formData.get("cv") ? Number.parseInt(formData.get("cv") as string) : null,
-      cc: formData.get("cc") ? Number.parseInt(formData.get("cc") as string) : null,
-      combustible: (formData.get("combustible") as string) || "Gasolina",
-      extras: (formData.get("extras") as string) || null,
-      donante: formData.get("donante") === "on",
-      asignadoa: empleadoId || null,
-      alquiler: formData.get("alquiler") === "on",
-      preciocompra: formData.get("preciocompra") ? Number.parseFloat(formData.get("preciocompra") as string) : null,
-      // Nuevos campos para la relación con empleados
-      empleado_id: empleadoId ? Number.parseInt(empleadoId) : null,
-      fecha_asignacion: (formData.get("fecha_asignacion") as string) || null,
-      observaciones_asignacion: (formData.get("observaciones_asignacion") as string) || null,
-    }
-
-    // Validaciones básicas
+    // Validar campos obligatorios
     if (!cocheData.matricula || !cocheData.marca || !cocheData.modelo) {
       return {
         success: false,
@@ -40,16 +31,15 @@ export async function crearCoche(formData: FormData) {
       }
     }
 
-    // Verificar si ya existe un coche con la misma matrícula
-    const { data: cocheExistente, error: errorBusqueda } = await supabase
+    // Verificar que la matrícula no exista ya
+    const { data: cocheExistente, error: existeError } = await supabase
       .from("coches")
       .select("matricula")
-      .eq("matricula", cocheData.matricula)
+      .eq("matricula", cocheData.matricula.toUpperCase())
       .single()
 
-    if (errorBusqueda && errorBusqueda.code !== "PGRST116") {
-      // PGRST116 es "no rows found", que es lo que esperamos
-      console.error("Error al verificar matrícula duplicada:", errorBusqueda)
+    if (existeError && existeError.code !== "PGRST116") {
+      console.error("Error al verificar matrícula:", existeError)
       return {
         success: false,
         error: "Error al verificar la matrícula",
@@ -59,78 +49,60 @@ export async function crearCoche(formData: FormData) {
     if (cocheExistente) {
       return {
         success: false,
-        error: `Ya existe un coche con la matrícula ${cocheData.matricula}`,
+        error: "Ya existe un coche con esta matrícula",
       }
     }
 
-    // Si no es alquiler y se asigna a empleado, validar que existe el empleado
-    if (!cocheData.alquiler && cocheData.empleado_id) {
-      const { data: empleado, error: empleadoError } = await supabase
-        .from("empleados")
-        .select("id")
-        .eq("id", cocheData.empleado_id)
-        .single()
-
-      if (empleadoError || !empleado) {
-        return {
-          success: false,
-          error: "El empleado seleccionado no existe",
-        }
-      }
+    // Preparar datos para insertar
+    const datosInsert = {
+      matricula: cocheData.matricula.toUpperCase(),
+      marca: cocheData.marca,
+      modelo: cocheData.modelo,
+      color: cocheData.color || null,
+      año: cocheData.año || null,
+      kilometros: cocheData.kilometros || null,
+      combustible: cocheData.combustible,
+      empleado_id: cocheData.empleado_id || null,
+      fecha_compra: cocheData.fecha_compra || null,
+      precio_compra: cocheData.precio_compra || null,
+      observaciones: cocheData.observaciones || null,
+      extras: cocheData.extras || null,
+      activo: true,
     }
 
-    // Si es alquiler, limpiar campos de empleado
-    if (cocheData.alquiler) {
-      cocheData.empleado_id = null
-      cocheData.fecha_asignacion = null
-      cocheData.observaciones_asignacion = null
-      cocheData.asignadoa = null
-    }
+    // Crear el coche
+    const { data: nuevoCoche, error: errorCoche } = await supabase
+      .from("coches")
+      .insert([datosInsert])
+      .select()
+      .single()
 
-    // Insertar en Supabase
-    const { data, error } = await supabase.from("coches").insert([cocheData]).select()
-
-    if (error) {
-      console.error("Error al crear coche:", error)
+    if (errorCoche) {
+      console.error("Error al crear coche:", errorCoche)
       return {
         success: false,
-        error: `Error al crear el coche: ${error.message}`,
+        error: `Error al crear el coche: ${errorCoche.message}`,
       }
     }
 
-    // Gestionar tarjeta SOLRED
-    const numeroTarjetaSolred = formData.get("numero_tarjeta_solred") as string
-    const nuevaTarjetaNumero = formData.get("nueva_tarjeta_numero") as string
-    const nuevaTarjetaPin = formData.get("nueva_tarjeta_pin") as string
-    const nuevaTarjetaVencimiento = formData.get("nueva_tarjeta_vencimiento") as string
+    // Si hay una tarjeta ViaT seleccionada y un empleado asignado, crear la relación
+    if (cocheData.viat_id && cocheData.empleado_id) {
+      const resultadoViat = await asignarTarjetaViat(
+        cocheData.empleado_id,
+        cocheData.viat_id,
+        cocheData.observaciones_viat,
+      )
 
-    if (nuevaTarjetaNumero && nuevaTarjetaPin && nuevaTarjetaVencimiento) {
-      // Crear nueva tarjeta SOLRED
-      const resultadoCreacion = await crearTarjetaSolred(nuevaTarjetaNumero, nuevaTarjetaPin, nuevaTarjetaVencimiento)
-      if (resultadoCreacion.success) {
-        // Asignar la nueva tarjeta al coche
-        const resultadoAsignacion = await asignarTarjetaSolred(cocheData.matricula, nuevaTarjetaNumero)
-        if (!resultadoAsignacion.success) {
-          console.warn("Error al asignar nueva tarjeta SOLRED:", resultadoAsignacion.error)
-        }
-      } else {
-        console.warn("Error al crear nueva tarjeta SOLRED:", resultadoCreacion.error)
-      }
-    } else if (numeroTarjetaSolred && numeroTarjetaSolred.trim() !== "") {
-      // Asignar tarjeta existente
-      const resultadoSolred = await asignarTarjetaSolred(cocheData.matricula, numeroTarjetaSolred.trim())
-      if (!resultadoSolred.success) {
-        console.warn("Error al asignar tarjeta SOLRED:", resultadoSolred.error)
+      if (!resultadoViat.success) {
+        console.warn("Error al asignar tarjeta ViaT:", resultadoViat.error)
+        // No fallar la creación del coche por esto, solo advertir
       }
     }
 
-    // Revalidar la página de coches para mostrar los nuevos datos
     revalidatePath("/coches")
-    revalidatePath("/")
-
     return {
       success: true,
-      data: data[0],
+      data: nuevoCoche,
     }
   } catch (error) {
     console.error("Error en crearCoche:", error)
