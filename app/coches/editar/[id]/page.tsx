@@ -10,7 +10,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { ArrowLeft, Car, Save } from "lucide-react"
-import { editarCoche, obtenerCoche } from "./actions"
+import {
+  editarCoche,
+  obtenerCoche,
+  guardarSeccionBasica,
+  guardarSeccionAlquiler,
+  guardarSeccionAsignacion,
+} from "./actions"
 import { obtenerEmpleados } from "@/app/actions/empleados"
 import { SolredManager } from "@/components/solred-manager"
 import { ViatManager } from "@/components/viat-manager"
@@ -44,6 +50,11 @@ interface Coche {
   empleado_id?: number
   fecha_asignacion?: string
   observaciones_asignacion?: string
+  fecha_inicio?: string
+  fecha_fin?: string
+  importe_anual?: number
+  compania?: string
+  kms_anuales?: number
 }
 
 export default function EditarCochePage({ params }: { params: { id: string } }) {
@@ -52,11 +63,21 @@ export default function EditarCochePage({ params }: { params: { id: string } }) 
   const [empleados, setEmpleados] = useState<Empleado[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [savingBasica, setSavingBasica] = useState(false)
+  const [savingAlquiler, setSavingAlquiler] = useState(false)
+  const [savingAsignacion, setSavingAsignacion] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isAlquiler, setIsAlquiler] = useState(false)
 
   useEffect(() => {
     cargarDatos()
   }, [params.id])
+
+  useEffect(() => {
+    if (coche) {
+      setIsAlquiler(coche.alquiler)
+    }
+  }, [coche])
 
   const cargarDatos = async () => {
     try {
@@ -102,6 +123,77 @@ export default function EditarCochePage({ params }: { params: { id: string } }) 
       setError("Error inesperado al guardar el coche")
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleAlquilerChange = (checked: boolean) => {
+    setIsAlquiler(checked)
+  }
+
+  const handleGuardarBasica = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setSavingBasica(true)
+    setError(null)
+
+    try {
+      const formData = new FormData(e.currentTarget)
+      const resultado = await guardarSeccionBasica(params.id, formData)
+
+      if (resultado.success) {
+        // Recargar datos para reflejar cambios
+        await cargarDatos()
+      } else {
+        setError(resultado.error || "Error al guardar información básica")
+      }
+    } catch (error) {
+      console.error("Error al guardar:", error)
+      setError("Error inesperado al guardar")
+    } finally {
+      setSavingBasica(false)
+    }
+  }
+
+  const handleGuardarAlquiler = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setSavingAlquiler(true)
+    setError(null)
+
+    try {
+      const formData = new FormData(e.currentTarget)
+      const resultado = await guardarSeccionAlquiler(params.id, formData)
+
+      if (resultado.success) {
+        await cargarDatos()
+      } else {
+        setError(resultado.error || "Error al guardar datos del alquiler")
+      }
+    } catch (error) {
+      console.error("Error al guardar:", error)
+      setError("Error inesperado al guardar")
+    } finally {
+      setSavingAlquiler(false)
+    }
+  }
+
+  const handleGuardarAsignacion = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setSavingAsignacion(true)
+    setError(null)
+
+    try {
+      const formData = new FormData(e.currentTarget)
+      const resultado = await guardarSeccionAsignacion(params.id, formData)
+
+      if (resultado.success) {
+        await cargarDatos()
+      } else {
+        setError(resultado.error || "Error al guardar asignación")
+      }
+    } catch (error) {
+      console.error("Error al guardar:", error)
+      setError("Error inesperado al guardar")
+    } finally {
+      setSavingAsignacion(false)
     }
   }
 
@@ -153,10 +245,14 @@ export default function EditarCochePage({ params }: { params: { id: string } }) 
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">{error}</div>}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleGuardarBasica} className="space-y-6">
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Información Básica</CardTitle>
+            <Button type="submit" size="sm" disabled={savingBasica}>
+              <Save className="mr-2 h-4 w-4" />
+              {savingBasica ? "Guardando..." : "Guardar"}
+            </Button>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -247,16 +343,84 @@ export default function EditarCochePage({ params }: { params: { id: string } }) 
                 <Label htmlFor="donante">Vehículo donante</Label>
               </div>
               <div className="flex items-center space-x-2">
-                <Checkbox id="alquiler" name="alquiler" defaultChecked={coche.alquiler} />
+                <Checkbox
+                  id="alquiler"
+                  name="alquiler"
+                  defaultChecked={coche.alquiler}
+                  onCheckedChange={handleAlquilerChange}
+                />
                 <Label htmlFor="alquiler">Vehículo de alquiler</Label>
               </div>
             </div>
           </CardContent>
         </Card>
+      </form>
 
+      {isAlquiler && (
+        <form onSubmit={handleGuardarAlquiler}>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Datos del Alquiler</CardTitle>
+              <Button type="submit" size="sm" disabled={savingAlquiler}>
+                <Save className="mr-2 h-4 w-4" />
+                {savingAlquiler ? "Guardando..." : "Guardar"}
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <input type="hidden" name="alquiler" value={isAlquiler ? "on" : ""} />
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="fecha_inicio">Fecha Inicio</Label>
+                  <Input id="fecha_inicio" name="fecha_inicio" type="date" defaultValue={coche.fecha_inicio || ""} />
+                </div>
+                <div>
+                  <Label htmlFor="fecha_fin">Fecha Fin</Label>
+                  <Input id="fecha_fin" name="fecha_fin" type="date" defaultValue={coche.fecha_fin || ""} />
+                </div>
+                <div>
+                  <Label htmlFor="importe_anual">Importe Anual (€)</Label>
+                  <Input
+                    id="importe_anual"
+                    name="importe_anual"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    defaultValue={coche.importe_anual || ""}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="compania">Compañía</Label>
+                  <Input
+                    id="compania"
+                    name="compania"
+                    defaultValue={coche.compania || ""}
+                    placeholder="Nombre de la compañía de alquiler"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="kms_anuales">Kilómetros Anuales</Label>
+                  <Input
+                    id="kms_anuales"
+                    name="kms_anuales"
+                    type="number"
+                    min="0"
+                    defaultValue={coche.kms_anuales || ""}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </form>
+      )}
+
+      <form onSubmit={handleGuardarAsignacion}>
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Asignación de Empleado</CardTitle>
+            <Button type="submit" size="sm" disabled={savingAsignacion}>
+              <Save className="mr-2 h-4 w-4" />
+              {savingAsignacion ? "Guardando..." : "Guardar"}
+            </Button>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -300,24 +464,26 @@ export default function EditarCochePage({ params }: { params: { id: string } }) 
             </div>
           </CardContent>
         </Card>
+      </form>
 
-        <SolredManager matricula={coche.matricula} isEditing={true} />
+      <SolredManager matricula={coche.matricula} isEditing={true} />
 
-        <ViatManager empleadoId={coche.empleado_id} showEmployeeAssignment={false} isEditing={true} />
+      <ViatManager empleadoId={coche.empleado_id} showEmployeeAssignment={false} isEditing={true} />
 
-        <ITVManager matricula={coche.matricula} isEditing={true} />
+      <ITVManager matricula={coche.matricula} isEditing={true} />
 
-        <SeguroManager matricula={coche.matricula} isEditing={true} />
+      <SeguroManager matricula={coche.matricula} isEditing={true} />
 
-        <FotosManager matricula={coche.matricula} isEditing={true} />
+      <FotosManager matricula={coche.matricula} isEditing={true} />
 
+      <form onSubmit={handleSubmit}>
         <div className="flex justify-end space-x-4">
           <Button type="button" variant="outline" onClick={() => router.push("/coches")} disabled={saving}>
             Cancelar
           </Button>
           <Button type="submit" disabled={saving}>
             <Save className="mr-2 h-4 w-4" />
-            {saving ? "Guardando..." : "Guardar Cambios"}
+            {saving ? "Guardando..." : "Guardar Todo"}
           </Button>
         </div>
       </form>

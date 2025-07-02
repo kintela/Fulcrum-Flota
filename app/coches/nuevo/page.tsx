@@ -42,11 +42,18 @@ export default function NuevoCochePage() {
     precio_compra: "",
     observaciones: "",
     extras: "",
+    alquiler: false,
+    fecha_inicio_alquiler: "",
+    fecha_fin_alquiler: "",
+    importe_anual: "",
+    compania: "",
+    kms_anuales: "",
   })
   const [viatSeleccionada, setViatSeleccionada] = useState<number | null>(null)
   const [observacionesViat, setObservacionesViat] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [mostrarAlquiler, setMostrarAlquiler] = useState(false)
 
   useEffect(() => {
     cargarEmpleados()
@@ -63,11 +70,17 @@ export default function NuevoCochePage() {
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target
+    const { name, value, type } = e.target
+    const checked = type === "checkbox" ? (e.target as HTMLInputElement).checked : undefined
+
     setFormData((prev) => ({
       ...prev,
-      [name]: value,
+      [name]: type === "checkbox" ? checked : value,
     }))
+
+    if (name === "alquiler") {
+      setMostrarAlquiler(checked || false)
+    }
   }
 
   const handleViatChange = (viatId: number | null, observaciones?: string) => {
@@ -308,6 +321,92 @@ export default function NuevoCochePage() {
               </div>
             </CardContent>
           </Card>
+
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="alquiler"
+              name="alquiler"
+              checked={formData.alquiler}
+              onChange={handleInputChange}
+              className="rounded border-gray-300"
+            />
+            <Label htmlFor="alquiler">Vehículo de alquiler</Label>
+          </div>
+
+          {mostrarAlquiler && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Car className="h-5 w-5" />
+                  Datos del Alquiler
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="fecha_inicio_alquiler">Fecha Inicio</Label>
+                    <Input
+                      id="fecha_inicio_alquiler"
+                      name="fecha_inicio_alquiler"
+                      type="date"
+                      value={formData.fecha_inicio_alquiler}
+                      onChange={handleInputChange}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="fecha_fin_alquiler">Fecha Fin</Label>
+                    <Input
+                      id="fecha_fin_alquiler"
+                      name="fecha_fin_alquiler"
+                      type="date"
+                      value={formData.fecha_fin_alquiler}
+                      onChange={handleInputChange}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="importe_anual">Importe Anual (€)</Label>
+                    <Input
+                      id="importe_anual"
+                      name="importe_anual"
+                      type="number"
+                      step="0.01"
+                      value={formData.importe_anual}
+                      onChange={handleInputChange}
+                      placeholder="12000.00"
+                      min="0"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="kms_anuales">Kilómetros Anuales</Label>
+                    <Input
+                      id="kms_anuales"
+                      name="kms_anuales"
+                      type="number"
+                      value={formData.kms_anuales}
+                      onChange={handleInputChange}
+                      placeholder="20000"
+                      min="0"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="compania">Compañía</Label>
+                  <Input
+                    id="compania"
+                    name="compania"
+                    value={formData.compania}
+                    onChange={handleInputChange}
+                    placeholder="Nombre de la compañía de alquiler"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Gestión de tarjetas y seguros */}

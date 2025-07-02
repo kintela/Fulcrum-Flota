@@ -1,5 +1,5 @@
 import { Card, CardContent } from "@/components/ui/card"
-import { Car, Users, AlertTriangle, CreditCard } from "lucide-react"
+import { Car, Users, AlertTriangle, CreditCard, Calendar } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import Link from "next/link"
 import { Suspense } from "react"
@@ -116,6 +116,48 @@ async function getDashboardData() {
       return fechaVencimiento >= today && fechaVencimiento <= thirtyDaysFromNow
     })
 
+    // Obtener alquileres próximos a vencer (2 meses o menos)
+    const { data: alquileres, error: alquileresError } = await supabase
+      .from("alquileres")
+      .select(`
+        *,
+        coches!inner (
+          matricula,
+          marca,
+          modelo,
+          donante,
+          asignadoa
+        )
+      `)
+      .order("fecha_fin", { ascending: true })
+
+    if (alquileresError) {
+      console.error("Error fetching alquileres:", alquileresError)
+    }
+
+    // Calcular alertas de alquileres (2 meses = 60 días)
+    const sixtyDaysFromNow = new Date()
+    sixtyDaysFromNow.setDate(today.getDate() + 60)
+
+    const alquilerAlerts = (alquileres || []).filter((alquiler) => {
+      // Skip donor vehicles
+      if (alquiler.coches?.donante === true) return false
+
+      if (!alquiler.fecha_fin) return false
+      const fechaFin = new Date(alquiler.fecha_fin)
+      return fechaFin <= sixtyDaysFromNow
+    })
+
+    const alquileresVencidos = alquilerAlerts.filter((alquiler) => {
+      const fechaFin = new Date(alquiler.fecha_fin)
+      return fechaFin < today
+    })
+
+    const alquileresProximosVencer = alquilerAlerts.filter((alquiler) => {
+      const fechaFin = new Date(alquiler.fecha_fin)
+      return fechaFin >= today && fechaFin <= sixtyDaysFromNow
+    })
+
     return {
       coches: coches || [],
       empleados: empleados || [],
@@ -131,6 +173,12 @@ async function getDashboardData() {
         vencidas: solredVencidas.length,
         proximasVencer: solredProximasVencer.length,
         detalles: solredAlerts,
+      },
+      alquilerAlerts: {
+        total: alquilerAlerts.length,
+        vencidos: alquileresVencidos.length,
+        proximosVencer: alquileresProximosVencer.length,
+        detalles: alquilerAlerts,
       },
     }
   } catch (error) {
@@ -151,6 +199,12 @@ async function getDashboardData() {
         proximasVencer: 0,
         detalles: [],
       },
+      alquilerAlerts: {
+        total: 0,
+        vencidos: 0,
+        proximosVencer: 0,
+        detalles: [],
+      },
     }
   }
 }
@@ -160,11 +214,13 @@ function DashboardStats({
   empleados,
   itvAlerts,
   solredAlerts,
+  alquilerAlerts,
 }: {
   coches: any[]
   empleados: any[]
   itvAlerts: any
   solredAlerts: any
+  alquilerAlerts: any
 }) {
   // Contar donantes
   const donantesCount = coches.filter((c) => c.donante === true).length
@@ -187,7 +243,7 @@ function DashboardStats({
     cochesDisponibles: disponiblesReal,
     totalEmpleados: empleados.length,
     donorVehicles: donantesCount,
-    totalAlertas: itvAlerts.total + solredAlerts.total,
+    totalAlertas: itvAlerts.total + solredAlerts.total + alquilerAlerts.total,
   }
 
   return (
@@ -289,7 +345,7 @@ function DashboardStats({
         </CardContent>
       </Card>
 
-      {/* 6. Alertas ITV */}
+      {/* 6. Alertas Totales */}
       <Card>
         <CardContent className="p-6">
           <div className="flex items-center">
@@ -297,7 +353,7 @@ function DashboardStats({
               <AlertTriangle className={`h-6 w-6 ${stats.totalAlertas > 0 ? "text-red-600" : "text-gray-400"}`} />
             </div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Alertas ITV</p>
+              <p className="text-sm font-medium text-gray-600">Total Alertas</p>
               <p className={`text-2xl font-bold ${stats.totalAlertas > 0 ? "text-red-600" : "text-gray-900"}`}>
                 {stats.totalAlertas}
               </p>
@@ -601,6 +657,158 @@ function SolredAlertsSection({ solredAlerts, empleados }: { solredAlerts: any; e
   )
 }
 
+function AlquilerAlertsSection({ alquilerAlerts, empleados }: { alquilerAlerts: any; empleados: any[] }) {
+  if (alquilerAlerts.total === 0) {
+    return null
+  }
+
+  // Crear mapa de empleados para búsqueda rápida
+  const empleadosMap = new Map()
+  empleados.forEach((empleado) => {
+    empleadosMap.set(empleado.id, empleado)
+  })
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("es-ES")
+  }
+
+  const getDaysUntilDate = (dateString: string) => {
+    const today = new Date()
+    const targetDate = new Date(dateString)
+    const diffTime = targetDate.getTime() - today.getTime()
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    return diffDays
+  }
+
+  // Función para obtener información del empleado asignado
+  const getEmpleadoInfo = (coche: any) => {
+    if (!coche || !coche.asignadoa) return null
+
+    // Si asignadoa es un número o string numérico, buscar en el mapa de empleados
+    const empleadoId = Number(coche.asignadoa)
+    if (!isNaN(empleadoId)) {
+      return empleadosMap.get(empleadoId)
+    }
+
+    // Si es un string no numérico, devolverlo directamente
+    if (typeof coche.asignadoa === "string" && coche.asignadoa.trim() !== "") {
+      return { nombre: coche.asignadoa, apellidos: "" }
+    }
+
+    return null
+  }
+
+  return (
+    <Card className="mb-8 border-purple-200 bg-purple-50">
+      <CardContent className="p-6">
+        <h2 className="text-xl font-bold mb-4 flex items-center text-purple-800">
+          <Calendar className="h-5 w-5 mr-2" />
+          Alertas de Alquileres ({alquilerAlerts.total})
+        </h2>
+
+        {alquilerAlerts.vencidos > 0 && (
+          <div className="mb-4">
+            <h3 className="font-semibold text-red-700 mb-2">Alquileres Vencidos ({alquilerAlerts.vencidos})</h3>
+            <div className="space-y-2">
+              {alquilerAlerts.detalles
+                .filter((alquiler: any) => new Date(alquiler.fecha_fin) < new Date())
+                .map((alquiler: any) => {
+                  const daysOverdue = Math.abs(getDaysUntilDate(alquiler.fecha_fin))
+                  const empleadoInfo = getEmpleadoInfo(alquiler.coches)
+
+                  return (
+                    <div key={alquiler.id} className="p-3 bg-red-100 border border-red-200 rounded-md">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="font-medium text-red-800">
+                            {alquiler.matricula} -{" "}
+                            {alquiler.coches
+                              ? `${alquiler.coches.marca} ${alquiler.coches.modelo}`
+                              : "Información no disponible"}
+                            {empleadoInfo && (
+                              <span className="ml-2 text-red-700 font-normal">
+                                (Asignado a: {empleadoInfo.nombre} {empleadoInfo.apellidos})
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-sm text-red-600">
+                            Alquiler de {alquiler.compania} vencido hace {daysOverdue} días (venció el{" "}
+                            {formatDate(alquiler.fecha_fin)})
+                          </p>
+                          {alquiler.importe_anual && (
+                            <p className="text-sm text-red-600">Importe anual: {alquiler.importe_anual}€</p>
+                          )}
+                        </div>
+                        <Link
+                          href={`/coches/detalle/${alquiler.matricula}`}
+                          className="text-red-600 hover:text-red-800 text-sm underline"
+                        >
+                          Ver detalles
+                        </Link>
+                      </div>
+                    </div>
+                  )
+                })}
+            </div>
+          </div>
+        )}
+
+        {alquilerAlerts.proximosVencer > 0 && (
+          <div>
+            <h3 className="font-semibold text-purple-700 mb-2">
+              Alquileres Próximos a Vencer ({alquilerAlerts.proximosVencer})
+            </h3>
+            <div className="space-y-2">
+              {alquilerAlerts.detalles
+                .filter((alquiler: any) => {
+                  const fecha = new Date(alquiler.fecha_fin)
+                  const today = new Date()
+                  return fecha >= today
+                })
+                .map((alquiler: any) => {
+                  const daysUntil = getDaysUntilDate(alquiler.fecha_fin)
+                  const empleadoInfo = getEmpleadoInfo(alquiler.coches)
+
+                  return (
+                    <div key={alquiler.id} className="p-3 bg-purple-100 border border-purple-200 rounded-md">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="font-medium text-purple-800">
+                            {alquiler.matricula} -{" "}
+                            {alquiler.coches
+                              ? `${alquiler.coches.marca} ${alquiler.coches.modelo}`
+                              : "Información no disponible"}
+                            {empleadoInfo && (
+                              <span className="ml-2 text-purple-700 font-normal">
+                                (Asignado a: {empleadoInfo.nombre} {empleadoInfo.apellidos})
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-sm text-purple-600">
+                            Alquiler de {alquiler.compania} vence en {daysUntil} días ({formatDate(alquiler.fecha_fin)})
+                          </p>
+                          {alquiler.importe_anual && (
+                            <p className="text-sm text-purple-600">Importe anual: {alquiler.importe_anual}€</p>
+                          )}
+                        </div>
+                        <Link
+                          href={`/coches/detalle/${alquiler.matricula}`}
+                          className="text-purple-600 hover:text-purple-800 text-sm underline"
+                        >
+                          Ver detalles
+                        </Link>
+                      </div>
+                    </div>
+                  )
+                })}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 function RecentVehicles({ cochesRecientes, empleados }: { cochesRecientes: any[]; empleados: any[] }) {
   // Crear mapa de empleados para búsqueda rápida
   const empleadosMap = new Map()
@@ -692,7 +900,7 @@ function RecentVehicles({ cochesRecientes, empleados }: { cochesRecientes: any[]
 }
 
 export default async function HomePage() {
-  const { coches, empleados, cochesRecientes, itvAlerts, solredAlerts } = await getDashboardData()
+  const { coches, empleados, cochesRecientes, itvAlerts, solredAlerts, alquilerAlerts } = await getDashboardData()
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
@@ -703,7 +911,13 @@ export default async function HomePage() {
         </div>
 
         <Suspense fallback={<div>Cargando estadísticas...</div>}>
-          <DashboardStats coches={coches} empleados={empleados} itvAlerts={itvAlerts} solredAlerts={solredAlerts} />
+          <DashboardStats
+            coches={coches}
+            empleados={empleados}
+            itvAlerts={itvAlerts}
+            solredAlerts={solredAlerts}
+            alquilerAlerts={alquilerAlerts}
+          />
         </Suspense>
 
         <Suspense fallback={<div>Cargando alertas...</div>}>
@@ -712,6 +926,10 @@ export default async function HomePage() {
 
         <Suspense fallback={<div>Cargando alertas SOLRED...</div>}>
           <SolredAlertsSection solredAlerts={solredAlerts} empleados={empleados} />
+        </Suspense>
+
+        <Suspense fallback={<div>Cargando alertas de alquileres...</div>}>
+          <AlquilerAlertsSection alquilerAlerts={alquilerAlerts} empleados={empleados} />
         </Suspense>
 
         <Suspense fallback={<div>Cargando vehículos recientes...</div>}>
