@@ -2,188 +2,150 @@
 
 import { supabase } from "@/lib/supabase"
 import { revalidatePath } from "next/cache"
-import {
-  asignarTarjetaSolred,
-  desasignarTarjetaSolred,
-  obtenerTarjetaAsignada,
-  crearTarjetaSolred,
-} from "@/app/actions/solred"
-import { asignarTarjetaViat } from "@/app/actions/viats"
 
-export async function editarCoche(id: string, formData: FormData) {
+export async function obtenerCoche(matricula: string) {
   try {
+    // Obtener datos del coche
+    const { data: coche, error: cocheError } = await supabase
+      .from("coches")
+      .select("*")
+      .eq("matricula", matricula)
+      .single()
+
+    if (cocheError) {
+      console.error("Error al obtener coche:", cocheError)
+      return null
+    }
+
+    // Obtener datos del alquiler si existe
+    const { data: alquiler } = await supabase.from("alquileres").select("*").eq("matricula", matricula).single()
+
+    // Combinar datos del coche con datos del alquiler
+    return {
+      ...coche,
+      fecha_inicio: alquiler?.fecha_inicio || null,
+      fecha_fin: alquiler?.fecha_fin || null,
+      importe_anual: alquiler?.importe_anual || null,
+      compania: alquiler?.compania || null,
+      kms_anuales: alquiler?.kms_anuales || null,
+    }
+  } catch (error) {
+    console.error("Error al obtener coche:", error)
+    return null
+  }
+}
+
+export async function editarCoche(matricula: string, formData: FormData) {
+  try {
+    const marca = formData.get("marca") as string
+    const modelo = formData.get("modelo") as string
+    const color = formData.get("color") as string
+    const fechamatriculacion = formData.get("fechamatriculacion") as string
+    const kms = Number.parseInt(formData.get("kms") as string) || 0
+    const kw = formData.get("kw") as string
+    const cv = formData.get("cv") as string
+    const cc = formData.get("cc") as string
+    const combustible = formData.get("combustible") as string
+    const extras = formData.get("extras") as string
+    const donante = formData.get("donante") === "on"
+    const alquiler = formData.get("alquiler") === "on"
+    const preciocompra = formData.get("preciocompra") as string
+    const empleadoId = formData.get("empleado_id") as string
+    const fechaAsignacion = formData.get("fecha_asignacion") as string
+    const observacionesAsignacion = formData.get("observaciones_asignacion") as string
+
     const cocheData = {
-      matricula: formData.get("matricula") as string,
-      marca: formData.get("marca") as string,
-      modelo: formData.get("modelo") as string,
-      color: (formData.get("color") as string) || null,
-      fechamatriculacion: (formData.get("fechamatriculacion") as string) || null,
-      kms: formData.get("kms") ? Number.parseInt(formData.get("kms") as string) : 0,
-      kw: formData.get("kw") ? Number.parseInt(formData.get("kw") as string) : null,
-      cv: formData.get("cv") ? Number.parseInt(formData.get("cv") as string) : null,
-      cc: formData.get("cc") ? Number.parseInt(formData.get("cc") as string) : null,
-      combustible: (formData.get("combustible") as string) || "Gasolina",
-      extras: (formData.get("extras") as string) || null,
-      donante: formData.get("donante") === "on",
-      alquiler: formData.get("alquiler") === "on",
-      preciocompra: formData.get("preciocompra") ? Number.parseFloat(formData.get("preciocompra") as string) : null,
+      marca,
+      modelo,
+      color: color || null,
+      fechamatriculacion: fechamatriculacion || null,
+      kms,
+      kw: kw && kw.trim() !== "" ? Number.parseInt(kw) : null,
+      cv: cv && cv.trim() !== "" ? Number.parseInt(cv) : null,
+      cc: cc && cc.trim() !== "" ? Number.parseInt(cc) : null,
+      combustible,
+      extras: extras || null,
+      donante,
+      alquiler,
+      preciocompra: preciocompra && preciocompra.trim() !== "" ? Number.parseFloat(preciocompra) : null,
+      empleado_id: empleadoId && empleadoId !== "0" ? Number.parseInt(empleadoId) : null,
+      fecha_asignacion: fechaAsignacion || null,
+      observaciones_asignacion: observacionesAsignacion || null,
     }
 
-    // Validaciones básicas
-    if (!cocheData.matricula || !cocheData.marca || !cocheData.modelo) {
+    // Actualizar el coche
+    const { error: cocheError } = await supabase.from("coches").update(cocheData).eq("matricula", matricula)
+
+    if (cocheError) {
+      console.error("Error al actualizar coche:", cocheError)
       return {
         success: false,
-        error: "Los campos matrícula, marca y modelo son obligatorios",
+        error: "Error al actualizar el coche: " + cocheError.message,
       }
     }
 
-    // Actualizar en Supabase usando matricula como clave primaria
-    const { data, error } = await supabase.from("coches").update(cocheData).eq("matricula", id).select()
-
-    if (error) {
-      console.error("Error al actualizar coche:", error)
-      return {
-        success: false,
-        error: `Error al actualizar el coche: ${error.message}`,
-      }
-    }
-
-    // Gestionar datos del alquiler
-    if (cocheData.alquiler) {
+    // Manejar datos del alquiler
+    if (alquiler) {
       const fechaInicio = formData.get("fecha_inicio") as string
       const fechaFin = formData.get("fecha_fin") as string
       const importeAnual = formData.get("importe_anual") as string
       const compania = formData.get("compania") as string
       const kmsAnuales = formData.get("kms_anuales") as string
 
-      const datosAlquiler = {
-        matricula: id,
-        fecha_inicio: fechaInicio && fechaInicio.trim() !== "" ? fechaInicio : null,
-        fecha_fin: fechaFin && fechaFin.trim() !== "" ? fechaFin : null,
+      const alquilerData = {
+        matricula,
+        fecha_inicio: fechaInicio || null,
+        fecha_fin: fechaFin || null,
         importe_anual: importeAnual && importeAnual.trim() !== "" ? Number.parseFloat(importeAnual) : null,
-        compania: compania && compania.trim() !== "" ? compania : null,
+        compania: compania || null,
         kms_anuales: kmsAnuales && kmsAnuales.trim() !== "" ? Number.parseInt(kmsAnuales) : null,
       }
 
-      // Verificar si ya existe un registro de alquiler para esta matrícula
-      const { data: alquilerExistente, error: errorBusqueda } = await supabase
+      // Verificar si ya existe un registro de alquiler
+      const { data: existingAlquiler } = await supabase
         .from("alquileres")
         .select("matricula")
-        .eq("matricula", id)
+        .eq("matricula", matricula)
         .single()
 
-      if (errorBusqueda && errorBusqueda.code !== "PGRST116") {
-        console.error("Error al buscar alquiler existente:", errorBusqueda)
-      }
-
-      if (alquilerExistente) {
+      if (existingAlquiler) {
         // Actualizar registro existente
-        const { error: errorActualizar } = await supabase.from("alquileres").update(datosAlquiler).eq("matricula", id)
+        const { error: alquilerError } = await supabase
+          .from("alquileres")
+          .update(alquilerData)
+          .eq("matricula", matricula)
 
-        if (errorActualizar) {
-          console.error("Error al actualizar datos de alquiler:", errorActualizar)
+        if (alquilerError) {
+          console.error("Error al actualizar datos de alquiler:", alquilerError)
+          return {
+            success: false,
+            error: "Error al actualizar datos de alquiler: " + alquilerError.message,
+          }
         }
       } else {
         // Crear nuevo registro
-        const { error: errorCrear } = await supabase.from("alquileres").insert([datosAlquiler])
+        const { error: alquilerError } = await supabase.from("alquileres").insert([alquilerData])
 
-        if (errorCrear) {
-          console.error("Error al crear datos de alquiler:", errorCrear)
+        if (alquilerError) {
+          console.error("Error al crear datos de alquiler:", alquilerError)
+          return {
+            success: false,
+            error: "Error al crear datos de alquiler: " + alquilerError.message,
+          }
         }
       }
     } else {
       // Si no es alquiler, eliminar datos de alquiler si existen
-      const { error: errorEliminar } = await supabase.from("alquileres").delete().eq("matricula", id)
-
-      if (errorEliminar) {
-        console.error("Error al eliminar datos de alquiler:", errorEliminar)
-      }
+      await supabase.from("alquileres").delete().eq("matricula", matricula)
     }
 
-    // Obtener el valor actual de asignadoa para usar en ViaT
-    const { data: cocheActual, error: errorCoche } = await supabase
-      .from("coches")
-      .select("asignadoa")
-      .eq("matricula", id)
-      .single()
-
-    if (errorCoche) {
-      console.error("Error al obtener datos del coche:", errorCoche)
-    }
-
-    // Gestionar tarjeta SOLRED
-    const numeroTarjetaSolred = formData.get("numero_tarjeta_solred") as string
-    const nuevaTarjetaNumero = formData.get("nueva_tarjeta_numero") as string
-    const nuevaTarjetaPin = formData.get("nueva_tarjeta_pin") as string
-    const nuevaTarjetaVencimiento = formData.get("nueva_tarjeta_vencimiento") as string
-    const tarjetaActual = await obtenerTarjetaAsignada(id)
-
-    if (nuevaTarjetaNumero && nuevaTarjetaPin && nuevaTarjetaVencimiento) {
-      // Crear nueva tarjeta SOLRED
-      const resultadoCreacion = await crearTarjetaSolred(nuevaTarjetaNumero, nuevaTarjetaPin, nuevaTarjetaVencimiento)
-      if (resultadoCreacion.success) {
-        // Desasignar tarjeta actual si existe
-        if (tarjetaActual) {
-          await desasignarTarjetaSolred(id)
-        }
-        // Asignar la nueva tarjeta al coche
-        const resultadoAsignacion = await asignarTarjetaSolred(id, nuevaTarjetaNumero)
-        if (!resultadoAsignacion.success) {
-          console.warn("Error al asignar nueva tarjeta SOLRED:", resultadoAsignacion.error)
-        }
-      } else {
-        console.warn("Error al crear nueva tarjeta SOLRED:", resultadoCreacion.error)
-      }
-    } else if (numeroTarjetaSolred && numeroTarjetaSolred.trim() !== "") {
-      // Si hay una nueva tarjeta especificada
-      if (!tarjetaActual || tarjetaActual.numero_tarjeta !== numeroTarjetaSolred.trim()) {
-        // Desasignar tarjeta actual si existe
-        if (tarjetaActual) {
-          await desasignarTarjetaSolred(id)
-        }
-        // Asignar nueva tarjeta
-        const resultadoSolred = await asignarTarjetaSolred(id, numeroTarjetaSolred.trim())
-        if (!resultadoSolred.success) {
-          console.warn("Error al asignar tarjeta SOLRED:", resultadoSolred.error)
-        }
-      }
-    } else {
-      // Si no hay tarjeta especificada, desasignar la actual si existe
-      if (tarjetaActual) {
-        await desasignarTarjetaSolred(id)
-      }
-    }
-
-    // Gestionar tarjeta ViaT usando el valor de asignadoa del coche
-    if (cocheActual?.asignadoa) {
-      const viatId = formData.get("viat_id") as string
-      const observacionesViat = formData.get("observaciones_viat") as string
-
-      if (viatId && viatId !== "") {
-        // Asignar tarjeta ViaT al empleado usando el asignadoa del coche
-        const resultadoViat = await asignarTarjetaViat(
-          Number.parseInt(cocheActual.asignadoa),
-          Number.parseInt(viatId),
-          observacionesViat || "",
-        )
-
-        if (!resultadoViat.success) {
-          console.warn("Error al asignar tarjeta ViaT:", resultadoViat.error)
-        }
-      }
-    }
-
-    // Revalidar las páginas relevantes
     revalidatePath("/coches")
-    revalidatePath(`/coches/detalle/${id}`)
-    revalidatePath("/")
-
     return {
       success: true,
-      data: data[0],
+      message: "Coche actualizado correctamente",
     }
   } catch (error) {
-    console.error("Error en editarCoche:", error)
+    console.error("Error inesperado:", error)
     return {
       success: false,
       error: "Error inesperado al actualizar el coche",
@@ -191,100 +153,76 @@ export async function editarCoche(id: string, formData: FormData) {
   }
 }
 
-export async function obtenerCoche(matricula: string) {
-  if (!matricula || matricula === "undefined") {
-    return null
-  }
-
+export async function guardarSeccionBasica(matricula: string, formData: FormData) {
   try {
-    const { data, error } = await supabase.from("coches").select("*").eq("matricula", matricula)
+    const marca = formData.get("marca") as string
+    const modelo = formData.get("modelo") as string
+    const color = formData.get("color") as string
+    const fechamatriculacion = formData.get("fechamatriculacion") as string
+    const kms = Number.parseInt(formData.get("kms") as string) || 0
+    const kw = formData.get("kw") as string
+    const cv = formData.get("cv") as string
+    const cc = formData.get("cc") as string
+    const combustible = formData.get("combustible") as string
+    const extras = formData.get("extras") as string
+    const donante = formData.get("donante") === "on"
+    const alquiler = formData.get("alquiler") === "on"
+    const preciocompra = formData.get("preciocompra") as string
 
-    if (error) {
-      console.error("Error al obtener coche:", error)
-      return null
-    }
-
-    // Si no hay datos, retornar null
-    if (!data || data.length === 0) {
-      return null
-    }
-
-    // Si hay múltiples registros, tomar el primero y registrar advertencia
-    if (data.length > 1) {
-      console.warn(`Múltiples coches encontrados con matrícula ${matricula}, tomando el primero`)
-    }
-
-    // Obtener datos del alquiler si existen
-    const { data: datosAlquiler, error: errorAlquiler } = await supabase
-      .from("alquileres")
-      .select("*")
-      .eq("matricula", matricula)
-      .single()
-
-    if (errorAlquiler && errorAlquiler.code !== "PGRST116") {
-      console.error("Error al obtener datos de alquiler:", errorAlquiler)
-    }
-
-    // Combinar datos del coche con datos del alquiler
-    if (datosAlquiler) {
-      data[0].fecha_inicio = datosAlquiler.fecha_inicio
-      data[0].fecha_fin = datosAlquiler.fecha_fin
-      data[0].importe_anual = datosAlquiler.importe_anual
-      data[0].compania = datosAlquiler.compania
-      data[0].kms_anuales = datosAlquiler.kms_anuales
-    }
-
-    // Obtener tarjeta SOLRED asignada
-    const tarjetaSolred = await obtenerTarjetaAsignada(matricula)
-    if (tarjetaSolred && tarjetaSolred.tarjetassolred) {
-      data[0].tarjeta_solred = tarjetaSolred.tarjetassolred
-    }
-
-    return data[0]
-  } catch (error) {
-    console.error("Error en obtenerCoche:", error)
-    return null
-  }
-}
-
-export async function guardarSeccionBasica(id: string, formData: FormData) {
-  try {
     const cocheData = {
-      matricula: (formData.get("matricula") as string).toUpperCase(),
-      marca: formData.get("marca") as string,
-      modelo: formData.get("modelo") as string,
-      color: (formData.get("color") as string) || null,
-      fechamatriculacion: (formData.get("fechamatriculacion") as string) || null,
-      kms: formData.get("kms") ? Number.parseInt(formData.get("kms") as string) : 0,
-      kw: formData.get("kw") ? Number.parseInt(formData.get("kw") as string) : null,
-      cv: formData.get("cv") ? Number.parseInt(formData.get("cv") as string) : null,
-      cc: formData.get("cc") ? Number.parseInt(formData.get("cc") as string) : null,
-      combustible: formData.get("combustible") as string,
-      preciocompra: formData.get("preciocompra") ? Number.parseFloat(formData.get("preciocompra") as string) : null,
-      extras: (formData.get("extras") as string) || null,
-      donante: formData.get("donante") === "on",
-      alquiler: formData.get("alquiler") === "on",
+      marca,
+      modelo,
+      color: color || null,
+      fechamatriculacion: fechamatriculacion || null,
+      kms,
+      kw: kw && kw.trim() !== "" ? Number.parseInt(kw) : null,
+      cv: cv && cv.trim() !== "" ? Number.parseInt(cv) : null,
+      cc: cc && cc.trim() !== "" ? Number.parseInt(cc) : null,
+      combustible,
+      extras: extras || null,
+      donante,
+      alquiler,
+      preciocompra: preciocompra && preciocompra.trim() !== "" ? Number.parseFloat(preciocompra) : null,
     }
 
-    const { error } = await supabase.from("coches").update(cocheData).eq("matricula", id)
+    const { error } = await supabase.from("coches").update(cocheData).eq("matricula", matricula)
 
     if (error) {
-      return { success: false, error: "Error al guardar información básica" }
+      console.error("Error al guardar información básica:", error)
+      return {
+        success: false,
+        error: "Error al guardar información básica: " + error.message,
+      }
     }
 
-    revalidatePath(`/coches/editar/${id}`)
-    return { success: true }
+    revalidatePath("/coches")
+    return {
+      success: true,
+      message: "Información básica guardada correctamente",
+    }
   } catch (error) {
-    return { success: false, error: "Error inesperado" }
+    console.error("Error inesperado:", error)
+    return {
+      success: false,
+      error: "Error inesperado al guardar",
+    }
   }
 }
 
-export async function guardarSeccionAlquiler(id: string, formData: FormData) {
+export async function guardarSeccionAlquiler(matricula: string, formData: FormData) {
   try {
     const alquiler = formData.get("alquiler") === "on"
 
     // Actualizar el campo alquiler en la tabla coches
-    await supabase.from("coches").update({ alquiler }).eq("matricula", id)
+    const { error: cocheError } = await supabase.from("coches").update({ alquiler }).eq("matricula", matricula)
+
+    if (cocheError) {
+      console.error("Error al actualizar campo alquiler:", cocheError)
+      return {
+        success: false,
+        error: "Error al actualizar campo alquiler: " + cocheError.message,
+      }
+    }
 
     if (alquiler) {
       const fechaInicio = formData.get("fecha_inicio") as string
@@ -294,7 +232,7 @@ export async function guardarSeccionAlquiler(id: string, formData: FormData) {
       const kmsAnuales = formData.get("kms_anuales") as string
 
       const alquilerData = {
-        matricula: id,
+        matricula,
         fecha_inicio: fechaInicio || null,
         fecha_fin: fechaFin || null,
         importe_anual: importeAnual && importeAnual.trim() !== "" ? Number.parseFloat(importeAnual) : null,
@@ -302,58 +240,90 @@ export async function guardarSeccionAlquiler(id: string, formData: FormData) {
         kms_anuales: kmsAnuales && kmsAnuales.trim() !== "" ? Number.parseInt(kmsAnuales) : null,
       }
 
-      // Verificar si ya existe
-      const { data: existente } = await supabase.from("alquileres").select("matricula").eq("matricula", id).single()
+      // Verificar si ya existe un registro de alquiler
+      const { data: existingAlquiler } = await supabase
+        .from("alquileres")
+        .select("matricula")
+        .eq("matricula", matricula)
+        .single()
 
-      if (existente) {
-        const { error } = await supabase.from("alquileres").update(alquilerData).eq("matricula", id)
+      if (existingAlquiler) {
+        // Actualizar registro existente
+        const { error: alquilerError } = await supabase
+          .from("alquileres")
+          .update(alquilerData)
+          .eq("matricula", matricula)
 
-        if (error) {
-          return { success: false, error: "Error al actualizar datos del alquiler" }
+        if (alquilerError) {
+          console.error("Error al actualizar datos de alquiler:", alquilerError)
+          return {
+            success: false,
+            error: "Error al actualizar datos de alquiler: " + alquilerError.message,
+          }
         }
       } else {
-        const { error } = await supabase.from("alquileres").insert(alquilerData)
+        // Crear nuevo registro
+        const { error: alquilerError } = await supabase.from("alquileres").insert([alquilerData])
 
-        if (error) {
-          return { success: false, error: "Error al crear datos del alquiler" }
+        if (alquilerError) {
+          console.error("Error al crear datos de alquiler:", alquilerError)
+          return {
+            success: false,
+            error: "Error al crear datos de alquiler: " + alquilerError.message,
+          }
         }
       }
     } else {
-      // Eliminar datos de alquiler si no es vehículo de alquiler
-      await supabase.from("alquileres").delete().eq("matricula", id)
+      // Si no es alquiler, eliminar datos de alquiler si existen
+      await supabase.from("alquileres").delete().eq("matricula", matricula)
     }
 
-    revalidatePath(`/coches/editar/${id}`)
-    return { success: true }
+    revalidatePath("/coches")
+    return {
+      success: true,
+      message: "Datos del alquiler guardados correctamente",
+    }
   } catch (error) {
-    return { success: false, error: "Error inesperado" }
+    console.error("Error inesperado:", error)
+    return {
+      success: false,
+      error: "Error inesperado al guardar",
+    }
   }
 }
 
-export async function guardarSeccionAsignacion(id: string, formData: FormData) {
+export async function guardarSeccionAsignacion(matricula: string, formData: FormData) {
   try {
-    const empleado_id = formData.get("empleado_id") as string
-    const fecha_asignacion = formData.get("fecha_asignacion") as string
-    const observaciones_asignacion = formData.get("observaciones_asignacion") as string
+    const empleadoId = formData.get("empleado_id") as string
+    const fechaAsignacion = formData.get("fecha_asignacion") as string
+    const observacionesAsignacion = formData.get("observaciones_asignacion") as string
 
     const asignacionData = {
-      asignadoa: empleado_id && empleado_id !== "0" ? empleado_id : null,
-      fechaasignacion: fecha_asignacion || null,
-      observacionesasignacion: observaciones_asignacion || null,
+      empleado_id: empleadoId && empleadoId !== "0" ? Number.parseInt(empleadoId) : null,
+      fecha_asignacion: fechaAsignacion || null,
+      observaciones_asignacion: observacionesAsignacion || null,
     }
 
-    const { error } = await supabase.from("coches").update(asignacionData).eq("matricula", id)
+    const { error } = await supabase.from("coches").update(asignacionData).eq("matricula", matricula)
 
     if (error) {
-      return { success: false, error: "Error al guardar asignación" }
+      console.error("Error al guardar asignación:", error)
+      return {
+        success: false,
+        error: "Error al guardar asignación: " + error.message,
+      }
     }
 
-    revalidatePath(`/coches/editar/${id}`)
-    return { success: true }
+    revalidatePath("/coches")
+    return {
+      success: true,
+      message: "Asignación guardada correctamente",
+    }
   } catch (error) {
-    return { success: false, error: "Error inesperado" }
+    console.error("Error inesperado:", error)
+    return {
+      success: false,
+      error: "Error inesperado al guardar",
+    }
   }
 }
-
-// Exportación adicional para compatibilidad
-export { editarCoche as actualizarCoche }
