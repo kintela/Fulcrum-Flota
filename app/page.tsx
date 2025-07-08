@@ -50,7 +50,7 @@ async function getDashboardData() {
       console.error("Error fetching ITVs:", itvsError)
     }
 
-    // Calcular alertas de ITVs - CORREGIDO para excluir ITVs ya realizadas con resultado apto
+    // Calcular alertas de ITVs - CORREGIDO para mostrar ITVs aptas solo cuando quede 1 mes o menos
     const today = new Date()
     const thirtyDaysFromNow = new Date()
     thirtyDaysFromNow.setDate(today.getDate() + 30)
@@ -59,13 +59,15 @@ async function getDashboardData() {
       // Skip donor vehicles
       if (itv.coches?.donante === true) return false
 
-      // Skip ITVs that have been completed with a passing result
-      // If fecharevision exists and resultado is "apto", this ITV has been completed successfully
+      const fechaProximaRevision = new Date(itv.fechaproximarevision)
+
+      // Si la ITV ya se realizó con resultado "Apto"
       if (itv.fecharevision && itv.resultado === "Apto") {
-        return false
+        // Solo mostrar alerta si la próxima revisión está dentro de 30 días
+        return fechaProximaRevision <= thirtyDaysFromNow
       }
 
-      const fechaProximaRevision = new Date(itv.fechaproximarevision)
+      // Para ITVs no realizadas o con otros resultados, mostrar si están dentro de 30 días
       return fechaProximaRevision <= thirtyDaysFromNow
     })
 
