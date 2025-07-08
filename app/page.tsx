@@ -50,7 +50,7 @@ async function getDashboardData() {
       console.error("Error fetching ITVs:", itvsError)
     }
 
-    // Calcular alertas de ITVs - CORREGIDO para mostrar ITVs aptas solo cuando quede 1 mes o menos
+    // Calcular alertas de ITVs - CORREGIDO para manejar correctamente ITVs con resultado Apto
     const today = new Date()
     const thirtyDaysFromNow = new Date()
     thirtyDaysFromNow.setDate(today.getDate() + 30)
@@ -67,10 +67,11 @@ async function getDashboardData() {
         return fechaProximaRevision <= thirtyDaysFromNow
       }
 
-      // Para ITVs no realizadas o con otros resultados, mostrar si están dentro de 30 días
+      // Para ITVs no realizadas o con otros resultados, usar la fecha de próxima revisión
       return fechaProximaRevision <= thirtyDaysFromNow
     })
 
+    // Para categorizar vencidas vs próximas a vencer, usar siempre fechaproximarevision
     const itvVencidas = itvAlerts.filter((itv) => {
       const fechaProximaRevision = new Date(itv.fechaproximarevision)
       return fechaProximaRevision < today
