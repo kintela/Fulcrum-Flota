@@ -61,7 +61,7 @@ async function getDashboardData() {
 
       // Skip ITVs that have been completed with a passing result
       // If fecharevision exists and resultado is "apto", this ITV has been completed successfully
-      if (itv.fecharevision && itv.resultado === "apto") {
+      if (itv.fecharevision && itv.resultado === "Apto") {
         return false
       }
 
