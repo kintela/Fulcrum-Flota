@@ -89,6 +89,10 @@ async function getDashboardData() {
 
       // Si la ITV ya se realizó con resultado "Apto"
       if (itv.fecharevision && itv.resultado === "Apto") {
+        // Si la fechaproximarevision ya pasó, NO mostrar alerta (la ITV se pasó correctamente)
+        if (fechaProximaRevision < today) {
+          return false
+        }
         // Solo mostrar alerta si la próxima revisión está dentro de 30 días
         return fechaProximaRevision <= thirtyDaysFromNow
       }
