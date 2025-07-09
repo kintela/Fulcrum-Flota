@@ -44,7 +44,7 @@ async function getDashboardData() {
       asignadoa
     )
   `)
-      .order("fecharevision", { ascending: false })
+      .order("id", { ascending: false }) // Ordenar por ID descendente para obtener el más reciente
 
     if (itvsError) {
       console.error("Error fetching ITVs:", itvsError)
@@ -55,7 +55,20 @@ async function getDashboardData() {
     const processedMatriculas = new Set()
 
     if (allItvs) {
-      for (const itv of allItvs) {
+      // Ordenar por fecha de revisión (los que tienen fecha primero, luego por ID descendente)
+      const sortedItvs = allItvs.sort((a, b) => {
+        // Si ambos tienen fecharevision, ordenar por fecha descendente
+        if (a.fecharevision && b.fecharevision) {
+          return new Date(b.fecharevision).getTime() - new Date(a.fecharevision).getTime()
+        }
+        // Si solo uno tiene fecharevision, ese va primero
+        if (a.fecharevision && !b.fecharevision) return -1
+        if (!a.fecharevision && b.fecharevision) return 1
+        // Si ninguno tiene fecharevision, ordenar por ID descendente
+        return b.id - a.id
+      })
+
+      for (const itv of sortedItvs) {
         if (!processedMatriculas.has(itv.matricula)) {
           latestItvs.push(itv)
           processedMatriculas.add(itv.matricula)
