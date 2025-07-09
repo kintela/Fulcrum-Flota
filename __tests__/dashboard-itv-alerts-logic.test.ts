@@ -1,12 +1,29 @@
-import { describe, it, expect, beforeEach, afterEach, jest } from "@jest/globals"
+import { describe, it, expect } from "@jest/globals"
 
-// Función extraída de la lógica del dashboard para poder testearla
-function calculateITVAlertsWithAptoLogic(itvs: any[]) {
-  const today = new Date()
-  const thirtyDaysFromNow = new Date()
+// Función auxiliar para simular la lógica de filtrado de ITVs
+function filterItvAlerts(itvs: any[], today: Date) {
+  const thirtyDaysFromNow = new Date(today)
   thirtyDaysFromNow.setDate(today.getDate() + 30)
 
-  const itvAlerts = (itvs || []).filter((itv) => {
+  // Filtrar para obtener solo el registro más reciente de cada vehículo
+  const latestItvs = []
+  const processedMatriculas = new Set()
+
+  // Ordenar por fecharevision descendente
+  const sortedItvs = [...itvs].sort((a, b) => {
+    const dateA = a.fecharevision ? new Date(a.fecharevision).getTime() : 0
+    const dateB = b.fecharevision ? new Date(b.fecharevision).getTime() : 0
+    return dateB - dateA
+  })
+
+  for (const itv of sortedItvs) {
+    if (!processedMatriculas.has(itv.matricula)) {
+      latestItvs.push(itv)
+      processedMatriculas.add(itv.matricula)
+    }
+  }
+
+  return latestItvs.filter((itv) => {
     // Skip donor vehicles
     if (itv.coches?.donante === true) return false
 
@@ -18,277 +35,185 @@ function calculateITVAlertsWithAptoLogic(itvs: any[]) {
       return fechaProximaRevision <= thirtyDaysFromNow
     }
 
-    // Para ITVs no realizadas o con otros resultados, mostrar si están dentro de 30 días
+    // Para ITVs no realizadas o con otros resultados, usar la fecha de próxima revisión
     return fechaProximaRevision <= thirtyDaysFromNow
   })
-
-  const itvVencidas = itvAlerts.filter((itv) => {
-    const fechaProximaRevision = new Date(itv.fechaproximarevision)
-    return fechaProximaRevision < today
-  })
-
-  const itvProximasVencer = itvAlerts.filter((itv) => {
-    const fechaProximaRevision = new Date(itv.fechaproximarevision)
-    return fechaProximaRevision >= today && fechaProximaRevision <= thirtyDaysFromNow
-  })
-
-  return {
-    total: itvAlerts.length,
-    vencidas: itvVencidas.length,
-    proximasVencer: itvProximasVencer.length,
-    detalles: itvAlerts,
-  }
 }
 
-describe("Dashboard ITV Alerts Logic with Apto Handling", () => {
-  beforeEach(() => {
-    jest.clearAllMocks()
-    // Mock current date to have consistent tests
-    jest.useFakeTimers()
-    jest.setSystemTime(new Date("2024-01-15")) // Fixed date for testing
-  })
+describe("Dashboard ITV Alerts Logic with Multiple Records", () => {
+  const today = new Date("2025-07-08") // Fecha fija para las pruebas
 
-  afterEach(() => {
-    jest.useRealTimers()
-  })
-
-  it("should NOT show alerts for ITVs with Apto result when next revision is more than 30 days away", () => {
+  it("should use only the most recent ITV record for each vehicle", () => {
     const itvs = [
       {
         id: 1,
-        matricula: "1234ABC",
-        fecharevision: "2023-12-01", // ITV realizada hace 45 días
-        resultado: "Apto",
-        fechaproximarevision: "2024-03-01", // Próxima revisión en 46 días (más de 30)
-        coches: { matricula: "1234ABC", donante: false },
-      },
-    ]
-
-    const alerts = calculateITVAlertsWithAptoLogic(itvs)
-
-    expect(alerts.total).toBe(0)
-    expect(alerts.vencidas).toBe(0)
-    expect(alerts.proximasVencer).toBe(0)
-    expect(alerts.detalles).toHaveLength(0)
-  })
-
-  it("should show alerts for ITVs with Apto result when next revision is within 30 days", () => {
-    const itvs = [
-      {
-        id: 1,
-        matricula: "1234ABC",
-        fecharevision: "2023-12-01", // ITV realizada hace 45 días
-        resultado: "Apto",
-        fechaproximarevision: "2024-02-10", // Próxima revisión en 26 días (dentro de 30)
-        coches: { matricula: "1234ABC", donante: false },
-      },
-    ]
-
-    const alerts = calculateITVAlertsWithAptoLogic(itvs)
-
-    expect(alerts.total).toBe(1)
-    expect(alerts.vencidas).toBe(0)
-    expect(alerts.proximasVencer).toBe(1)
-    expect(alerts.detalles).toHaveLength(1)
-    expect(alerts.detalles[0].matricula).toBe("1234ABC")
-  })
-
-  it("should show alerts for ITVs with Apto result when next revision is overdue", () => {
-    const itvs = [
-      {
-        id: 1,
-        matricula: "1234ABC",
-        fecharevision: "2022-12-01", // ITV realizada hace más de 1 año
-        resultado: "Apto",
-        fechaproximarevision: "2024-01-10", // Próxima revisión vencida hace 5 días
-        coches: { matricula: "1234ABC", donante: false },
-      },
-    ]
-
-    const alerts = calculateITVAlertsWithAptoLogic(itvs)
-
-    expect(alerts.total).toBe(1)
-    expect(alerts.vencidas).toBe(1)
-    expect(alerts.proximasVencer).toBe(0)
-    expect(alerts.detalles).toHaveLength(1)
-    expect(alerts.detalles[0].matricula).toBe("1234ABC")
-  })
-
-  it("should show alerts for ITVs without fecharevision (not yet performed) when within 30 days", () => {
-    const itvs = [
-      {
-        id: 1,
-        matricula: "1234ABC",
-        fecharevision: null, // ITV no realizada
-        resultado: null,
-        fechaproximarevision: "2024-02-10", // Próxima revisión en 26 días
-        coches: { matricula: "1234ABC", donante: false },
-      },
-    ]
-
-    const alerts = calculateITVAlertsWithAptoLogic(itvs)
-
-    expect(alerts.total).toBe(1)
-    expect(alerts.vencidas).toBe(0)
-    expect(alerts.proximasVencer).toBe(1)
-    expect(alerts.detalles).toHaveLength(1)
-  })
-
-  it("should show alerts for ITVs with No Apto result regardless of when next revision is", () => {
-    const itvs = [
-      {
-        id: 1,
-        matricula: "1234ABC",
-        fecharevision: "2023-12-01",
+        matricula: "3656-GLH",
+        fecharevision: "2025-06-15",
+        fechaproximarevision: "2025-06-18", // Registro antiguo
         resultado: "No Apto",
-        fechaproximarevision: "2024-03-01", // Próxima revisión en 46 días (más de 30)
-        coches: { matricula: "1234ABC", donante: false },
-      },
-    ]
-
-    const alerts = calculateITVAlertsWithAptoLogic(itvs)
-
-    expect(alerts.total).toBe(1)
-    expect(alerts.vencidas).toBe(0)
-    expect(alerts.proximasVencer).toBe(1)
-    expect(alerts.detalles).toHaveLength(1)
-  })
-
-  it("should show alerts for ITVs with Apto Con Observaciones result when within 30 days", () => {
-    const itvs = [
-      {
-        id: 1,
-        matricula: "1234ABC",
-        fecharevision: "2023-12-01",
-        resultado: "Apto Con Observaciones",
-        fechaproximarevision: "2024-02-10", // Próxima revisión en 26 días
-        coches: { matricula: "1234ABC", donante: false },
-      },
-    ]
-
-    const alerts = calculateITVAlertsWithAptoLogic(itvs)
-
-    expect(alerts.total).toBe(1)
-    expect(alerts.vencidas).toBe(0)
-    expect(alerts.proximasVencer).toBe(1)
-    expect(alerts.detalles).toHaveLength(1)
-  })
-
-  it("should exclude donor vehicles from alerts even with Apto result and overdue next revision", () => {
-    const itvs = [
-      {
-        id: 1,
-        matricula: "DONOR1",
-        fecharevision: "2022-12-01",
-        resultado: "Apto",
-        fechaproximarevision: "2024-01-10", // Vencida hace 5 días
-        coches: { matricula: "DONOR1", donante: true },
-      },
-    ]
-
-    const alerts = calculateITVAlertsWithAptoLogic(itvs)
-
-    expect(alerts.total).toBe(0)
-    expect(alerts.vencidas).toBe(0)
-    expect(alerts.proximasVencer).toBe(0)
-    expect(alerts.detalles).toHaveLength(0)
-  })
-
-  it("should handle mixed scenarios correctly", () => {
-    const itvs = [
-      {
-        id: 1,
-        matricula: "APTO_LEJANA",
-        fecharevision: "2023-12-01",
-        resultado: "Apto",
-        fechaproximarevision: "2024-03-01", // 46 días (no debe aparecer)
-        coches: { matricula: "APTO_LEJANA", donante: false },
+        coches: { donante: false },
       },
       {
         id: 2,
-        matricula: "APTO_CERCANA",
-        fecharevision: "2023-12-01",
+        matricula: "3656-GLH",
+        fecharevision: "2025-06-20",
+        fechaproximarevision: "2026-06-18", // Registro más reciente
         resultado: "Apto",
-        fechaproximarevision: "2024-02-10", // 26 días (debe aparecer)
-        coches: { matricula: "APTO_CERCANA", donante: false },
+        coches: { donante: false },
       },
+    ]
+
+    const alerts = filterItvAlerts(itvs, today)
+
+    // No debe aparecer alerta porque el registro más reciente tiene fechaproximarevision en 2026
+    expect(alerts).toHaveLength(0)
+  })
+
+  it("should show alert for vehicle with recent ITV but next revision within 30 days", () => {
+    const itvs = [
+      {
+        id: 1,
+        matricula: "3799-DZF",
+        fecharevision: "2024-07-15",
+        fechaproximarevision: "2025-07-15", // Registro antiguo
+        resultado: "No Apto",
+        coches: { donante: false },
+      },
+      {
+        id: 2,
+        matricula: "3799-DZF",
+        fecharevision: "2025-06-20",
+        fechaproximarevision: "2025-07-19", // Registro más reciente, dentro de 30 días
+        resultado: "Apto",
+        coches: { donante: false },
+      },
+    ]
+
+    const alerts = filterItvAlerts(itvs, today)
+
+    // Debe aparecer alerta porque fechaproximarevision está dentro de 30 días
+    expect(alerts).toHaveLength(1)
+    expect(alerts[0].matricula).toBe("3799-DZF")
+    expect(alerts[0].fechaproximarevision).toBe("2025-07-19")
+  })
+
+  it("should handle multiple vehicles with multiple records each", () => {
+    const itvs = [
+      // Vehículo 1: Registro antiguo
+      {
+        id: 1,
+        matricula: "1111-AAA",
+        fecharevision: "2024-06-15",
+        fechaproximarevision: "2025-06-15",
+        resultado: "No Apto",
+        coches: { donante: false },
+      },
+      // Vehículo 1: Registro más reciente (Apto, próxima revisión lejana)
+      {
+        id: 2,
+        matricula: "1111-AAA",
+        fecharevision: "2025-06-20",
+        fechaproximarevision: "2026-06-20",
+        resultado: "Apto",
+        coches: { donante: false },
+      },
+      // Vehículo 2: Registro antiguo
       {
         id: 3,
-        matricula: "APTO_VENCIDA",
-        fecharevision: "2022-12-01",
+        matricula: "2222-BBB",
+        fecharevision: "2024-07-01",
+        fechaproximarevision: "2025-07-01",
         resultado: "Apto",
-        fechaproximarevision: "2024-01-10", // Vencida (debe aparecer)
-        coches: { matricula: "APTO_VENCIDA", donante: false },
+        coches: { donante: false },
       },
+      // Vehículo 2: Registro más reciente (Apto, próxima revisión cercana)
       {
         id: 4,
-        matricula: "NO_APTO",
-        fecharevision: "2023-12-01",
-        resultado: "No Apto",
-        fechaproximarevision: "2024-03-01", // 46 días pero No Apto (debe aparecer)
-        coches: { matricula: "NO_APTO", donante: false },
+        matricula: "2222-BBB",
+        fecharevision: "2025-06-25",
+        fechaproximarevision: "2025-07-15", // Dentro de 30 días
+        resultado: "Apto",
+        coches: { donante: false },
+      },
+    ]
+
+    const alerts = filterItvAlerts(itvs, today)
+
+    // Solo debe aparecer el vehículo 2222-BBB
+    expect(alerts).toHaveLength(1)
+    expect(alerts[0].matricula).toBe("2222-BBB")
+    expect(alerts[0].fechaproximarevision).toBe("2025-07-15")
+  })
+
+  it("should exclude donor vehicles even with multiple records", () => {
+    const itvs = [
+      {
+        id: 1,
+        matricula: "3333-CCC",
+        fecharevision: "2025-06-15",
+        fechaproximarevision: "2025-07-10", // Dentro de 30 días
+        resultado: "Apto",
+        coches: { donante: true }, // Vehículo donante
       },
       {
-        id: 5,
-        matricula: "SIN_REALIZAR",
+        id: 2,
+        matricula: "3333-CCC",
+        fecharevision: "2025-06-20",
+        fechaproximarevision: "2025-07-12",
+        resultado: "Apto",
+        coches: { donante: true },
+      },
+    ]
+
+    const alerts = filterItvAlerts(itvs, today)
+
+    // No debe aparecer porque es vehículo donante
+    expect(alerts).toHaveLength(0)
+  })
+
+  it("should handle vehicles with no fecharevision (not performed yet)", () => {
+    const itvs = [
+      {
+        id: 1,
+        matricula: "4444-DDD",
         fecharevision: null,
+        fechaproximarevision: "2025-07-15", // Dentro de 30 días
         resultado: null,
-        fechaproximarevision: "2024-02-05", // 21 días (debe aparecer)
-        coches: { matricula: "SIN_REALIZAR", donante: false },
+        coches: { donante: false },
       },
     ]
 
-    const alerts = calculateITVAlertsWithAptoLogic(itvs)
+    const alerts = filterItvAlerts(itvs, today)
 
-    expect(alerts.total).toBe(4) // Todos excepto APTO_LEJANA
-    expect(alerts.vencidas).toBe(1) // Solo APTO_VENCIDA
-    expect(alerts.proximasVencer).toBe(3) // APTO_CERCANA, NO_APTO, SIN_REALIZAR
-
-    const alertMatriculas = alerts.detalles.map((itv: any) => itv.matricula)
-    expect(alertMatriculas).toContain("APTO_CERCANA")
-    expect(alertMatriculas).toContain("APTO_VENCIDA")
-    expect(alertMatriculas).toContain("NO_APTO")
-    expect(alertMatriculas).toContain("SIN_REALIZAR")
-    expect(alertMatriculas).not.toContain("APTO_LEJANA")
+    // Debe aparecer porque fechaproximarevision está dentro de 30 días
+    expect(alerts).toHaveLength(1)
+    expect(alerts[0].matricula).toBe("4444-DDD")
   })
 
-  it("should handle edge case: Apto ITV with next revision exactly 30 days away", () => {
+  it("should prioritize most recent fecharevision when determining latest record", () => {
     const itvs = [
       {
         id: 1,
-        matricula: "EDGE30",
-        fecharevision: "2023-12-01",
+        matricula: "5555-EEE",
+        fecharevision: "2025-06-25", // Más reciente
+        fechaproximarevision: "2025-07-15",
         resultado: "Apto",
-        fechaproximarevision: "2024-02-14", // Exactamente 30 días
-        coches: { matricula: "EDGE30", donante: false },
+        coches: { donante: false },
       },
-    ]
-
-    const alerts = calculateITVAlertsWithAptoLogic(itvs)
-
-    expect(alerts.total).toBe(1)
-    expect(alerts.vencidas).toBe(0)
-    expect(alerts.proximasVencer).toBe(1)
-    expect(alerts.detalles[0].matricula).toBe("EDGE30")
-  })
-
-  it("should handle edge case: Apto ITV with next revision exactly 31 days away", () => {
-    const itvs = [
       {
-        id: 1,
-        matricula: "EDGE31",
-        fecharevision: "2023-12-01",
+        id: 2,
+        matricula: "5555-EEE",
+        fecharevision: "2025-06-20", // Menos reciente
+        fechaproximarevision: "2026-06-20",
         resultado: "Apto",
-        fechaproximarevision: "2024-02-15", // Exactamente 31 días (no debe aparecer)
-        coches: { matricula: "EDGE31", donante: false },
+        coches: { donante: false },
       },
     ]
 
-    const alerts = calculateITVAlertsWithAptoLogic(itvs)
+    const alerts = filterItvAlerts(itvs, today)
 
-    expect(alerts.total).toBe(0)
-    expect(alerts.vencidas).toBe(0)
-    expect(alerts.proximasVencer).toBe(0)
-    expect(alerts.detalles).toHaveLength(0)
+    // Debe usar el registro con fecharevision más reciente (2025-06-25)
+    expect(alerts).toHaveLength(1)
+    expect(alerts[0].fechaproximarevision).toBe("2025-07-15")
   })
 })

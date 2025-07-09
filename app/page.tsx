@@ -31,8 +31,8 @@ async function getDashboardData() {
       console.error("Error fetching coches recientes:", recientesError)
     }
 
-    // Modify the ITV query to include the vehicle information
-    const { data: itvs, error: itvsError } = await supabase
+    // Obtener TODOS los registros de ITVs con información del vehículo
+    const { data: allItvs, error: itvsError } = await supabase
       .from("itvs")
       .select(`
     *,
@@ -44,18 +44,31 @@ async function getDashboardData() {
       asignadoa
     )
   `)
-      .order("fechaproximarevision", { ascending: true })
+      .order("fecharevision", { ascending: false })
 
     if (itvsError) {
       console.error("Error fetching ITVs:", itvsError)
     }
 
-    // Calcular alertas de ITVs - CORREGIDO para manejar correctamente ITVs con resultado Apto
+    // Filtrar para obtener solo el registro más reciente de cada vehículo
+    const latestItvs = []
+    const processedMatriculas = new Set()
+
+    if (allItvs) {
+      for (const itv of allItvs) {
+        if (!processedMatriculas.has(itv.matricula)) {
+          latestItvs.push(itv)
+          processedMatriculas.add(itv.matricula)
+        }
+      }
+    }
+
+    // Calcular alertas de ITVs usando solo los registros más recientes
     const today = new Date()
     const thirtyDaysFromNow = new Date()
     thirtyDaysFromNow.setDate(today.getDate() + 30)
 
-    const itvAlerts = (itvs || []).filter((itv) => {
+    const itvAlerts = latestItvs.filter((itv) => {
       // Skip donor vehicles
       if (itv.coches?.donante === true) return false
 
