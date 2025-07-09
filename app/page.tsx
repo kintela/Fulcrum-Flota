@@ -31,8 +31,8 @@ async function getDashboardData() {
       console.error("Error fetching coches recientes:", recientesError)
     }
 
-    // Modify the ITV query to include the vehicle information
-    const { data: itvs, error: itvsError } = await supabase
+    // Obtener TODOS los registros de ITVs con información del vehículo
+    const { data: allItvs, error: itvsError } = await supabase
       .from("itvs")
       .select(`
     *,
@@ -44,25 +44,64 @@ async function getDashboardData() {
       asignadoa
     )
   `)
-      .order("fechaproximarevision", { ascending: true })
+      .order("id", { ascending: false }) // Ordenar por ID descendente para obtener el más reciente
 
     if (itvsError) {
       console.error("Error fetching ITVs:", itvsError)
     }
 
-    // Calcular alertas de ITVs
+    // Filtrar para obtener solo el registro más reciente de cada vehículo
+    const latestItvs = []
+    const processedMatriculas = new Set()
+
+    if (allItvs) {
+      // Ordenar por fecha de revisión (los que tienen fecha primero, luego por ID descendente)
+      const sortedItvs = allItvs.sort((a, b) => {
+        // Si ambos tienen fecharevision, ordenar por fecha descendente
+        if (a.fecharevision && b.fecharevision) {
+          return new Date(b.fecharevision).getTime() - new Date(a.fecharevision).getTime()
+        }
+        // Si solo uno tiene fecharevision, ese va primero
+        if (a.fecharevision && !b.fecharevision) return -1
+        if (!a.fecharevision && b.fecharevision) return 1
+        // Si ninguno tiene fecharevision, ordenar por ID descendente
+        return b.id - a.id
+      })
+
+      for (const itv of sortedItvs) {
+        if (!processedMatriculas.has(itv.matricula)) {
+          latestItvs.push(itv)
+          processedMatriculas.add(itv.matricula)
+        }
+      }
+    }
+
+    // Calcular alertas de ITVs usando solo los registros más recientes
     const today = new Date()
     const thirtyDaysFromNow = new Date()
     thirtyDaysFromNow.setDate(today.getDate() + 30)
 
-    const itvAlerts = (itvs || []).filter((itv) => {
+    const itvAlerts = latestItvs.filter((itv) => {
       // Skip donor vehicles
       if (itv.coches?.donante === true) return false
 
       const fechaProximaRevision = new Date(itv.fechaproximarevision)
+
+      // Si la ITV ya se realizó con resultado "Apto"
+      if (itv.fecharevision && itv.resultado === "Apto") {
+        // Si la fechaproximarevision ya pasó, NO mostrar alerta (la ITV se pasó correctamente)
+        if (fechaProximaRevision < today) {
+          return false
+        }
+        // Solo mostrar alerta si la próxima revisión está dentro de 30 días
+        return fechaProximaRevision <= thirtyDaysFromNow
+      }
+
+      // Para ITVs no realizadas o con otros resultados, usar la fecha de próxima revisión
       return fechaProximaRevision <= thirtyDaysFromNow
     })
 
+    // Para categorizar vencidas vs próximas a vencer, usar siempre fechaproximarevision
     const itvVencidas = itvAlerts.filter((itv) => {
       const fechaProximaRevision = new Date(itv.fechaproximarevision)
       return fechaProximaRevision < today
