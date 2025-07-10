@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { MapPin, RefreshCw, Navigation } from "lucide-react"
+import { MapPin, RefreshCw, Navigation, AlertCircle } from "lucide-react"
 
 interface Coche {
   matricula: string
@@ -25,7 +25,7 @@ interface MapaCochesProps {
 declare global {
   interface Window {
     google: any
-    initMap?: () => void
+    initMapaCoches?: () => void
   }
 }
 
@@ -35,6 +35,25 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [markers, setMarkers] = useState<any[]>([])
+  const [debugInfo, setDebugInfo] = useState<string>("")
+
+  // Debug: Log initial data
+  useEffect(() => {
+    console.log("MapaCoches - Datos recibidos:", {
+      totalCoches: coches.length,
+      cochesConUbicacion: coches.filter((c) => c.latitud && c.longitud).length,
+      cochesNoDonantes: coches.filter((c) => !c.donante).length,
+      apiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? "Configurada" : "NO CONFIGURADA",
+      primerosCoches: coches.slice(0, 3),
+    })
+
+    setDebugInfo(`
+      Total coches: ${coches.length}
+      Con ubicación: ${coches.filter((c) => c.latitud && c.longitud).length}
+      No donantes: ${coches.filter((c) => !c.donante).length}
+      API Key: ${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? "✓" : "✗"}
+    `)
+  }, [coches])
 
   // Crear mapa de empleados para búsqueda rápida
   const empleadosMap = new Map()
@@ -61,9 +80,24 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
   // Inicializar el mapa
   useEffect(() => {
     const initMap = () => {
-      if (!mapRef.current || !window.google) return
+      console.log("Iniciando mapa...")
+
+      if (!mapRef.current) {
+        console.error("mapRef.current no está disponible")
+        setError("Error: Referencia del mapa no disponible")
+        setIsLoading(false)
+        return
+      }
+
+      if (!window.google) {
+        console.error("window.google no está disponible")
+        setError("Error: Google Maps no cargado")
+        setIsLoading(false)
+        return
+      }
 
       try {
+        console.log("Creando instancia del mapa...")
         const mapInstance = new window.google.maps.Map(mapRef.current, {
           zoom: 6,
           center: { lat: 40.4168, lng: -3.7038 }, // Madrid
@@ -77,41 +111,67 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
           ],
         })
 
+        console.log("Mapa creado exitosamente")
         setMap(mapInstance)
         setIsLoading(false)
         setError(null)
       } catch (err) {
-        console.error("Error creating map:", err)
-        setError("Error al crear el mapa")
+        console.error("Error creando mapa:", err)
+        setError(`Error al crear el mapa: ${err instanceof Error ? err.message : "Error desconocido"}`)
         setIsLoading(false)
       }
     }
 
     const loadGoogleMaps = () => {
+      console.log("Cargando Google Maps...")
+
+      // Verificar que tenemos la API key
+      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+      console.log("API Key disponible:", !!apiKey)
+
+      if (!apiKey) {
+        console.error("API key no configurada")
+        setError("API key de Google Maps no configurada. Verifica NEXT_PUBLIC_GOOGLE_MAPS_API_KEY")
+        setIsLoading(false)
+        return
+      }
+
       if (window.google && window.google.maps) {
+        console.log("Google Maps ya está cargado")
         initMap()
         return
       }
 
-      // Verificar que tenemos la API key
-      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-      if (!apiKey) {
-        setError("API key de Google Maps no configurada")
-        setIsLoading(false)
-        return
+      // Limpiar callback anterior si existe
+      if (window.initMapaCoches) {
+        delete window.initMapaCoches
       }
 
-      // Crear callback global
-      window.initMap = initMap
+      // Crear callback global único
+      window.initMapaCoches = () => {
+        console.log("Callback de Google Maps ejecutado")
+        initMap()
+      }
 
       const script = document.createElement("script")
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initMap`
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initMapaCoches`
       script.async = true
       script.defer = true
 
-      script.onerror = () => {
-        setError("Error al cargar Google Maps. Verifica tu API key y conexión.")
+      script.onload = () => {
+        console.log("Script de Google Maps cargado")
+      }
+
+      script.onerror = (e) => {
+        console.error("Error cargando script de Google Maps:", e)
+        setError("Error al cargar Google Maps. Verifica tu API key y conexión a internet.")
         setIsLoading(false)
+      }
+
+      // Remover script anterior si existe
+      const existingScript = document.querySelector('script[src*="maps.googleapis.com"]')
+      if (existingScript) {
+        existingScript.remove()
       }
 
       document.head.appendChild(script)
@@ -121,15 +181,20 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
 
     // Cleanup
     return () => {
-      if (window.initMap) {
-        delete window.initMap
+      if (window.initMapaCoches) {
+        delete window.initMapaCoches
       }
     }
   }, [])
 
   // Agregar marcadores cuando el mapa esté listo
   useEffect(() => {
-    if (!map || !window.google) return
+    if (!map || !window.google) {
+      console.log("Mapa o Google no disponible para marcadores")
+      return
+    }
+
+    console.log("Agregando marcadores...")
 
     // Limpiar marcadores existentes
     markers.forEach((marker) => {
@@ -145,19 +210,30 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
         coche.longitud &&
         !coche.donante &&
         typeof coche.latitud === "number" &&
-        typeof coche.longitud === "number",
+        typeof coche.longitud === "number" &&
+        !isNaN(coche.latitud) &&
+        !isNaN(coche.longitud),
     )
 
+    console.log("Coches con ubicación válida:", cochesConUbicacion.length, cochesConUbicacion)
+
     if (cochesConUbicacion.length === 0) {
+      console.log("No hay coches con ubicación válida")
       return
     }
 
     const bounds = new window.google.maps.LatLngBounds()
     const newMarkers: any[] = []
+    let markersCreated = 0
 
-    cochesConUbicacion.forEach((coche) => {
+    cochesConUbicacion.forEach((coche, index) => {
       try {
-        const position = { lat: Number(coche.latitud), lng: Number(coche.longitud) }
+        const lat = Number(coche.latitud)
+        const lng = Number(coche.longitud)
+
+        console.log(`Creando marcador ${index + 1} para ${coche.matricula}:`, { lat, lng })
+
+        const position = { lat, lng }
         const empleadoInfo = getEmpleadoInfo(coche)
         const isAssigned = !!empleadoInfo || !!coche.asignadoa
 
@@ -235,16 +311,21 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
         marker.infoWindow = infoWindow
         newMarkers.push(marker)
         bounds.extend(position)
+        markersCreated++
+
+        console.log(`Marcador ${markersCreated} creado exitosamente para ${coche.matricula}`)
       } catch (err) {
-        console.error("Error creating marker for", coche.matricula, err)
+        console.error(`Error creando marcador para ${coche.matricula}:`, err)
       }
     })
 
+    console.log(`Total marcadores creados: ${markersCreated}`)
     setMarkers(newMarkers)
 
     // Ajustar el mapa para mostrar todos los marcadores
     if (newMarkers.length > 0) {
       try {
+        console.log("Ajustando vista del mapa...")
         map.fitBounds(bounds)
 
         // Evitar zoom excesivo si solo hay un marcador
@@ -254,18 +335,20 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
           }
         })
       } catch (err) {
-        console.error("Error fitting bounds:", err)
+        console.error("Error ajustando vista del mapa:", err)
       }
     }
   }, [map, coches, empleados])
 
   const handleRefresh = () => {
+    console.log("Refrescando página...")
     window.location.reload()
   }
 
   const handleCenterMap = () => {
     if (map && markers.length > 0) {
       try {
+        console.log("Centrando mapa...")
         const bounds = new window.google.maps.LatLngBounds()
         markers.forEach((marker) => {
           if (marker && marker.getPosition) {
@@ -274,7 +357,7 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
         })
         map.fitBounds(bounds)
       } catch (err) {
-        console.error("Error centering map:", err)
+        console.error("Error centrando mapa:", err)
       }
     }
   }
@@ -290,12 +373,25 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
         </CardHeader>
         <CardContent>
           <div className="text-center py-8">
-            <MapPin className="h-12 w-12 text-red-400 mx-auto mb-4" />
+            <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
             <p className="text-red-600 mb-4 font-medium">{error}</p>
-            <p className="text-gray-500 text-sm">
-              Verifica que la API key de Google Maps esté configurada correctamente
-              <br />y que las APIs necesarias estén habilitadas en Google Cloud Console.
-            </p>
+            <div className="bg-gray-100 p-4 rounded-lg mb-4 text-left">
+              <h4 className="font-semibold mb-2">Información de Debug:</h4>
+              <pre className="text-xs text-gray-600 whitespace-pre-wrap">{debugInfo}</pre>
+            </div>
+            <div className="text-sm text-gray-500 mb-4">
+              <p>
+                <strong>Pasos para solucionar:</strong>
+              </p>
+              <ol className="text-left mt-2 space-y-1">
+                <li>1. Verifica que NEXT_PUBLIC_GOOGLE_MAPS_API_KEY esté configurada</li>
+                <li>2. Asegúrate de que las APIs estén habilitadas en Google Cloud Console:</li>
+                <li>&nbsp;&nbsp;&nbsp;- Maps JavaScript API</li>
+                <li>&nbsp;&nbsp;&nbsp;- Places API</li>
+                <li>&nbsp;&nbsp;&nbsp;- Geocoding API</li>
+                <li>3. Verifica que la API key tenga permisos para tu dominio</li>
+              </ol>
+            </div>
             <Button onClick={handleRefresh} className="mt-4">
               Reintentar
             </Button>
@@ -334,7 +430,10 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
           <div className="flex items-center justify-center h-96 bg-gray-100 rounded-lg">
             <div className="text-center">
               <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-gray-400" />
-              <p className="text-gray-500">Cargando mapa...</p>
+              <p className="text-gray-500 mb-2">Cargando mapa...</p>
+              <div className="bg-white p-3 rounded border text-xs text-gray-600 max-w-md">
+                <pre className="whitespace-pre-wrap">{debugInfo}</pre>
+              </div>
             </div>
           </div>
         ) : (
@@ -378,6 +477,17 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
                   <span className="text-xs">Ejecuta el script SQL para agregar ubicaciones de ejemplo.</span>
                 </p>
               </div>
+            )}
+
+            {/* Debug info en desarrollo */}
+            {process.env.NODE_ENV === "development" && (
+              <details className="bg-gray-100 p-3 rounded text-xs">
+                <summary className="cursor-pointer font-semibold">Debug Info</summary>
+                <pre className="mt-2 whitespace-pre-wrap">{debugInfo}</pre>
+                <div className="mt-2">
+                  <strong>Marcadores activos:</strong> {markers.length}
+                </div>
+              </details>
             )}
           </div>
         )}

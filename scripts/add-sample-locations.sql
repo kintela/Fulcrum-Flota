@@ -1,5 +1,5 @@
--- Script para agregar ubicaciones de ejemplo a algunos coches
--- Ubicaciones en España para testing
+-- Script para agregar ubicaciones de ejemplo a los coches existentes
+-- Actualiza algunos coches con coordenadas de ciudades españolas
 
 UPDATE coches 
 SET 
@@ -10,7 +10,7 @@ SET
 WHERE matricula IN (
   SELECT matricula FROM coches 
   WHERE donante = false 
-  LIMIT 3
+  LIMIT 1
 );
 
 UPDATE coches 
@@ -22,8 +22,10 @@ SET
 WHERE matricula IN (
   SELECT matricula FROM coches 
   WHERE donante = false 
-  AND latitud IS NULL
-  LIMIT 2
+  AND matricula NOT IN (
+    SELECT matricula FROM coches WHERE latitud IS NOT NULL
+  )
+  LIMIT 1
 );
 
 UPDATE coches 
@@ -35,8 +37,10 @@ SET
 WHERE matricula IN (
   SELECT matricula FROM coches 
   WHERE donante = false 
-  AND latitud IS NULL
-  LIMIT 2
+  AND matricula NOT IN (
+    SELECT matricula FROM coches WHERE latitud IS NOT NULL
+  )
+  LIMIT 1
 );
 
 UPDATE coches 
@@ -48,6 +52,36 @@ SET
 WHERE matricula IN (
   SELECT matricula FROM coches 
   WHERE donante = false 
-  AND latitud IS NULL
+  AND matricula NOT IN (
+    SELECT matricula FROM coches WHERE latitud IS NOT NULL
+  )
   LIMIT 1
 );
+
+UPDATE coches 
+SET 
+  latitud = 43.2627,
+  longitud = -2.9253,
+  ultima_ubicacion = NOW(),
+  direccion_actual = 'Bilbao, España'
+WHERE matricula IN (
+  SELECT matricula FROM coches 
+  WHERE donante = false 
+  AND matricula NOT IN (
+    SELECT matricula FROM coches WHERE latitud IS NOT NULL
+  )
+  LIMIT 1
+);
+
+-- Mostrar resultados
+SELECT 
+  matricula, 
+  marca, 
+  modelo, 
+  latitud, 
+  longitud, 
+  direccion_actual,
+  donante
+FROM coches 
+WHERE latitud IS NOT NULL 
+ORDER BY ultima_ubicacion DESC;
