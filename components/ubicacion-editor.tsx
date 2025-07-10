@@ -35,16 +35,21 @@ export function UbicacionEditor({
   const marker = useRef<any>(null)
   const geocoder = useRef<any>(null)
 
+  const [isClient, setIsClient] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
-  const [mounted, setMounted] = useState(false)
 
   // Estados del formulario
   const [latitud, setLatitud] = useState<string>(initialLatitud?.toString() || "")
   const [longitud, setLongitud] = useState<string>(initialLongitud?.toString() || "")
   const [direccion, setDireccion] = useState<string>(initialDireccion || "")
+
+  // Verificar que estamos en el cliente
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
 
   // Función para obtener dirección desde coordenadas
   const geocodeLatLng = async (lat: number, lng: number) => {
@@ -102,9 +107,16 @@ export function UbicacionEditor({
     mapInstance.current.setZoom(15)
   }
 
-  // Función para inicializar el editor - VERSIÓN FORZADA
-  const forceInitializeEditor = () => {
-    console.log("🚀 FORZANDO inicialización del editor...")
+  // Función para crear el editor
+  const createEditor = () => {
+    console.log("🗺️ Creando editor...")
+
+    if (!mapRef.current) {
+      console.error("❌ Editor - Contenedor no disponible")
+      setError("Contenedor del editor no disponible")
+      setIsLoading(false)
+      return
+    }
 
     if (!window.google?.maps) {
       console.error("❌ Editor - Google Maps no disponible")
@@ -113,39 +125,13 @@ export function UbicacionEditor({
       return
     }
 
-    // Obtener el contenedor
-    let container = mapRef.current
-    if (!container) {
-      console.log("🔍 Editor - Buscando contenedor por ID...")
-      container = document.getElementById("editor-container")
-    }
-
-    if (!container) {
-      console.error("❌ Editor - No se puede encontrar el contenedor")
-      setError("No se pudo encontrar el contenedor del editor")
-      setIsLoading(false)
-      return
-    }
-
-    // Forzar dimensiones del contenedor
-    container.style.width = "100%"
-    container.style.height = "400px"
-    container.style.minHeight = "400px"
-    container.style.display = "block"
-    container.style.position = "relative"
-
-    console.log("📦 Editor - Contenedor preparado:", {
-      width: container.offsetWidth,
-      height: container.offsetHeight,
-    })
-
     try {
       const hasInitialLocation = initialLatitud && initialLongitud
       const center = hasInitialLocation
         ? { lat: Number(initialLatitud), lng: Number(initialLongitud) }
         : { lat: 40.4168, lng: -3.7038 }
 
-      const map = new window.google.maps.Map(container, {
+      const map = new window.google.maps.Map(mapRef.current, {
         zoom: hasInitialLocation ? 15 : 6,
         center,
         mapTypeId: window.google.maps.MapTypeId.ROADMAP,
@@ -189,14 +175,9 @@ export function UbicacionEditor({
     }
   }
 
-  // Efecto para marcar como montado
+  // Cargar Google Maps
   useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  // Efecto principal para cargar Google Maps
-  useEffect(() => {
-    if (!mounted) return
+    if (!isClient) return
 
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
@@ -209,14 +190,32 @@ export function UbicacionEditor({
     // Si Google Maps ya está disponible
     if (window.google?.maps) {
       console.log("♻️ Editor - Google Maps ya disponible")
-      setTimeout(forceInitializeEditor, 500)
+      const checkContainer = () => {
+        if (mapRef.current) {
+          console.log("📦 Editor - Contenedor encontrado")
+          createEditor()
+        } else {
+          console.log("⏳ Editor - Esperando contenedor...")
+          setTimeout(checkContainer, 100)
+        }
+      }
+      checkContainer()
       return
     }
 
     // Callback global
     window.initEditorCallback = () => {
       console.log("📞 Editor - Callback ejecutado")
-      setTimeout(forceInitializeEditor, 500)
+      const checkContainer = () => {
+        if (mapRef.current) {
+          console.log("📦 Editor - Contenedor encontrado después del callback")
+          createEditor()
+        } else {
+          console.log("⏳ Editor - Esperando contenedor después del callback...")
+          setTimeout(checkContainer, 100)
+        }
+      }
+      checkContainer()
     }
 
     // Cargar script
@@ -236,20 +235,21 @@ export function UbicacionEditor({
       document.head.appendChild(script)
     } else {
       // Script ya existe
-      const checkInterval = setInterval(() => {
+      const checkGoogleMaps = () => {
         if (window.google?.maps) {
-          clearInterval(checkInterval)
-          setTimeout(forceInitializeEditor, 500)
+          const checkContainer = () => {
+            if (mapRef.current) {
+              createEditor()
+            } else {
+              setTimeout(checkContainer, 100)
+            }
+          }
+          checkContainer()
+        } else {
+          setTimeout(checkGoogleMaps, 100)
         }
-      }, 100)
-
-      setTimeout(() => {
-        clearInterval(checkInterval)
-        if (!window.google?.maps) {
-          setError("Timeout esperando Google Maps")
-          setIsLoading(false)
-        }
-      }, 10000)
+      }
+      checkGoogleMaps()
     }
 
     return () => {
@@ -257,7 +257,7 @@ export function UbicacionEditor({
         delete window.initEditorCallback
       }
     }
-  }, [mounted, isLoading])
+  }, [isClient])
 
   // Función para obtener ubicación actual
   const handleGetCurrentLocation = () => {
@@ -411,6 +411,25 @@ export function UbicacionEditor({
     }
   }
 
+  // No renderizar nada hasta que estemos en el cliente
+  if (!isClient) {
+    return (
+      <Card className="w-full">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MapPin className="h-5 w-5" />
+            Editor de Ubicación
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center h-64 bg-gray-100 rounded-lg">
+            <RefreshCw className="h-6 w-6 animate-spin text-gray-400" />
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
   if (error) {
     return (
       <Card className="w-full">
@@ -427,9 +446,8 @@ export function UbicacionEditor({
             <div className="bg-gray-100 p-4 rounded-lg mb-4 text-left">
               <h4 className="font-semibold mb-2">Debug Info:</h4>
               <pre className="text-xs text-gray-600">
-                {`Contenedor ref: ${mapRef.current ? "✓" : "✗"}
-Contenedor DOM: ${typeof document !== "undefined" && document.getElementById("editor-container") ? "✓" : "✗"}
-Montado: ${mounted ? "✓" : "✗"}`}
+                {`Cliente: ${isClient ? "✓" : "✗"}
+Contenedor ref: ${mapRef.current ? "✓" : "✗"}`}
               </pre>
             </div>
             <Button onClick={() => window.location.reload()}>Reintentar</Button>
@@ -517,7 +535,6 @@ Montado: ${mounted ? "✓" : "✗"}`}
         <div className="w-full bg-white rounded-lg border shadow-sm overflow-hidden">
           <div
             ref={mapRef}
-            id="editor-container"
             className="w-full bg-gray-100"
             style={{
               height: "400px",
