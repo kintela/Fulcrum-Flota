@@ -36,6 +36,13 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
   const [error, setError] = useState<string | null>(null)
   const [markers, setMarkers] = useState<any[]>([])
   const [debugInfo, setDebugInfo] = useState<string>("")
+  const [isMounted, setIsMounted] = useState(false)
+
+  // Marcar componente como montado
+  useEffect(() => {
+    setIsMounted(true)
+    return () => setIsMounted(false)
+  }, [])
 
   // Debug: Log initial data
   useEffect(() => {
@@ -54,9 +61,10 @@ Total coches: ${coches.length}
 Con ubicación: ${cochesConUbicacion.length}
 No donantes: ${coches.filter((c) => !c.donante).length}
 API Key: ${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? "✓" : "✗"}
+Componente montado: ${isMounted ? "✓" : "✗"}
     `.trim(),
     )
-  }, [coches])
+  }, [coches, isMounted])
 
   // Crear mapa de empleados para búsqueda rápida
   const empleadosMap = new Map()
@@ -82,18 +90,34 @@ API Key: ${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? "✓" : "✗"}
 
   // Inicializar el mapa
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout
+    if (!isMounted) return
+
+    let retryCount = 0
+    const maxRetries = 10
 
     const initMap = () => {
-      console.log("Iniciando mapa...")
+      console.log(`Intento ${retryCount + 1} de inicializar mapa...`)
       console.log("mapRef.current:", !!mapRef.current)
       console.log("window.google:", !!window.google)
+      console.log("isMounted:", isMounted)
+
+      if (!isMounted) {
+        console.log("Componente no montado, cancelando...")
+        return
+      }
 
       if (!mapRef.current) {
-        console.error("mapRef.current no está disponible")
-        setError("Error: Contenedor del mapa no encontrado")
-        setIsLoading(false)
-        return
+        console.log("mapRef.current no disponible, reintentando...")
+        retryCount++
+        if (retryCount < maxRetries) {
+          setTimeout(initMap, 100)
+          return
+        } else {
+          console.error("mapRef.current no está disponible después de múltiples intentos")
+          setError("Error: Contenedor del mapa no encontrado después de múltiples intentos")
+          setIsLoading(false)
+          return
+        }
       }
 
       if (!window.google || !window.google.maps) {
@@ -127,12 +151,21 @@ API Key: ${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? "✓" : "✗"}
         mapInstanceRef.current = mapInstance
         console.log("Mapa creado exitosamente")
 
-        // Pequeño delay para asegurar que el mapa esté completamente inicializado
-        timeoutId = setTimeout(() => {
+        // Esperar a que el mapa esté completamente listo
+        window.google.maps.event.addListenerOnce(mapInstance, "tilesloaded", () => {
+          console.log("Mapa completamente cargado")
           setIsLoading(false)
           setError(null)
-          console.log("Mapa listo para marcadores")
-        }, 500)
+        })
+
+        // Fallback en caso de que tilesloaded no se dispare
+        setTimeout(() => {
+          if (isLoading) {
+            console.log("Fallback: marcando mapa como listo")
+            setIsLoading(false)
+            setError(null)
+          }
+        }, 2000)
       } catch (err) {
         console.error("Error creando mapa:", err)
         setError(`Error al crear el mapa: ${err instanceof Error ? err.message : "Error desconocido"}`)
@@ -156,7 +189,8 @@ API Key: ${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? "✓" : "✗"}
 
       if (window.google && window.google.maps) {
         console.log("Google Maps ya está cargado")
-        initMap()
+        // Pequeño delay para asegurar que el componente esté montado
+        setTimeout(initMap, 100)
         return
       }
 
@@ -168,7 +202,8 @@ API Key: ${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? "✓" : "✗"}
       // Crear callback global único
       window.initMapaCoches = () => {
         console.log("Callback de Google Maps ejecutado")
-        initMap()
+        // Delay para asegurar que el componente esté completamente montado
+        setTimeout(initMap, 200)
       }
 
       // Remover script anterior si existe
@@ -203,19 +238,21 @@ API Key: ${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? "✓" : "✗"}
 
     // Cleanup
     return () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId)
-      }
       if (window.initMapaCoches) {
         delete window.initMapaCoches
       }
     }
-  }, [])
+  }, [isMounted])
 
   // Agregar marcadores cuando el mapa esté listo
   useEffect(() => {
-    if (isLoading || !mapInstanceRef.current || !window.google) {
-      console.log("Esperando mapa:", { isLoading, map: !!mapInstanceRef.current, google: !!window.google })
+    if (isLoading || !mapInstanceRef.current || !window.google || !isMounted) {
+      console.log("Esperando mapa:", {
+        isLoading,
+        map: !!mapInstanceRef.current,
+        google: !!window.google,
+        isMounted,
+      })
       return
     }
 
@@ -363,7 +400,7 @@ API Key: ${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? "✓" : "✗"}
         console.error("Error ajustando vista del mapa:", err)
       }
     }
-  }, [isLoading, coches, empleados])
+  }, [isLoading, coches, empleados, isMounted])
 
   const handleRefresh = () => {
     console.log("Refrescando página...")
@@ -415,6 +452,7 @@ API Key: ${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? "✓" : "✗"}
                 <li>&nbsp;&nbsp;&nbsp;- Places API</li>
                 <li>&nbsp;&nbsp;&nbsp;- Geocoding API</li>
                 <li>3. Verifica que la API key tenga permisos para tu dominio</li>
+                <li>4. Intenta refrescar la página</li>
               </ol>
             </div>
             <Button onClick={handleRefresh} className="mt-4">
@@ -492,7 +530,12 @@ API Key: ${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? "✓" : "✗"}
             </div>
 
             {/* Mapa */}
-            <div ref={mapRef} className="w-full h-96 rounded-lg border shadow-sm" style={{ minHeight: "400px" }} />
+            <div
+              ref={mapRef}
+              className="w-full h-96 rounded-lg border shadow-sm bg-gray-100"
+              style={{ minHeight: "400px" }}
+              id="mapa-coches-container"
+            />
 
             {cochesConUbicacion.length === 0 && (
               <div className="text-center py-4">
@@ -511,6 +554,10 @@ API Key: ${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? "✓" : "✗"}
                 <pre className="mt-2 whitespace-pre-wrap">{debugInfo}</pre>
                 <div className="mt-2">
                   <strong>Marcadores activos:</strong> {markers.length}
+                  <br />
+                  <strong>Mapa ref disponible:</strong> {mapRef.current ? "✓" : "✗"}
+                  <br />
+                  <strong>Mapa instancia:</strong> {mapInstanceRef.current ? "✓" : "✗"}
                 </div>
               </details>
             )}

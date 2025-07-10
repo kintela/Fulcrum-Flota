@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { MapPin, Trash2, Navigation, Save } from "lucide-react"
-import { guardarUbicacion, eliminarUbicacion } from "@/app/coches/editar/[id]/actions"
 import { toast } from "@/hooks/use-toast"
 
 interface UbicacionEditorProps {
@@ -16,6 +15,8 @@ interface UbicacionEditorProps {
     longitud?: number
     direccion_actual?: string
   }
+  onSave: (ubicacion: { latitud: number; longitud: number; direccion_actual: string }) => Promise<void>
+  onDelete: () => Promise<void>
 }
 
 declare global {
@@ -25,13 +26,14 @@ declare global {
   }
 }
 
-export function UbicacionEditor({ matricula, ubicacionActual }: UbicacionEditorProps) {
+export function UbicacionEditor({ matricula, ubicacionActual, onSave, onDelete }: UbicacionEditorProps) {
   const mapRef = useRef<HTMLDivElement>(null)
-  const [map, setMap] = useState<any>(null)
-  const [marker, setMarker] = useState<any>(null)
+  const mapInstanceRef = useRef<any>(null)
+  const markerRef = useRef<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [isMounted, setIsMounted] = useState(false)
 
   const [ubicacion, setUbicacion] = useState({
     latitud: ubicacionActual?.latitud || 40.4168,
@@ -39,11 +41,42 @@ export function UbicacionEditor({ matricula, ubicacionActual }: UbicacionEditorP
     direccion_actual: ubicacionActual?.direccion_actual || "",
   })
 
+  // Marcar componente como montado
+  useEffect(() => {
+    setIsMounted(true)
+    return () => setIsMounted(false)
+  }, [])
+
   // Inicializar el mapa
   useEffect(() => {
+    if (!isMounted) return
+
+    let retryCount = 0
+    const maxRetries = 10
+
     const initMap = () => {
-      if (!mapRef.current || !window.google) {
-        setError("Error: Referencias no disponibles")
+      console.log(`UbicacionEditor - Intento ${retryCount + 1} de inicializar mapa...`)
+
+      if (!isMounted) {
+        console.log("Componente no montado, cancelando...")
+        return
+      }
+
+      if (!mapRef.current) {
+        console.log("mapRef.current no disponible, reintentando...")
+        retryCount++
+        if (retryCount < maxRetries) {
+          setTimeout(initMap, 100)
+          return
+        } else {
+          setError("Error: Contenedor del mapa no encontrado")
+          setIsLoading(false)
+          return
+        }
+      }
+
+      if (!window.google || !window.google.maps) {
+        setError("Error: Google Maps no cargado")
         setIsLoading(false)
         return
       }
@@ -55,16 +88,20 @@ export function UbicacionEditor({ matricula, ubicacionActual }: UbicacionEditorP
           mapTypeId: window.google.maps.MapTypeId.ROADMAP,
         })
 
+        mapInstanceRef.current = mapInstance
+
         // Crear marcador
-        const markerInstance = new window.google.maps.Marker({
+        const marker = new window.google.maps.Marker({
           position: { lat: ubicacion.latitud, lng: ubicacion.longitud },
           map: mapInstance,
           draggable: true,
           title: `Ubicación de ${matricula}`,
         })
 
+        markerRef.current = marker
+
         // Evento de arrastre del marcador
-        markerInstance.addListener("dragend", (event: any) => {
+        marker.addListener("dragend", (event: any) => {
           const lat = event.latLng.lat()
           const lng = event.latLng.lng()
 
@@ -91,7 +128,7 @@ export function UbicacionEditor({ matricula, ubicacionActual }: UbicacionEditorP
           const lat = event.latLng.lat()
           const lng = event.latLng.lng()
 
-          markerInstance.setPosition({ lat, lng })
+          marker.setPosition({ lat, lng })
 
           setUbicacion((prev) => ({
             ...prev,
@@ -111,10 +148,19 @@ export function UbicacionEditor({ matricula, ubicacionActual }: UbicacionEditorP
           })
         })
 
-        setMap(mapInstance)
-        setMarker(markerInstance)
-        setIsLoading(false)
-        setError(null)
+        // Esperar a que el mapa esté completamente listo
+        window.google.maps.event.addListenerOnce(mapInstance, "tilesloaded", () => {
+          setIsLoading(false)
+          setError(null)
+        })
+
+        // Fallback
+        setTimeout(() => {
+          if (isLoading) {
+            setIsLoading(false)
+            setError(null)
+          }
+        }, 2000)
       } catch (err) {
         console.error("Error creando mapa:", err)
         setError("Error al crear el mapa")
@@ -131,11 +177,18 @@ export function UbicacionEditor({ matricula, ubicacionActual }: UbicacionEditorP
       }
 
       if (window.google && window.google.maps) {
-        initMap()
+        setTimeout(initMap, 100)
         return
       }
 
-      window.initUbicacionEditor = initMap
+      // Limpiar callback anterior
+      if (window.initUbicacionEditor) {
+        delete window.initUbicacionEditor
+      }
+
+      window.initUbicacionEditor = () => {
+        setTimeout(initMap, 200)
+      }
 
       const script = document.createElement("script")
       script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initUbicacionEditor`
@@ -157,28 +210,20 @@ export function UbicacionEditor({ matricula, ubicacionActual }: UbicacionEditorP
         delete window.initUbicacionEditor
       }
     }
-  }, [matricula])
+  }, [matricula, isMounted])
 
   const handleSave = async () => {
     setIsSaving(true)
     try {
-      const result = await guardarUbicacion(matricula, ubicacion)
-      if (result.success) {
-        toast({
-          title: "Ubicación guardada",
-          description: "La ubicación se ha actualizado correctamente",
-        })
-      } else {
-        toast({
-          title: "Error",
-          description: result.error || "Error al guardar la ubicación",
-          variant: "destructive",
-        })
-      }
+      await onSave(ubicacion)
+      toast({
+        title: "Ubicación guardada",
+        description: "La ubicación se ha actualizado correctamente",
+      })
     } catch (error) {
       toast({
         title: "Error",
-        description: "Error inesperado al guardar",
+        description: "Error al guardar la ubicación",
         variant: "destructive",
       })
     } finally {
@@ -187,38 +232,35 @@ export function UbicacionEditor({ matricula, ubicacionActual }: UbicacionEditorP
   }
 
   const handleDelete = async () => {
+    if (!confirm("¿Estás seguro de que quieres eliminar la ubicación de este vehículo?")) {
+      return
+    }
+
     setIsSaving(true)
     try {
-      const result = await eliminarUbicacion(matricula)
-      if (result.success) {
-        setUbicacion({
-          latitud: 40.4168,
-          longitud: -3.7038,
-          direccion_actual: "",
-        })
+      await onDelete()
 
-        if (marker) {
-          marker.setPosition({ lat: 40.4168, lng: -3.7038 })
-        }
-        if (map) {
-          map.setCenter({ lat: 40.4168, lng: -3.7038 })
-        }
+      setUbicacion({
+        latitud: 40.4168,
+        longitud: -3.7038,
+        direccion_actual: "",
+      })
 
-        toast({
-          title: "Ubicación eliminada",
-          description: "La ubicación se ha eliminado correctamente",
-        })
-      } else {
-        toast({
-          title: "Error",
-          description: result.error || "Error al eliminar la ubicación",
-          variant: "destructive",
-        })
+      if (markerRef.current) {
+        markerRef.current.setPosition({ lat: 40.4168, lng: -3.7038 })
       }
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.setCenter({ lat: 40.4168, lng: -3.7038 })
+      }
+
+      toast({
+        title: "Ubicación eliminada",
+        description: "La ubicación se ha eliminado correctamente",
+      })
     } catch (error) {
       toast({
         title: "Error",
-        description: "Error inesperado al eliminar",
+        description: "Error al eliminar la ubicación",
         variant: "destructive",
       })
     } finally {
@@ -239,11 +281,11 @@ export function UbicacionEditor({ matricula, ubicacionActual }: UbicacionEditorP
             longitud: lng,
           }))
 
-          if (marker) {
-            marker.setPosition({ lat, lng })
+          if (markerRef.current) {
+            markerRef.current.setPosition({ lat, lng })
           }
-          if (map) {
-            map.setCenter({ lat, lng })
+          if (mapInstanceRef.current) {
+            mapInstanceRef.current.setCenter({ lat, lng })
           }
 
           // Geocoding inverso
@@ -276,6 +318,15 @@ export function UbicacionEditor({ matricula, ubicacionActual }: UbicacionEditorP
     }
   }
 
+  const updateMapFromInputs = (lat: number, lng: number) => {
+    if (markerRef.current) {
+      markerRef.current.setPosition({ lat, lng })
+    }
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.setCenter({ lat, lng })
+    }
+  }
+
   if (error) {
     return (
       <Card>
@@ -300,18 +351,21 @@ export function UbicacionEditor({ matricula, ubicacionActual }: UbicacionEditorP
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <MapPin className="h-5 w-5" />
-          Editor de Ubicación
+          Editor de Ubicación - {matricula}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {isLoading ? (
           <div className="flex items-center justify-center h-64 bg-gray-100 rounded">
-            <p className="text-gray-500">Cargando mapa...</p>
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-500">Cargando mapa...</p>
+            </div>
           </div>
         ) : (
           <>
             {/* Mapa */}
-            <div ref={mapRef} className="w-full h-64 rounded border" />
+            <div ref={mapRef} className="w-full h-64 rounded border bg-gray-100" id={`ubicacion-editor-${matricula}`} />
 
             {/* Controles */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -326,8 +380,7 @@ export function UbicacionEditor({ matricula, ubicacionActual }: UbicacionEditorP
                     const lat = Number.parseFloat(e.target.value)
                     if (!isNaN(lat)) {
                       setUbicacion((prev) => ({ ...prev, latitud: lat }))
-                      if (marker) marker.setPosition({ lat, lng: ubicacion.longitud })
-                      if (map) map.setCenter({ lat, lng: ubicacion.longitud })
+                      updateMapFromInputs(lat, ubicacion.longitud)
                     }
                   }}
                 />
@@ -343,8 +396,7 @@ export function UbicacionEditor({ matricula, ubicacionActual }: UbicacionEditorP
                     const lng = Number.parseFloat(e.target.value)
                     if (!isNaN(lng)) {
                       setUbicacion((prev) => ({ ...prev, longitud: lng }))
-                      if (marker) marker.setPosition({ lat: ubicacion.latitud, lng })
-                      if (map) map.setCenter({ lat: ubicacion.latitud, lng })
+                      updateMapFromInputs(ubicacion.latitud, lng)
                     }
                   }}
                 />
