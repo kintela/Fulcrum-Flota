@@ -1,5 +1,5 @@
+import { createClient } from "@/lib/supabase"
 import { notFound } from "next/navigation"
-import { createClient } from "@supabase/supabase-js"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -7,19 +7,16 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Car, Calendar, User } from "lucide-react"
+import { Separator } from "@/components/ui/separator"
+import { ArrowLeft, Car, Calendar, User, FileText, Wrench, Shield, CreditCard, Fuel } from "lucide-react"
 import Link from "next/link"
-import { editarCoche } from "./actions"
 import { FotosManager } from "@/components/fotos-manager"
-import { SolredManager } from "@/components/solred-manager"
 import { SeguroManager } from "@/components/seguro-manager"
+import { SolredManager } from "@/components/solred-manager"
 import { ItvManager } from "@/components/itv-manager"
 import { ViatManager } from "@/components/viat-manager"
 import { UbicacionEditor } from "@/components/ubicacion-editor"
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-const supabase = createClient(supabaseUrl, supabaseKey)
+import { editarCoche } from "./actions"
 
 interface PageProps {
   params: {
@@ -28,13 +25,16 @@ interface PageProps {
 }
 
 export default async function EditarCochePage({ params }: PageProps) {
-  const { id } = params
+  const supabase = createClient()
 
   // Obtener datos del coche
-  const { data: coche, error } = await supabase.from("coches").select("*").eq("matricula", id).single()
+  const { data: coche, error: cocheError } = await supabase
+    .from("coches")
+    .select("*")
+    .eq("matricula", params.id)
+    .single()
 
-  if (error || !coche) {
-    console.error("Error obteniendo coche:", error)
+  if (cocheError || !coche) {
     notFound()
   }
 
@@ -53,7 +53,7 @@ export default async function EditarCochePage({ params }: PageProps) {
         </Link>
         <div>
           <h1 className="text-3xl font-bold">Editar Vehículo</h1>
-          <p className="text-muted-foreground">Modificar información del vehículo {coche.matricula}</p>
+          <p className="text-muted-foreground">Matrícula: {coche.matricula}</p>
         </div>
       </div>
 
@@ -73,26 +73,30 @@ export default async function EditarCochePage({ params }: PageProps) {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="marca">Marca</Label>
-                  <Input id="marca" name="marca" defaultValue={coche.marca} required />
+                  <Input id="marca" name="marca" defaultValue={coche.marca || "Desconocida"} required />
                 </div>
                 <div>
                   <Label htmlFor="modelo">Modelo</Label>
-                  <Input id="modelo" name="modelo" defaultValue={coche.modelo} required />
+                  <Input id="modelo" name="modelo" defaultValue={coche.modelo || "Desconocido"} required />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="año">Año</Label>
-                  <Input id="año" name="año" type="number" min="1900" max="2030" defaultValue={coche.año} required />
+                  <Input id="año" name="año" type="number" defaultValue={coche.año || "0"} />
                 </div>
                 <div>
                   <Label htmlFor="color">Color</Label>
-                  <Input id="color" name="color" defaultValue={coche.color || "Sin especificar"} />
+                  <Input id="color" name="color" defaultValue={coche.color || "Desconocido"} />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="kilometros">Kilómetros</Label>
+                  <Input id="kilometros" name="kilometros" type="number" defaultValue={coche.kilometros || "0"} />
+                </div>
                 <div>
                   <Label htmlFor="combustible">Combustible</Label>
                   <Select name="combustible" defaultValue={coche.combustible || "Gasolina"}>
@@ -108,16 +112,6 @@ export default async function EditarCochePage({ params }: PageProps) {
                       <SelectItem value="GNC">GNC</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-                <div>
-                  <Label htmlFor="kilometraje">Kilometraje</Label>
-                  <Input
-                    id="kilometraje"
-                    name="kilometraje"
-                    type="number"
-                    min="0"
-                    defaultValue={coche.kilometraje || "0"}
-                  />
                 </div>
               </div>
 
@@ -143,15 +137,21 @@ export default async function EditarCochePage({ params }: PageProps) {
                 <Textarea
                   id="extras"
                   name="extras"
-                  defaultValue={coche.extras || "Sin especificar"}
-                  placeholder="Equipamiento adicional, características especiales..."
+                  defaultValue={coche.extras || ""}
+                  placeholder="Describe los extras del vehículo..."
                   rows={3}
                 />
               </div>
 
-              <div className="flex items-center gap-2">
-                <input type="checkbox" id="donante" name="donante" defaultChecked={coche.donante} className="rounded" />
-                <Label htmlFor="donante">Vehículo donante (para piezas)</Label>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="donante"
+                  name="donante"
+                  defaultChecked={coche.donante || false}
+                  className="rounded"
+                />
+                <Label htmlFor="donante">Vehículo donante (no operativo)</Label>
               </div>
 
               <Button type="submit" className="w-full">
@@ -165,7 +165,7 @@ export default async function EditarCochePage({ params }: PageProps) {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
+              <FileText className="h-5 w-5" />
               Estado del Vehículo
             </CardTitle>
           </CardHeader>
@@ -173,71 +173,127 @@ export default async function EditarCochePage({ params }: PageProps) {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label className="text-sm font-medium">Estado</Label>
-                <Badge variant={coche.donante ? "destructive" : "default"}>
-                  {coche.donante ? "Donante" : "Activo"}
+                <Badge variant={coche.donante ? "destructive" : "default"} className="mt-1">
+                  {coche.donante ? "Donante" : "Operativo"}
                 </Badge>
               </div>
               <div>
                 <Label className="text-sm font-medium">Asignación</Label>
-                <Badge variant={coche.asignadoa ? "default" : "secondary"}>
+                <Badge variant={coche.asignadoa ? "default" : "secondary"} className="mt-1">
                   {coche.asignadoa ? "Asignado" : "Disponible"}
                 </Badge>
               </div>
             </div>
 
-            <div>
-              <Label className="text-sm font-medium">Fecha de registro</Label>
-              <p className="text-sm text-muted-foreground">
-                {new Date(coche.created_at).toLocaleDateString("es-ES", {
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                })}
-              </p>
+            <Separator />
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Fechas importantes</Label>
+              <div className="text-sm text-muted-foreground space-y-1">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  <span>Creado: {new Date(coche.created_at).toLocaleDateString()}</span>
+                </div>
+                {coche.updated_at && (
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    <span>Actualizado: {new Date(coche.updated_at).toLocaleDateString()}</span>
+                  </div>
+                )}
+              </div>
             </div>
 
             {coche.asignadoa && empleados && (
-              <div>
-                <Label className="text-sm font-medium">Empleado asignado</Label>
-                <div className="flex items-center gap-2 mt-1">
-                  <User className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm">
-                    {empleados.find((e) => e.id.toString() === coche.asignadoa?.toString())?.nombre}{" "}
-                    {empleados.find((e) => e.id.toString() === coche.asignadoa?.toString())?.apellidos}
-                  </span>
+              <>
+                <Separator />
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Empleado asignado</Label>
+                  <div className="flex items-center gap-2">
+                    <User className="h-4 w-4" />
+                    <span className="text-sm">
+                      {empleados.find((e) => e.id === coche.asignadoa)?.nombre}{" "}
+                      {empleados.find((e) => e.id === coche.asignadoa)?.apellidos}
+                    </span>
+                  </div>
                 </div>
-              </div>
+              </>
             )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Ubicación */}
+      {/* Editor de Ubicación */}
       <UbicacionEditor
         matricula={coche.matricula}
         latitud={coche.latitud}
         longitud={coche.longitud}
         direccion_actual={coche.direccion_actual}
-        onUbicacionGuardada={() => {
-          // Recargar la página para mostrar los cambios
-          window.location.reload()
-        }}
       />
 
       {/* Gestión de fotos */}
-      <FotosManager matricula={coche.matricula} />
-
-      {/* Gestión de tarjetas SOLRED */}
-      <SolredManager matricula={coche.matricula} />
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            Gestión de Fotos
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <FotosManager matricula={coche.matricula} />
+        </CardContent>
+      </Card>
 
       {/* Gestión de seguros */}
-      <SeguroManager matricula={coche.matricula} />
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="h-5 w-5" />
+            Gestión de Seguros
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <SeguroManager matricula={coche.matricula} />
+        </CardContent>
+      </Card>
 
       {/* Gestión de ITVs */}
-      <ItvManager matricula={coche.matricula} />
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Wrench className="h-5 w-5" />
+            Gestión de ITVs
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ItvManager matricula={coche.matricula} />
+        </CardContent>
+      </Card>
 
-      {/* Gestión de ViaT */}
-      <ViatManager matricula={coche.matricula} />
+      {/* Gestión de tarjetas Solred */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Fuel className="h-5 w-5" />
+            Gestión de Tarjetas Solred
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <SolredManager matricula={coche.matricula} />
+        </CardContent>
+      </Card>
+
+      {/* Gestión de tarjetas ViaT */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CreditCard className="h-5 w-5" />
+            Gestión de Tarjetas ViaT
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ViatManager matricula={coche.matricula} />
+        </CardContent>
+      </Card>
     </div>
   )
 }
