@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { createClient } from "@/lib/supabase"
 
 export async function POST(request: NextRequest, { params }: { params: { matricula: string } }) {
   try {
@@ -13,11 +13,28 @@ export async function POST(request: NextRequest, { params }: { params: { matricu
     }
 
     // Validar rangos de coordenadas
-    if (latitud < -90 || latitud > 90 || longitud < -180 || longitud > 180) {
-      return NextResponse.json({ error: "Coordenadas fuera de rango válido" }, { status: 400 })
+    if (latitud < -90 || latitud > 90) {
+      return NextResponse.json({ error: "Latitud debe estar entre -90 y 90" }, { status: 400 })
     }
 
-    // Actualizar ubicación del vehículo
+    if (longitud < -180 || longitud > 180) {
+      return NextResponse.json({ error: "Longitud debe estar entre -180 y 180" }, { status: 400 })
+    }
+
+    const supabase = createClient()
+
+    // Verificar que el coche existe
+    const { data: coche, error: cocheError } = await supabase
+      .from("coches")
+      .select("matricula")
+      .eq("matricula", matricula)
+      .single()
+
+    if (cocheError || !coche) {
+      return NextResponse.json({ error: "Coche no encontrado" }, { status: 404 })
+    }
+
+    // Actualizar ubicación
     const { data, error } = await supabase
       .from("coches")
       .update({
@@ -31,11 +48,7 @@ export async function POST(request: NextRequest, { params }: { params: { matricu
 
     if (error) {
       console.error("Error actualizando ubicación:", error)
-      return NextResponse.json({ error: "Error al actualizar la ubicación" }, { status: 500 })
-    }
-
-    if (!data || data.length === 0) {
-      return NextResponse.json({ error: "Vehículo no encontrado" }, { status: 404 })
+      return NextResponse.json({ error: "Error al actualizar ubicación" }, { status: 500 })
     }
 
     return NextResponse.json({
@@ -44,7 +57,7 @@ export async function POST(request: NextRequest, { params }: { params: { matricu
       data: data[0],
     })
   } catch (error) {
-    console.error("Error en POST /api/coches/[matricula]/ubicacion:", error)
+    console.error("Error en API de ubicación:", error)
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
@@ -52,8 +65,20 @@ export async function POST(request: NextRequest, { params }: { params: { matricu
 export async function DELETE(request: NextRequest, { params }: { params: { matricula: string } }) {
   try {
     const { matricula } = params
+    const supabase = createClient()
 
-    // Eliminar ubicación del vehículo
+    // Verificar que el coche existe
+    const { data: coche, error: cocheError } = await supabase
+      .from("coches")
+      .select("matricula")
+      .eq("matricula", matricula)
+      .single()
+
+    if (cocheError || !coche) {
+      return NextResponse.json({ error: "Coche no encontrado" }, { status: 404 })
+    }
+
+    // Eliminar ubicación
     const { data, error } = await supabase
       .from("coches")
       .update({
@@ -67,11 +92,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { matri
 
     if (error) {
       console.error("Error eliminando ubicación:", error)
-      return NextResponse.json({ error: "Error al eliminar la ubicación" }, { status: 500 })
-    }
-
-    if (!data || data.length === 0) {
-      return NextResponse.json({ error: "Vehículo no encontrado" }, { status: 404 })
+      return NextResponse.json({ error: "Error al eliminar ubicación" }, { status: 500 })
     }
 
     return NextResponse.json({
@@ -80,7 +101,32 @@ export async function DELETE(request: NextRequest, { params }: { params: { matri
       data: data[0],
     })
   } catch (error) {
-    console.error("Error en DELETE /api/coches/[matricula]/ubicacion:", error)
+    console.error("Error en API de ubicación:", error)
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
+  }
+}
+
+export async function GET(request: NextRequest, { params }: { params: { matricula: string } }) {
+  try {
+    const { matricula } = params
+    const supabase = createClient()
+
+    const { data, error } = await supabase
+      .from("coches")
+      .select("matricula, latitud, longitud, direccion_actual, ultima_ubicacion")
+      .eq("matricula", matricula)
+      .single()
+
+    if (error || !data) {
+      return NextResponse.json({ error: "Coche no encontrado" }, { status: 404 })
+    }
+
+    return NextResponse.json({
+      success: true,
+      data,
+    })
+  } catch (error) {
+    console.error("Error obteniendo ubicación:", error)
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
