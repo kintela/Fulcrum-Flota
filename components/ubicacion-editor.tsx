@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -33,7 +33,7 @@ export function UbicacionEditor({
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<any>(null)
   const markerRef = useRef<any>(null)
-  const [isClient, setIsClient] = useState(false)
+  const [mounted, setMounted] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -44,15 +44,17 @@ export function UbicacionEditor({
   const [longitud, setLongitud] = useState<string>(longitudActual?.toString() || "")
   const [direccion, setDireccion] = useState<string>(direccionActual || "")
 
-  // Asegurar que estamos en el cliente
+  // Asegurar que el componente está montado
   useEffect(() => {
-    setIsClient(true)
+    setMounted(true)
+    console.log("🔄 Componente UbicacionEditor montado")
   }, [])
 
   // Función para inicializar el mapa
-  const initializeMap = () => {
-    console.log("🗺️ Inicializando editor de ubicación...")
-    console.log("Contenedor disponible:", !!mapContainerRef.current)
+  const initializeMap = useCallback(() => {
+    console.log("🗺️ Intentando inicializar editor de ubicación...")
+    console.log("📦 Contenedor disponible:", !!mapContainerRef.current)
+    console.log("🌍 Google Maps disponible:", !!(window.google && window.google.maps))
 
     if (!mapContainerRef.current) {
       console.error("❌ Contenedor del editor no encontrado")
@@ -133,11 +135,13 @@ export function UbicacionEditor({
       setIsLoading(false)
       return false
     }
-  }
+  }, [latitudActual, longitudActual, matricula, mapReady])
 
   // Cargar Google Maps y inicializar
   useEffect(() => {
-    if (!isClient) return
+    if (!mounted) return
+
+    let timeoutId: NodeJS.Timeout
 
     const loadGoogleMaps = () => {
       const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
@@ -149,9 +153,16 @@ export function UbicacionEditor({
       }
 
       if (window.google && window.google.maps) {
-        setTimeout(() => {
-          initializeMap()
-        }, 100)
+        // Esperar a que el contenedor esté disponible
+        const checkContainer = () => {
+          if (mapContainerRef.current) {
+            initializeMap()
+          } else {
+            console.log("⏳ Editor: Esperando contenedor...")
+            timeoutId = setTimeout(checkContainer, 100)
+          }
+        }
+        checkContainer()
         return
       }
 
@@ -161,19 +172,31 @@ export function UbicacionEditor({
 
       window.initUbicacionEditor = () => {
         console.log("📞 Callback del editor ejecutado")
-        setTimeout(() => {
-          requestAnimationFrame(() => {
+        // Esperar a que el contenedor esté disponible
+        const checkContainer = () => {
+          if (mapContainerRef.current) {
             initializeMap()
-          })
-        }, 200)
+          } else {
+            console.log("⏳ Callback Editor: Esperando contenedor...")
+            timeoutId = setTimeout(checkContainer, 100)
+          }
+        }
+        checkContainer()
       }
 
       // Verificar si ya existe el script
       const existingScript = document.querySelector('script[src*="maps.googleapis.com"]')
       if (existingScript) {
-        setTimeout(() => {
-          initializeMap()
-        }, 100)
+        // Esperar a que el contenedor esté disponible
+        const checkContainer = () => {
+          if (mapContainerRef.current) {
+            initializeMap()
+          } else {
+            console.log("⏳ Script existente: Esperando contenedor...")
+            timeoutId = setTimeout(checkContainer, 100)
+          }
+        }
+        checkContainer()
         return
       }
 
@@ -194,18 +217,20 @@ export function UbicacionEditor({
       document.head.appendChild(script)
     }
 
-    requestAnimationFrame(() => {
-      setTimeout(() => {
-        loadGoogleMaps()
-      }, 100)
-    })
+    // Esperar un momento para que el DOM esté completamente listo
+    timeoutId = setTimeout(() => {
+      loadGoogleMaps()
+    }, 100)
 
     return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
       if (window.initUbicacionEditor) {
         delete window.initUbicacionEditor
       }
     }
-  }, [isClient, latitudActual, longitudActual, matricula])
+  }, [mounted, initializeMap])
 
   // Función para obtener dirección desde coordenadas
   const geocodePosition = async (lat: number, lng: number) => {
@@ -376,8 +401,8 @@ export function UbicacionEditor({
     }
   }
 
-  // No renderizar nada hasta que estemos en el cliente
-  if (!isClient) {
+  // No renderizar nada hasta que estemos montados
+  if (!mounted) {
     return (
       <Card className="w-full">
         <CardHeader>
@@ -456,13 +481,25 @@ export function UbicacionEditor({
           <div className="w-full bg-white rounded-lg border shadow-sm overflow-hidden">
             <div
               ref={mapContainerRef}
-              className="w-full h-64"
+              className="w-full"
               style={{
+                height: "300px",
                 minHeight: "300px",
                 backgroundColor: "#f3f4f6",
+                position: "relative",
               }}
               id={`ubicacion-editor-${matricula}`}
-            />
+            >
+              {/* Contenido de fallback mientras se carga */}
+              {!mapReady && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+                  <div className="text-center">
+                    <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-gray-400" />
+                    <p className="text-gray-500 text-sm">Preparando editor...</p>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
