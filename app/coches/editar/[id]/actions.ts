@@ -1,6 +1,7 @@
 "use server"
 
 import { supabase } from "@/lib/supabase"
+import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 
 export async function editarCoche(formData: FormData) {
@@ -8,29 +9,30 @@ export async function editarCoche(formData: FormData) {
     const matricula = formData.get("matricula") as string
     const marca = formData.get("marca") as string
     const modelo = formData.get("modelo") as string
+    const año = formData.get("año") as string
     const color = formData.get("color") as string
-    const anio = formData.get("anio") as string
+    const combustible = formData.get("combustible") as string
+    const kilometraje = formData.get("kilometraje") as string
     const asignadoa = formData.get("asignadoa") as string
-    const donante = formData.get("donante") === "on"
     const extras = formData.get("extras") as string
+    const donante = formData.get("donante") === "on"
 
     console.log("Editando coche:", {
       matricula,
       marca,
       modelo,
+      año,
       color,
-      anio,
+      combustible,
+      kilometraje,
       asignadoa,
-      donante,
       extras,
+      donante,
     })
 
     // Validaciones básicas
     if (!matricula || !marca || !modelo) {
-      return {
-        success: false,
-        error: "Matrícula, marca y modelo son campos obligatorios",
-      }
+      throw new Error("Matrícula, marca y modelo son campos obligatorios")
     }
 
     // Preparar datos para actualizar
@@ -38,42 +40,24 @@ export async function editarCoche(formData: FormData) {
       marca: marca.trim(),
       modelo: modelo.trim(),
       color: color?.trim() || null,
-      anio: anio ? Number.parseInt(anio) : null,
-      donante,
+      combustible: combustible || null,
       extras: extras?.trim() || null,
+      donante,
     }
 
-    // Manejar asignación
-    if (donante) {
-      // Si es donante, no puede estar asignado
-      updateData.asignadoa = null
-    } else {
-      // Si no es donante, manejar asignación
-      if (asignadoa && asignadoa !== "") {
-        // Verificar si es un ID numérico (empleado) o texto libre
-        const empleadoId = Number.parseInt(asignadoa)
-        if (!isNaN(empleadoId)) {
-          // Es un ID de empleado, verificar que existe
-          const { data: empleado, error: empleadoError } = await supabase
-            .from("empleados")
-            .select("id")
-            .eq("id", empleadoId)
-            .single()
+    // Agregar campos opcionales solo si tienen valor
+    if (año && !isNaN(Number(año))) {
+      updateData.año = Number(año)
+    }
 
-          if (empleadoError || !empleado) {
-            return {
-              success: false,
-              error: "El empleado seleccionado no existe",
-            }
-          }
-          updateData.asignadoa = empleadoId
-        } else {
-          // Es texto libre
-          updateData.asignadoa = asignadoa.trim()
-        }
-      } else {
-        updateData.asignadoa = null
-      }
+    if (kilometraje && !isNaN(Number(kilometraje))) {
+      updateData.kilometraje = Number(kilometraje)
+    }
+
+    if (asignadoa && asignadoa !== "") {
+      updateData.asignadoa = Number(asignadoa)
+    } else {
+      updateData.asignadoa = null
     }
 
     // Actualizar en la base de datos
@@ -81,39 +65,21 @@ export async function editarCoche(formData: FormData) {
 
     if (error) {
       console.error("Error actualizando coche:", error)
-      return {
-        success: false,
-        error: "Error al actualizar el vehículo en la base de datos",
-      }
+      throw new Error("Error al actualizar el vehículo")
     }
 
     if (!data || data.length === 0) {
-      return {
-        success: false,
-        error: "No se encontró el vehículo para actualizar",
-      }
+      throw new Error("Vehículo no encontrado")
     }
 
-    console.log("Coche actualizado exitosamente:", data[0])
-
-    // Revalidar las páginas relacionadas
-    revalidatePath("/coches")
-    revalidatePath(`/coches/detalle/${matricula}`)
-    revalidatePath(`/coches/editar/${matricula}`)
-    revalidatePath("/") // Dashboard
-
-    return {
-      success: true,
-      message: "Vehículo actualizado correctamente",
-      data: data[0],
-    }
+    console.log("✅ Vehículo actualizado exitosamente:", matricula)
   } catch (error) {
-    console.error("Error en editarCoche:", error)
-    return {
-      success: false,
-      error: "Error interno del servidor",
-    }
+    console.error("❌ Error en editarCoche:", error)
+    throw error
   }
+
+  // Redirigir a la página de detalle
+  redirect(`/coches/detalle/${formData.get("matricula")}`)
 }
 
 export async function eliminarCoche(matricula: string) {

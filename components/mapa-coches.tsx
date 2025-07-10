@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, useCallback } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { MapPin, RefreshCw, Navigation, AlertCircle } from "lucide-react"
@@ -25,274 +25,86 @@ interface MapaCochesProps {
 declare global {
   interface Window {
     google: any
-    initMapaCoches?: () => void
+    initGoogleMap?: () => void
   }
 }
 
 export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
-  const mapContainerRef = useRef<HTMLDivElement>(null)
-  const mapInstanceRef = useRef<any>(null)
-  const [mounted, setMounted] = useState(false)
+  const mapRef = useRef<HTMLDivElement>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [markers, setMarkers] = useState<any[]>([])
-  const [debugInfo, setDebugInfo] = useState<string>("")
-  const [mapReady, setMapReady] = useState(false)
-  const [containerReady, setContainerReady] = useState(false)
+  const [mapInstance, setMapInstance] = useState<any>(null)
 
-  // Asegurar que el componente está montado
-  useEffect(() => {
-    setMounted(true)
-    console.log("🔄 Componente MapaCoches montado")
-
-    // Verificar contenedor inmediatamente después del montaje
-    const checkContainer = () => {
-      if (mapContainerRef.current) {
-        console.log("✅ Contenedor encontrado después del montaje")
-        setContainerReady(true)
-      } else {
-        console.log("⏳ Contenedor no encontrado, reintentando...")
-        setTimeout(checkContainer, 50)
-      }
-    }
-
-    // Usar requestAnimationFrame para asegurar que el DOM esté listo
-    requestAnimationFrame(() => {
-      setTimeout(checkContainer, 10)
-    })
-  }, [])
-
-  // Debug: Log initial data
-  useEffect(() => {
-    if (!mounted) return
-
-    const cochesConUbicacion = coches.filter((c) => c.latitud && c.longitud && !c.donante)
-    console.log("📊 MapaCoches - Datos recibidos:", {
-      totalCoches: coches.length,
-      cochesConUbicacion: cochesConUbicacion.length,
-      cochesNoDonantes: coches.filter((c) => !c.donante).length,
-      apiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? "Configurada" : "NO CONFIGURADA",
-      primerosCoches: cochesConUbicacion.slice(0, 3),
-    })
-
-    setDebugInfo(
-      `
-Total coches: ${coches.length}
-Con ubicación: ${cochesConUbicacion.length}
-No donantes: ${coches.filter((c) => !c.donante).length}
-API Key: ${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? "✓" : "✗"}
-Montado: ${mounted ? "✓" : "✗"}
-Contenedor: ${containerReady ? "✓" : "✗"}
-    `.trim(),
-    )
-  }, [coches, mounted, containerReady])
-
-  // Crear mapa de empleados para búsqueda rápida
+  // Crear mapa de empleados
   const empleadosMap = new Map()
   empleados.forEach((empleado) => {
     empleadosMap.set(empleado.id, empleado)
   })
 
-  // Función para obtener información del empleado
   const getEmpleadoInfo = (coche: Coche) => {
     if (!coche.asignadoa) return null
-
     const empleadoId = Number(coche.asignadoa)
     if (!isNaN(empleadoId)) {
       return empleadosMap.get(empleadoId)
     }
-
     if (typeof coche.asignadoa === "string" && coche.asignadoa.trim() !== "") {
       return { nombre: coche.asignadoa, apellidos: "" }
     }
-
     return null
   }
 
   // Función para inicializar el mapa
-  const initializeMap = useCallback(() => {
-    console.log("🗺️ Intentando inicializar mapa...")
-    console.log("📦 Contenedor disponible:", !!mapContainerRef.current)
-    console.log("🌍 Google Maps disponible:", !!(window.google && window.google.maps))
-    console.log("🏗️ Elemento DOM:", mapContainerRef.current)
+  const initMap = () => {
+    console.log("🗺️ Inicializando mapa...")
 
-    if (!mapContainerRef.current) {
-      console.error("❌ Contenedor del mapa no encontrado")
-      setError("Error: Contenedor del mapa no encontrado")
+    if (!mapRef.current) {
+      console.error("❌ No se encontró el contenedor del mapa")
+      setError("No se pudo encontrar el contenedor del mapa")
       setIsLoading(false)
-      return false
+      return
     }
 
-    if (!window.google || !window.google.maps) {
-      console.error("❌ Google Maps no disponible")
-      setError("Error: Google Maps no cargado correctamente")
+    if (!window.google?.maps) {
+      console.error("❌ Google Maps no está disponible")
+      setError("Google Maps no se cargó correctamente")
       setIsLoading(false)
-      return false
+      return
     }
 
     try {
-      console.log("🏗️ Creando instancia del mapa...")
-
-      const mapInstance = new window.google.maps.Map(mapContainerRef.current, {
+      // Crear el mapa
+      const map = new window.google.maps.Map(mapRef.current, {
         zoom: 6,
         center: { lat: 40.4168, lng: -3.7038 }, // Madrid
         mapTypeId: window.google.maps.MapTypeId.ROADMAP,
-        styles: [
-          {
-            featureType: "poi",
-            elementType: "labels",
-            stylers: [{ visibility: "off" }],
-          },
-        ],
       })
 
-      mapInstanceRef.current = mapInstance
       console.log("✅ Mapa creado exitosamente")
-
-      // Esperar a que el mapa esté completamente listo
-      window.google.maps.event.addListenerOnce(mapInstance, "tilesloaded", () => {
-        console.log("🎯 Mapa completamente cargado")
-        setMapReady(true)
-        setIsLoading(false)
-        setError(null)
-      })
-
-      // Fallback en caso de que tilesloaded no se dispare
-      setTimeout(() => {
-        if (!mapReady) {
-          console.log("⏰ Fallback: marcando mapa como listo")
-          setMapReady(true)
-          setIsLoading(false)
-          setError(null)
-        }
-      }, 3000)
-
-      return true
-    } catch (err) {
-      console.error("❌ Error creando mapa:", err)
-      setError(`Error al crear el mapa: ${err instanceof Error ? err.message : "Error desconocido"}`)
+      setMapInstance(map)
       setIsLoading(false)
-      return false
+      setError(null)
+
+      // Agregar marcadores
+      addMarkers(map)
+    } catch (err) {
+      console.error("❌ Error creando el mapa:", err)
+      setError("Error al crear el mapa")
+      setIsLoading(false)
     }
-  }, [mapReady])
+  }
 
-  // Cargar Google Maps y inicializar
-  useEffect(() => {
-    if (!mounted || !containerReady) {
-      console.log("⏳ Esperando montaje y contenedor:", { mounted, containerReady })
-      return
-    }
-
-    let timeoutId: NodeJS.Timeout
-
-    const loadGoogleMaps = () => {
-      console.log("📡 Iniciando carga de Google Maps...")
-
-      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-      console.log("🔑 API Key disponible:", !!apiKey)
-
-      if (!apiKey) {
-        console.error("❌ API key no configurada")
-        setError("API key de Google Maps no configurada. Verifica NEXT_PUBLIC_GOOGLE_MAPS_API_KEY")
-        setIsLoading(false)
-        return
-      }
-
-      // Si Google Maps ya está cargado
-      if (window.google && window.google.maps) {
-        console.log("♻️ Google Maps ya está cargado")
-        initializeMap()
-        return
-      }
-
-      // Limpiar callback anterior si existe
-      if (window.initMapaCoches) {
-        delete window.initMapaCoches
-      }
-
-      // Crear callback global único
-      window.initMapaCoches = () => {
-        console.log("📞 Callback de Google Maps ejecutado")
-        setTimeout(() => {
-          initializeMap()
-        }, 100)
-      }
-
-      // Remover script anterior si existe
-      const existingScript = document.querySelector('script[src*="maps.googleapis.com"]')
-      if (existingScript) {
-        console.log("🧹 Removiendo script anterior")
-        existingScript.remove()
-      }
-
-      const script = document.createElement("script")
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initMapaCoches&loading=async`
-      script.async = true
-      script.defer = true
-
-      script.onload = () => {
-        console.log("✅ Script de Google Maps cargado exitosamente")
-      }
-
-      script.onerror = (e) => {
-        console.error("❌ Error cargando script de Google Maps:", e)
-        setError(
-          "Error al cargar Google Maps. Verifica tu API key, conexión a internet y que las APIs estén habilitadas.",
-        )
-        setIsLoading(false)
-      }
-
-      console.log("📝 Agregando script al DOM...")
-      document.head.appendChild(script)
-    }
-
-    loadGoogleMaps()
-
-    // Cleanup
-    return () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId)
-      }
-      if (window.initMapaCoches) {
-        delete window.initMapaCoches
-      }
-    }
-  }, [mounted, containerReady, initializeMap])
-
-  // Agregar marcadores cuando el mapa esté listo
-  useEffect(() => {
-    if (!mounted || !mapReady || !mapInstanceRef.current || !window.google) {
-      console.log("⏳ Esperando condiciones para marcadores:", {
-        mounted,
-        mapReady,
-        map: !!mapInstanceRef.current,
-        google: !!window.google,
-      })
-      return
-    }
-
-    console.log("📍 Agregando marcadores...")
-
-    // Limpiar marcadores existentes
-    markers.forEach((marker) => {
-      if (marker && marker.setMap) {
-        marker.setMap(null)
-      }
-    })
-    setMarkers([])
-
+  // Función para agregar marcadores
+  const addMarkers = (map: any) => {
     const cochesConUbicacion = coches.filter(
       (coche) =>
         coche.latitud &&
         coche.longitud &&
         !coche.donante &&
-        typeof coche.latitud === "number" &&
-        typeof coche.longitud === "number" &&
-        !isNaN(coche.latitud) &&
-        !isNaN(coche.longitud),
+        !isNaN(Number(coche.latitud)) &&
+        !isNaN(Number(coche.longitud)),
     )
 
-    console.log("🚗 Coches con ubicación válida:", cochesConUbicacion.length)
+    console.log(`📍 Agregando ${cochesConUbicacion.length} marcadores`)
 
     if (cochesConUbicacion.length === 0) {
       console.log("⚠️ No hay coches con ubicación válida")
@@ -300,165 +112,141 @@ Contenedor: ${containerReady ? "✓" : "✗"}
     }
 
     const bounds = new window.google.maps.LatLngBounds()
-    const newMarkers: any[] = []
-    let markersCreated = 0
 
-    cochesConUbicacion.forEach((coche, index) => {
-      try {
-        const lat = Number(coche.latitud)
-        const lng = Number(coche.longitud)
+    cochesConUbicacion.forEach((coche) => {
+      const lat = Number(coche.latitud)
+      const lng = Number(coche.longitud)
+      const position = { lat, lng }
+      const empleadoInfo = getEmpleadoInfo(coche)
+      const isAssigned = !!empleadoInfo || !!coche.asignadoa
 
-        console.log(`📌 Creando marcador ${index + 1} para ${coche.matricula}:`, { lat, lng })
+      // Crear marcador
+      const marker = new window.google.maps.Marker({
+        position,
+        map,
+        title: `${coche.matricula} - ${coche.marca} ${coche.modelo}`,
+        icon: {
+          path: window.google.maps.SymbolPath.CIRCLE,
+          scale: 10,
+          fillColor: isAssigned ? "#10b981" : "#3b82f6",
+          fillOpacity: 0.8,
+          strokeColor: "#ffffff",
+          strokeWeight: 2,
+        },
+      })
 
-        const position = { lat, lng }
-        const empleadoInfo = getEmpleadoInfo(coche)
-        const isAssigned = !!empleadoInfo || !!coche.asignadoa
-
-        // Crear marcador
-        const marker = new window.google.maps.Marker({
-          position,
-          map: mapInstanceRef.current,
-          title: `${coche.matricula} - ${coche.marca} ${coche.modelo}`,
-          icon: {
-            path: window.google.maps.SymbolPath.CIRCLE,
-            scale: 12,
-            fillColor: isAssigned ? "#10b981" : "#3b82f6",
-            fillOpacity: 0.8,
-            strokeColor: "#ffffff",
-            strokeWeight: 2,
-          },
-        })
-
-        // Crear ventana de información
-        const infoWindow = new window.google.maps.InfoWindow({
-          content: `
-            <div style="padding: 12px; min-width: 250px; font-family: system-ui, -apple-system, sans-serif;">
-              <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                <div style="width: 12px; height: 12px; border-radius: 50%; background-color: ${isAssigned ? "#10b981" : "#3b82f6"}; margin-right: 8px;"></div>
-                <h3 style="margin: 0; color: #1f2937; font-size: 16px; font-weight: 600;">${coche.matricula}</h3>
-              </div>
-              
-              <div style="margin-bottom: 8px;">
-                <p style="margin: 2px 0; color: #6b7280; font-size: 14px;"><strong>Vehículo:</strong> ${coche.marca} ${coche.modelo}</p>
-                <p style="margin: 2px 0; color: #6b7280; font-size: 14px;"><strong>Estado:</strong> 
-                  <span style="color: ${isAssigned ? "#059669" : "#2563eb"}; font-weight: 500;">
-                    ${isAssigned ? "Asignado" : "Disponible"}
-                  </span>
-                </p>
-                ${empleadoInfo ? `<p style="margin: 2px 0; color: #6b7280; font-size: 14px;"><strong>Asignado a:</strong> ${empleadoInfo.nombre} ${empleadoInfo.apellidos || ""}</p>` : ""}
-              </div>
-
-              ${coche.direccion_actual ? `<p style="margin: 4px 0; color: #6b7280; font-size: 13px;"><strong>📍 Ubicación:</strong> ${coche.direccion_actual}</p>` : ""}
-              
-              ${
-                coche.ultima_ubicacion
-                  ? `
-                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #e5e7eb;">
-                  <p style="margin: 0; color: #9ca3af; font-size: 12px;">
-                    <strong>Última actualización:</strong><br>
-                    ${new Date(coche.ultima_ubicacion).toLocaleString("es-ES")}
-                  </p>
-                </div>
-              `
-                  : ""
-              }
-              
-              <div style="margin-top: 12px;">
-                <a href="/coches/detalle/${coche.matricula}" 
-                   style="display: inline-block; background-color: #3b82f6; color: white; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 12px; font-weight: 500;">
-                  Ver detalles
-                </a>
-              </div>
+      // Crear ventana de información
+      const infoWindow = new window.google.maps.InfoWindow({
+        content: `
+          <div style="padding: 10px; font-family: Arial, sans-serif;">
+            <h3 style="margin: 0 0 8px 0; color: #1f2937;">${coche.matricula}</h3>
+            <p style="margin: 4px 0; color: #6b7280;"><strong>Vehículo:</strong> ${coche.marca} ${coche.modelo}</p>
+            <p style="margin: 4px 0; color: #6b7280;"><strong>Estado:</strong> 
+              <span style="color: ${isAssigned ? "#059669" : "#2563eb"};">
+                ${isAssigned ? "Asignado" : "Disponible"}
+              </span>
+            </p>
+            ${empleadoInfo ? `<p style="margin: 4px 0; color: #6b7280;"><strong>Asignado a:</strong> ${empleadoInfo.nombre} ${empleadoInfo.apellidos || ""}</p>` : ""}
+            ${coche.direccion_actual ? `<p style="margin: 4px 0; color: #6b7280;"><strong>Ubicación:</strong> ${coche.direccion_actual}</p>` : ""}
+            <div style="margin-top: 8px;">
+              <a href="/coches/detalle/${coche.matricula}" 
+                 style="background-color: #3b82f6; color: white; padding: 4px 8px; border-radius: 4px; text-decoration: none; font-size: 12px;">
+                Ver detalles
+              </a>
             </div>
-          `,
-        })
+          </div>
+        `,
+      })
 
-        // Agregar evento click al marcador
-        marker.addListener("click", () => {
-          // Cerrar otras ventanas de información
-          newMarkers.forEach((m) => {
-            if (m.infoWindow && m.infoWindow.close) {
-              m.infoWindow.close()
-            }
-          })
-          infoWindow.open(mapInstanceRef.current, marker)
-        })
+      marker.addListener("click", () => {
+        infoWindow.open(map, marker)
+      })
 
-        // Guardar referencia a la ventana de información
-        marker.infoWindow = infoWindow
-        newMarkers.push(marker)
-        bounds.extend(position)
-        markersCreated++
-
-        console.log(`✅ Marcador ${markersCreated} creado exitosamente para ${coche.matricula}`)
-      } catch (err) {
-        console.error(`❌ Error creando marcador para ${coche.matricula}:`, err)
-      }
+      bounds.extend(position)
     })
 
-    console.log(`🎯 Total marcadores creados: ${markersCreated}`)
-    setMarkers(newMarkers)
+    // Ajustar vista del mapa
+    if (cochesConUbicacion.length > 0) {
+      map.fitBounds(bounds)
 
-    // Ajustar el mapa para mostrar todos los marcadores
-    if (newMarkers.length > 0) {
-      try {
-        console.log("🔍 Ajustando vista del mapa...")
-        mapInstanceRef.current.fitBounds(bounds)
+      // Evitar zoom excesivo
+      const listener = window.google.maps.event.addListenerOnce(map, "bounds_changed", () => {
+        if (map.getZoom() > 15) {
+          map.setZoom(15)
+        }
+      })
+    }
+  }
 
-        // Evitar zoom excesivo si solo hay un marcador
-        window.google.maps.event.addListenerOnce(mapInstanceRef.current, "bounds_changed", () => {
-          if (mapInstanceRef.current.getZoom() && mapInstanceRef.current.getZoom() > 15) {
-            mapInstanceRef.current.setZoom(15)
-          }
-        })
-      } catch (err) {
-        console.error("❌ Error ajustando vista del mapa:", err)
+  // Cargar Google Maps
+  useEffect(() => {
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+
+    if (!apiKey) {
+      setError("API key de Google Maps no configurada")
+      setIsLoading(false)
+      return
+    }
+
+    // Si Google Maps ya está cargado
+    if (window.google?.maps) {
+      console.log("♻️ Google Maps ya está disponible")
+      setTimeout(initMap, 100)
+      return
+    }
+
+    // Timeout de seguridad
+    const timeoutId = setTimeout(() => {
+      if (isLoading) {
+        setError("Timeout cargando Google Maps")
+        setIsLoading(false)
+      }
+    }, 15000) // 15 segundos
+
+    // Callback global
+    window.initGoogleMap = () => {
+      console.log("📞 Callback de Google Maps ejecutado")
+      clearTimeout(timeoutId)
+      setTimeout(initMap, 100)
+    }
+
+    // Cargar script
+    const script = document.createElement("script")
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initGoogleMap&loading=async`
+    script.async = true
+    script.defer = true
+
+    script.onerror = () => {
+      clearTimeout(timeoutId)
+      setError("Error al cargar Google Maps")
+      setIsLoading(false)
+    }
+
+    document.head.appendChild(script)
+
+    return () => {
+      clearTimeout(timeoutId)
+      if (window.initGoogleMap) {
+        delete window.initGoogleMap
       }
     }
-  }, [mounted, mapReady, coches, empleados, markers])
+  }, [])
 
   const handleRefresh = () => {
-    console.log("🔄 Refrescando página...")
     window.location.reload()
   }
 
-  const handleCenterMap = () => {
-    if (mapInstanceRef.current && markers.length > 0) {
-      try {
-        console.log("🎯 Centrando mapa...")
+  const handleCenter = () => {
+    if (mapInstance && coches.length > 0) {
+      const cochesConUbicacion = coches.filter((c) => c.latitud && c.longitud && !c.donante)
+      if (cochesConUbicacion.length > 0) {
         const bounds = new window.google.maps.LatLngBounds()
-        markers.forEach((marker) => {
-          if (marker && marker.getPosition) {
-            bounds.extend(marker.getPosition())
-          }
+        cochesConUbicacion.forEach((coche) => {
+          bounds.extend({ lat: Number(coche.latitud), lng: Number(coche.longitud) })
         })
-        mapInstanceRef.current.fitBounds(bounds)
-      } catch (err) {
-        console.error("❌ Error centrando mapa:", err)
+        mapInstance.fitBounds(bounds)
       }
     }
-  }
-
-  // No renderizar nada hasta que estemos montados
-  if (!mounted) {
-    return (
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MapPin className="h-5 w-5" />
-            Mapa de Vehículos
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center h-96 bg-gray-100 rounded-lg">
-            <div className="text-center">
-              <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-gray-400" />
-              <p className="text-gray-500">Inicializando mapa...</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    )
   }
 
   if (error) {
@@ -473,28 +261,18 @@ Contenedor: ${containerReady ? "✓" : "✗"}
         <CardContent>
           <div className="text-center py-8">
             <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
-            <p className="text-red-600 mb-4 font-medium">{error}</p>
-            <div className="bg-gray-100 p-4 rounded-lg mb-4 text-left">
-              <h4 className="font-semibold mb-2">Información de Debug:</h4>
-              <pre className="text-xs text-gray-600 whitespace-pre-wrap">{debugInfo}</pre>
-            </div>
+            <p className="text-red-600 mb-4">{error}</p>
             <div className="text-sm text-gray-500 mb-4">
               <p>
-                <strong>Pasos para solucionar:</strong>
+                <strong>Posibles soluciones:</strong>
               </p>
-              <ol className="text-left mt-2 space-y-1">
-                <li>1. Verifica que NEXT_PUBLIC_GOOGLE_MAPS_API_KEY esté configurada</li>
-                <li>2. Asegúrate de que las APIs estén habilitadas en Google Cloud Console:</li>
-                <li>&nbsp;&nbsp;&nbsp;- Maps JavaScript API</li>
-                <li>&nbsp;&nbsp;&nbsp;- Places API</li>
-                <li>&nbsp;&nbsp;&nbsp;- Geocoding API</li>
-                <li>3. Verifica que la API key tenga permisos para tu dominio</li>
-                <li>4. Intenta refrescar la página</li>
-              </ol>
+              <ul className="text-left mt-2 space-y-1">
+                <li>• Verifica que NEXT_PUBLIC_GOOGLE_MAPS_API_KEY esté configurada</li>
+                <li>• Asegúrate de que las APIs estén habilitadas en Google Cloud Console</li>
+                <li>• Verifica tu conexión a internet</li>
+              </ul>
             </div>
-            <Button onClick={handleRefresh} className="mt-4">
-              Reintentar
-            </Button>
+            <Button onClick={handleRefresh}>Reintentar</Button>
           </div>
         </CardContent>
       </Card>
@@ -514,12 +292,12 @@ Contenedor: ${containerReady ? "✓" : "✗"}
             Mapa de Vehículos
           </CardTitle>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handleCenterMap} disabled={isLoading || markers.length === 0}>
+            <Button variant="outline" size="sm" onClick={handleCenter} disabled={isLoading || !mapInstance}>
               <Navigation className="h-4 w-4 mr-2" />
               Centrar
             </Button>
-            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading}>
-              <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+            <Button variant="outline" size="sm" onClick={handleRefresh}>
+              <RefreshCw className="h-4 w-4 mr-2" />
               Actualizar
             </Button>
           </div>
@@ -531,14 +309,14 @@ Contenedor: ${containerReady ? "✓" : "✗"}
             <div className="text-center">
               <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-gray-400" />
               <p className="text-gray-500 mb-2">Cargando mapa...</p>
-              <div className="bg-white p-3 rounded border text-xs text-gray-600 max-w-md">
-                <pre className="whitespace-pre-wrap">{debugInfo}</pre>
-              </div>
+              <p className="text-xs text-gray-400">
+                Total coches: {coches.length} | Con ubicación: {cochesConUbicacion.length}
+              </p>
             </div>
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Estadísticas del mapa */}
+            {/* Estadísticas */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
               <div className="text-center">
                 <div className="text-2xl font-bold text-blue-600">{cochesConUbicacion.length}</div>
@@ -566,43 +344,16 @@ Contenedor: ${containerReady ? "✓" : "✗"}
               </div>
             </div>
 
-            {/* Contenedor del mapa con ID único y estilos inline */}
+            {/* Mapa */}
             <div className="w-full bg-white rounded-lg border shadow-sm overflow-hidden">
               <div
-                ref={mapContainerRef}
-                id="mapa-coches-container"
+                ref={mapRef}
                 style={{
                   width: "100%",
                   height: "400px",
-                  minHeight: "400px",
                   backgroundColor: "#f3f4f6",
-                  position: "relative",
-                  display: "block",
                 }}
-              >
-                {/* Contenido de fallback mientras se carga */}
-                {!mapReady && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      backgroundColor: "#f3f4f6",
-                      zIndex: 1,
-                    }}
-                  >
-                    <div style={{ textAlign: "center" }}>
-                      <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-gray-400" />
-                      <p className="text-gray-500 text-sm">Preparando mapa...</p>
-                    </div>
-                  </div>
-                )}
-              </div>
+              />
             </div>
 
             {cochesConUbicacion.length === 0 && (
@@ -613,27 +364,6 @@ Contenedor: ${containerReady ? "✓" : "✗"}
                   <span className="text-xs">Ejecuta el script SQL para agregar ubicaciones de ejemplo.</span>
                 </p>
               </div>
-            )}
-
-            {/* Debug info en desarrollo */}
-            {process.env.NODE_ENV === "development" && (
-              <details className="bg-gray-100 p-3 rounded text-xs">
-                <summary className="cursor-pointer font-semibold">Debug Info</summary>
-                <pre className="mt-2 whitespace-pre-wrap">{debugInfo}</pre>
-                <div className="mt-2">
-                  <strong>Marcadores activos:</strong> {markers.length}
-                  <br />
-                  <strong>Contenedor ref disponible:</strong> {mapContainerRef.current ? "✓" : "✗"}
-                  <br />
-                  <strong>Mapa instancia:</strong> {mapInstanceRef.current ? "✓" : "✗"}
-                  <br />
-                  <strong>Montado:</strong> {mounted ? "✓" : "✗"}
-                  <br />
-                  <strong>Contenedor listo:</strong> {containerReady ? "✓" : "✗"}
-                  <br />
-                  <strong>Mapa listo:</strong> {mapReady ? "✓" : "✗"}
-                </div>
-              </details>
             )}
           </div>
         )}

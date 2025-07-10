@@ -19,7 +19,7 @@ interface UbicacionEditorProps {
 declare global {
   interface Window {
     google: any
-    initUbicacionEditor?: () => void
+    initEditorMap?: () => void
   }
 }
 
@@ -30,15 +30,11 @@ export function UbicacionEditor({
   direccion_actual: initialDireccion,
   onUbicacionGuardada,
 }: UbicacionEditorProps) {
-  const mapContainerRef = useRef<HTMLDivElement>(null)
-  const mapInstanceRef = useRef<any>(null)
-  const markerRef = useRef<any>(null)
-  const geocoderRef = useRef<any>(null)
-
-  const [mounted, setMounted] = useState(false)
+  const mapRef = useRef<HTMLDivElement>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [mapReady, setMapReady] = useState(false)
+  const [mapInstance, setMapInstance] = useState<any>(null)
+  const [marker, setMarker] = useState<any>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
@@ -47,19 +43,14 @@ export function UbicacionEditor({
   const [longitud, setLongitud] = useState<string>(initialLongitud?.toString() || "")
   const [direccion, setDireccion] = useState<string>(initialDireccion || "")
 
-  // Asegurar que el componente está montado
-  useEffect(() => {
-    setMounted(true)
-    console.log("🔄 UbicacionEditor montado para:", matricula)
-  }, [matricula])
-
   // Función para obtener dirección desde coordenadas
   const geocodeLatLng = async (lat: number, lng: number) => {
-    if (!geocoderRef.current) return
+    if (!window.google?.maps) return null
 
+    const geocoder = new window.google.maps.Geocoder()
     try {
       const response = await new Promise((resolve, reject) => {
-        geocoderRef.current.geocode({ location: { lat, lng } }, (results: any[], status: string) => {
+        geocoder.geocode({ location: { lat, lng } }, (results: any[], status: string) => {
           if (status === "OK" && results[0]) {
             resolve(results[0].formatted_address)
           } else {
@@ -76,80 +67,68 @@ export function UbicacionEditor({
 
   // Función para actualizar marcador
   const updateMarker = async (lat: number, lng: number) => {
-    if (!mapInstanceRef.current || !window.google) return
+    if (!mapInstance || !window.google) return
 
     const position = { lat, lng }
 
-    // Si no hay marcador, crearlo
-    if (!markerRef.current) {
-      markerRef.current = new window.google.maps.Marker({
+    if (marker) {
+      marker.setPosition(position)
+    } else {
+      const newMarker = new window.google.maps.Marker({
         position,
-        map: mapInstanceRef.current,
+        map: mapInstance,
         draggable: true,
         title: `Ubicación de ${matricula}`,
       })
 
-      // Agregar listener para arrastrar
-      markerRef.current.addListener("dragend", async (event: any) => {
+      newMarker.addListener("dragend", async (event: any) => {
         const newLat = event.latLng.lat()
         const newLng = event.latLng.lng()
-
         setLatitud(newLat.toFixed(6))
         setLongitud(newLng.toFixed(6))
 
-        // Obtener dirección
         const address = await geocodeLatLng(newLat, newLng)
         if (address) {
           setDireccion(address)
         }
       })
-    } else {
-      // Actualizar posición del marcador existente
-      markerRef.current.setPosition(position)
+
+      setMarker(newMarker)
     }
 
-    // Centrar mapa en la nueva posición
-    mapInstanceRef.current.setCenter(position)
-    mapInstanceRef.current.setZoom(15)
+    mapInstance.setCenter(position)
+    mapInstance.setZoom(15)
   }
 
   // Función para inicializar el mapa
-  const initializeMap = () => {
-    console.log("🗺️ Inicializando mapa del editor...")
+  const initMap = () => {
+    console.log("🗺️ Inicializando editor de ubicación...")
 
-    if (!mapContainerRef.current) {
-      console.error("❌ Contenedor del mapa no encontrado")
-      setError("Error: Contenedor del mapa no encontrado")
+    if (!mapRef.current) {
+      setError("No se pudo encontrar el contenedor del mapa")
       setIsLoading(false)
-      return false
+      return
     }
 
-    if (!window.google || !window.google.maps) {
-      console.error("❌ Google Maps no disponible")
-      setError("Error: Google Maps no cargado correctamente")
+    if (!window.google?.maps) {
+      setError("Google Maps no se cargó correctamente")
       setIsLoading(false)
-      return false
+      return
     }
 
     try {
-      // Determinar centro inicial
       const hasInitialLocation = initialLatitud && initialLongitud
       const center = hasInitialLocation
         ? { lat: Number(initialLatitud), lng: Number(initialLongitud) }
-        : { lat: 40.4168, lng: -3.7038 } // Madrid por defecto
+        : { lat: 40.4168, lng: -3.7038 }
 
-      console.log("🎯 Centro inicial del mapa:", center)
-
-      const mapInstance = new window.google.maps.Map(mapContainerRef.current, {
+      const map = new window.google.maps.Map(mapRef.current, {
         zoom: hasInitialLocation ? 15 : 6,
         center,
         mapTypeId: window.google.maps.MapTypeId.ROADMAP,
       })
 
-      mapInstanceRef.current = mapInstance
-
-      // Inicializar geocoder
-      geocoderRef.current = new window.google.maps.Geocoder()
+      setMapInstance(map)
 
       // Si hay ubicación inicial, crear marcador
       if (hasInitialLocation) {
@@ -157,109 +136,95 @@ export function UbicacionEditor({
       }
 
       // Agregar listener para clicks en el mapa
-      mapInstance.addListener("click", async (event: any) => {
+      map.addListener("click", async (event: any) => {
         const lat = event.latLng.lat()
         const lng = event.latLng.lng()
 
         setLatitud(lat.toFixed(6))
         setLongitud(lng.toFixed(6))
 
-        // Actualizar marcador
         await updateMarker(lat, lng)
 
-        // Obtener dirección
         const address = await geocodeLatLng(lat, lng)
         if (address) {
           setDireccion(address)
         }
       })
 
-      console.log("✅ Mapa del editor creado exitosamente")
-      setMapReady(true)
+      console.log("✅ Editor de ubicación creado exitosamente")
       setIsLoading(false)
       setError(null)
-
-      return true
     } catch (err) {
-      console.error("❌ Error creando mapa del editor:", err)
-      setError(`Error al crear el mapa: ${err instanceof Error ? err.message : "Error desconocido"}`)
+      console.error("❌ Error creando editor:", err)
+      setError("Error al crear el editor de ubicación")
       setIsLoading(false)
-      return false
     }
   }
 
   // Cargar Google Maps
   useEffect(() => {
-    if (!mounted) return
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
-    const loadGoogleMaps = () => {
-      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-
-      if (!apiKey) {
-        setError("API key de Google Maps no configurada")
-        setIsLoading(false)
-        return
-      }
-
-      // Si Google Maps ya está cargado
-      if (window.google && window.google.maps) {
-        console.log("♻️ Google Maps ya disponible para editor")
-        setTimeout(initializeMap, 100)
-        return
-      }
-
-      // Si ya hay un callback global, usar el existente
-      if (window.initMapaCoches) {
-        console.log("🔗 Usando callback existente de Google Maps")
-        setTimeout(initializeMap, 500)
-        return
-      }
-
-      // Crear callback si no existe
-      window.initUbicacionEditor = () => {
-        console.log("📞 Callback del editor ejecutado")
-        setTimeout(initializeMap, 100)
-      }
-
-      // Solo cargar script si no existe
-      const existingScript = document.querySelector('script[src*="maps.googleapis.com"]')
-      if (!existingScript) {
-        const script = document.createElement("script")
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initUbicacionEditor&loading=async`
-        script.async = true
-        script.defer = true
-
-        script.onload = () => {
-          console.log("✅ Script de Google Maps cargado para editor")
-        }
-
-        script.onerror = () => {
-          setError("Error al cargar Google Maps")
-          setIsLoading(false)
-        }
-
-        document.head.appendChild(script)
-      } else {
-        // Script ya existe, esperar un poco y inicializar
-        setTimeout(initializeMap, 500)
-      }
+    if (!apiKey) {
+      setError("API key de Google Maps no configurada")
+      setIsLoading(false)
+      return
     }
 
-    setTimeout(loadGoogleMaps, 100)
+    // Si Google Maps ya está cargado
+    if (window.google?.maps) {
+      setTimeout(initMap, 100)
+      return
+    }
+
+    // Timeout de seguridad
+    const timeoutId = setTimeout(() => {
+      if (isLoading) {
+        setError("Timeout cargando Google Maps")
+        setIsLoading(false)
+      }
+    }, 15000)
+
+    // Callback global
+    window.initEditorMap = () => {
+      console.log("📞 Callback del editor ejecutado")
+      clearTimeout(timeoutId)
+      setTimeout(initMap, 100)
+    }
+
+    // Solo cargar script si no existe
+    const existingScript = document.querySelector('script[src*="maps.googleapis.com"]')
+    if (!existingScript) {
+      const script = document.createElement("script")
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initEditorMap&loading=async`
+      script.async = true
+      script.defer = true
+
+      script.onerror = () => {
+        clearTimeout(timeoutId)
+        setError("Error al cargar Google Maps")
+        setIsLoading(false)
+      }
+
+      document.head.appendChild(script)
+    } else {
+      setTimeout(initMap, 500)
+    }
 
     return () => {
-      if (window.initUbicacionEditor) {
-        delete window.initUbicacionEditor
+      clearTimeout(timeoutId)
+      if (window.initEditorMap) {
+        delete window.initEditorMap
       }
     }
-  }, [mounted, initialLatitud, initialLongitud])
+  }, [])
 
   // Función para obtener ubicación actual
   const handleGetCurrentLocation = () => {
     if (!navigator.geolocation) {
       toast({
         title: "Error",
-        description: "La geolocalización no está disponible en este navegador",
+        description: "La geolocalización no está disponible",
         variant: "destructive",
       })
       return
@@ -273,10 +238,8 @@ export function UbicacionEditor({
         setLatitud(lat.toFixed(6))
         setLongitud(lng.toFixed(6))
 
-        if (mapReady) {
+        if (mapInstance) {
           await updateMarker(lat, lng)
-
-          // Obtener dirección
           const address = await geocodeLatLng(lat, lng)
           if (address) {
             setDireccion(address)
@@ -284,12 +247,11 @@ export function UbicacionEditor({
         }
 
         toast({
-          title: "Ubicación obtenida",
-          description: "Se ha obtenido tu ubicación actual",
+          title: "Éxito",
+          description: "Ubicación actual obtenida",
         })
       },
-      (error) => {
-        console.error("Error obteniendo ubicación:", error)
+      () => {
         toast({
           title: "Error",
           description: "No se pudo obtener la ubicación actual",
@@ -304,7 +266,7 @@ export function UbicacionEditor({
     if (!latitud || !longitud) {
       toast({
         title: "Error",
-        description: "Debes seleccionar una ubicación en el mapa",
+        description: "Debes seleccionar una ubicación",
         variant: "destructive",
       })
       return
@@ -315,9 +277,7 @@ export function UbicacionEditor({
     try {
       const response = await fetch(`/api/coches/${matricula}/ubicacion`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           latitud: Number.parseFloat(latitud),
           longitud: Number.parseFloat(longitud),
@@ -336,12 +296,10 @@ export function UbicacionEditor({
         description: "Ubicación guardada correctamente",
       })
 
-      // Llamar callback si existe
       if (onUbicacionGuardada) {
         onUbicacionGuardada()
       }
     } catch (error) {
-      console.error("Error guardando ubicación:", error)
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Error al guardar ubicación",
@@ -354,7 +312,7 @@ export function UbicacionEditor({
 
   // Función para eliminar ubicación
   const handleDelete = async () => {
-    if (!confirm("¿Estás seguro de que quieres eliminar la ubicación de este vehículo?")) {
+    if (!confirm("¿Estás seguro de que quieres eliminar la ubicación?")) {
       return
     }
 
@@ -371,15 +329,13 @@ export function UbicacionEditor({
         throw new Error(data.error || "Error al eliminar ubicación")
       }
 
-      // Limpiar formulario
       setLatitud("")
       setLongitud("")
       setDireccion("")
 
-      // Remover marcador del mapa
-      if (markerRef.current) {
-        markerRef.current.setMap(null)
-        markerRef.current = null
+      if (marker) {
+        marker.setMap(null)
+        setMarker(null)
       }
 
       toast({
@@ -387,12 +343,10 @@ export function UbicacionEditor({
         description: "Ubicación eliminada correctamente",
       })
 
-      // Llamar callback si existe
       if (onUbicacionGuardada) {
         onUbicacionGuardada()
       }
     } catch (error) {
-      console.error("Error eliminando ubicación:", error)
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Error al eliminar ubicación",
@@ -408,33 +362,13 @@ export function UbicacionEditor({
     const lat = Number.parseFloat(newLat)
     const lng = Number.parseFloat(newLng)
 
-    if (!isNaN(lat) && !isNaN(lng) && mapReady) {
+    if (!isNaN(lat) && !isNaN(lng) && mapInstance) {
       await updateMarker(lat, lng)
-
-      // Obtener dirección
       const address = await geocodeLatLng(lat, lng)
       if (address) {
         setDireccion(address)
       }
     }
-  }
-
-  if (!mounted) {
-    return (
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MapPin className="h-5 w-5" />
-            Editor de Ubicación
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center h-64 bg-gray-100 rounded-lg">
-            <RefreshCw className="h-6 w-6 animate-spin text-gray-400" />
-          </div>
-        </CardContent>
-      </Card>
-    )
   }
 
   if (error) {
@@ -534,20 +468,18 @@ export function UbicacionEditor({
         {/* Mapa */}
         <div className="w-full bg-white rounded-lg border shadow-sm overflow-hidden">
           <div
-            ref={mapContainerRef}
+            ref={mapRef}
             style={{
               width: "100%",
               height: "400px",
-              minHeight: "400px",
               backgroundColor: "#f3f4f6",
-              position: "relative",
             }}
           >
             {isLoading && (
-              <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+              <div className="flex items-center justify-center h-full">
                 <div className="text-center">
                   <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-gray-400" />
-                  <p className="text-gray-500 text-sm">Cargando mapa...</p>
+                  <p className="text-gray-500 text-sm">Cargando editor...</p>
                 </div>
               </div>
             )}
