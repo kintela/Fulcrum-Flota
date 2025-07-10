@@ -38,11 +38,28 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
   const [markers, setMarkers] = useState<any[]>([])
   const [debugInfo, setDebugInfo] = useState<string>("")
   const [mapReady, setMapReady] = useState(false)
+  const [containerReady, setContainerReady] = useState(false)
 
   // Asegurar que el componente está montado
   useEffect(() => {
     setMounted(true)
     console.log("🔄 Componente MapaCoches montado")
+
+    // Verificar contenedor inmediatamente después del montaje
+    const checkContainer = () => {
+      if (mapContainerRef.current) {
+        console.log("✅ Contenedor encontrado después del montaje")
+        setContainerReady(true)
+      } else {
+        console.log("⏳ Contenedor no encontrado, reintentando...")
+        setTimeout(checkContainer, 50)
+      }
+    }
+
+    // Usar requestAnimationFrame para asegurar que el DOM esté listo
+    requestAnimationFrame(() => {
+      setTimeout(checkContainer, 10)
+    })
   }, [])
 
   // Debug: Log initial data
@@ -65,10 +82,10 @@ Con ubicación: ${cochesConUbicacion.length}
 No donantes: ${coches.filter((c) => !c.donante).length}
 API Key: ${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? "✓" : "✗"}
 Montado: ${mounted ? "✓" : "✗"}
-Contenedor: ${mapContainerRef.current ? "✓" : "✗"}
+Contenedor: ${containerReady ? "✓" : "✗"}
     `.trim(),
     )
-  }, [coches, mounted])
+  }, [coches, mounted, containerReady])
 
   // Crear mapa de empleados para búsqueda rápida
   const empleadosMap = new Map()
@@ -161,7 +178,10 @@ Contenedor: ${mapContainerRef.current ? "✓" : "✗"}
 
   // Cargar Google Maps y inicializar
   useEffect(() => {
-    if (!mounted) return
+    if (!mounted || !containerReady) {
+      console.log("⏳ Esperando montaje y contenedor:", { mounted, containerReady })
+      return
+    }
 
     let timeoutId: NodeJS.Timeout
 
@@ -181,16 +201,7 @@ Contenedor: ${mapContainerRef.current ? "✓" : "✗"}
       // Si Google Maps ya está cargado
       if (window.google && window.google.maps) {
         console.log("♻️ Google Maps ya está cargado")
-        // Esperar a que el contenedor esté disponible
-        const checkContainer = () => {
-          if (mapContainerRef.current) {
-            initializeMap()
-          } else {
-            console.log("⏳ Esperando contenedor...")
-            timeoutId = setTimeout(checkContainer, 100)
-          }
-        }
-        checkContainer()
+        initializeMap()
         return
       }
 
@@ -202,16 +213,9 @@ Contenedor: ${mapContainerRef.current ? "✓" : "✗"}
       // Crear callback global único
       window.initMapaCoches = () => {
         console.log("📞 Callback de Google Maps ejecutado")
-        // Esperar a que el contenedor esté disponible
-        const checkContainer = () => {
-          if (mapContainerRef.current) {
-            initializeMap()
-          } else {
-            console.log("⏳ Callback: Esperando contenedor...")
-            timeoutId = setTimeout(checkContainer, 100)
-          }
-        }
-        checkContainer()
+        setTimeout(() => {
+          initializeMap()
+        }, 100)
       }
 
       // Remover script anterior si existe
@@ -222,7 +226,7 @@ Contenedor: ${mapContainerRef.current ? "✓" : "✗"}
       }
 
       const script = document.createElement("script")
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initMapaCoches`
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initMapaCoches&loading=async`
       script.async = true
       script.defer = true
 
@@ -242,10 +246,7 @@ Contenedor: ${mapContainerRef.current ? "✓" : "✗"}
       document.head.appendChild(script)
     }
 
-    // Esperar un momento para que el DOM esté completamente listo
-    timeoutId = setTimeout(() => {
-      loadGoogleMaps()
-    }, 100)
+    loadGoogleMaps()
 
     // Cleanup
     return () => {
@@ -256,7 +257,7 @@ Contenedor: ${mapContainerRef.current ? "✓" : "✗"}
         delete window.initMapaCoches
       }
     }
-  }, [mounted, initializeMap])
+  }, [mounted, containerReady, initializeMap])
 
   // Agregar marcadores cuando el mapa esté listo
   useEffect(() => {
@@ -565,23 +566,37 @@ Contenedor: ${mapContainerRef.current ? "✓" : "✗"}
               </div>
             </div>
 
-            {/* Mapa - CONTENEDOR PRINCIPAL CON FORZADO DE DIMENSIONES */}
+            {/* Contenedor del mapa con ID único y estilos inline */}
             <div className="w-full bg-white rounded-lg border shadow-sm overflow-hidden">
               <div
                 ref={mapContainerRef}
-                className="w-full"
+                id="mapa-coches-container"
                 style={{
+                  width: "100%",
                   height: "400px",
                   minHeight: "400px",
                   backgroundColor: "#f3f4f6",
                   position: "relative",
+                  display: "block",
                 }}
-                id="google-maps-container"
               >
                 {/* Contenido de fallback mientras se carga */}
                 {!mapReady && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
-                    <div className="text-center">
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: "#f3f4f6",
+                      zIndex: 1,
+                    }}
+                  >
+                    <div style={{ textAlign: "center" }}>
                       <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-gray-400" />
                       <p className="text-gray-500 text-sm">Preparando mapa...</p>
                     </div>
@@ -613,6 +628,8 @@ Contenedor: ${mapContainerRef.current ? "✓" : "✗"}
                   <strong>Mapa instancia:</strong> {mapInstanceRef.current ? "✓" : "✗"}
                   <br />
                   <strong>Montado:</strong> {mounted ? "✓" : "✗"}
+                  <br />
+                  <strong>Contenedor listo:</strong> {containerReady ? "✓" : "✗"}
                   <br />
                   <strong>Mapa listo:</strong> {mapReady ? "✓" : "✗"}
                 </div>
