@@ -16,6 +16,8 @@ import {
   guardarSeccionBasica,
   guardarSeccionAlquiler,
   guardarSeccionAsignacion,
+  guardarUbicacion,
+  eliminarUbicacion,
 } from "./actions"
 import { obtenerEmpleados } from "@/app/actions/empleados"
 import { SolredManager } from "@/components/solred-manager"
@@ -23,6 +25,7 @@ import { ViatManager } from "@/components/viat-manager"
 import { ITVManager } from "@/components/itv-manager"
 import { SeguroManager } from "@/components/seguro-manager"
 import { FotosManager } from "@/components/fotos-manager"
+import { UbicacionEditor } from "@/components/ubicacion-editor"
 
 interface Empleado {
   id: number
@@ -55,6 +58,10 @@ interface Coche {
   importe_anual?: number
   compania?: string
   kms_anuales?: number
+  latitud?: number
+  longitud?: number
+  ultima_ubicacion?: string
+  direccion_actual?: string
 }
 
 export default function EditarCochePage({ params }: { params: { id: string } }) {
@@ -194,6 +201,30 @@ export default function EditarCochePage({ params }: { params: { id: string } }) 
       setError("Error inesperado al guardar")
     } finally {
       setSavingAsignacion(false)
+    }
+  }
+
+  const handleGuardarUbicacion = async (ubicacion: {
+    latitud: number
+    longitud: number
+    direccion_actual: string
+  }) => {
+    const resultado = await guardarUbicacion(params.id, ubicacion)
+
+    if (resultado.success) {
+      await cargarDatos() // Recargar datos para mostrar la nueva ubicación
+    } else {
+      throw new Error(resultado.error || "Error al guardar ubicación")
+    }
+  }
+
+  const handleEliminarUbicacion = async () => {
+    const resultado = await eliminarUbicacion(params.id)
+
+    if (resultado.success) {
+      await cargarDatos() // Recargar datos para reflejar el cambio
+    } else {
+      throw new Error(resultado.error || "Error al eliminar ubicación")
     }
   }
 
@@ -465,6 +496,16 @@ export default function EditarCochePage({ params }: { params: { id: string } }) 
           </CardContent>
         </Card>
       </form>
+
+      {/* Editor de Ubicación */}
+      <UbicacionEditor
+        matricula={coche.matricula}
+        latitud={coche.latitud}
+        longitud={coche.longitud}
+        direccion_actual={coche.direccion_actual}
+        onSave={handleGuardarUbicacion}
+        onDelete={handleEliminarUbicacion}
+      />
 
       <SolredManager matricula={coche.matricula} isEditing={true} />
 

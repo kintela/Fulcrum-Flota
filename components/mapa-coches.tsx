@@ -25,6 +25,7 @@ interface MapaCochesProps {
 declare global {
   interface Window {
     google: any
+    initMap?: () => void
   }
 }
 
@@ -59,75 +60,108 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
 
   // Inicializar el mapa
   useEffect(() => {
-    const initMap = async () => {
+    const initMap = () => {
+      if (!mapRef.current || !window.google) return
+
       try {
-        if (!window.google) {
-          const script = document.createElement("script")
-          script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`
-          script.async = true
-          script.defer = true
+        const mapInstance = new window.google.maps.Map(mapRef.current, {
+          zoom: 6,
+          center: { lat: 40.4168, lng: -3.7038 }, // Madrid
+          mapTypeId: window.google.maps.MapTypeId.ROADMAP,
+          styles: [
+            {
+              featureType: "poi",
+              elementType: "labels",
+              stylers: [{ visibility: "off" }],
+            },
+          ],
+        })
 
-          script.onload = () => {
-            createMap()
-          }
-
-          script.onerror = () => {
-            setError("Error al cargar Google Maps. Verifica tu API key.")
-            setIsLoading(false)
-          }
-
-          document.head.appendChild(script)
-        } else {
-          createMap()
-        }
+        setMap(mapInstance)
+        setIsLoading(false)
+        setError(null)
       } catch (err) {
-        setError("Error al inicializar el mapa")
+        console.error("Error creating map:", err)
+        setError("Error al crear el mapa")
         setIsLoading(false)
       }
     }
 
-    const createMap = () => {
-      if (!mapRef.current) return
+    const loadGoogleMaps = () => {
+      if (window.google && window.google.maps) {
+        initMap()
+        return
+      }
 
-      const mapInstance = new window.google.maps.Map(mapRef.current, {
-        zoom: 6,
-        center: { lat: 40.4168, lng: -3.7038 }, // Madrid
-        mapTypeId: window.google.maps.MapTypeId.ROADMAP,
-        styles: [
-          {
-            featureType: "poi",
-            elementType: "labels",
-            stylers: [{ visibility: "off" }],
-          },
-        ],
-      })
+      // Verificar que tenemos la API key
+      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+      if (!apiKey) {
+        setError("API key de Google Maps no configurada")
+        setIsLoading(false)
+        return
+      }
 
-      setMap(mapInstance)
-      setIsLoading(false)
+      // Crear callback global
+      window.initMap = initMap
+
+      const script = document.createElement("script")
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initMap`
+      script.async = true
+      script.defer = true
+
+      script.onerror = () => {
+        setError("Error al cargar Google Maps. Verifica tu API key y conexión.")
+        setIsLoading(false)
+      }
+
+      document.head.appendChild(script)
     }
 
-    initMap()
+    loadGoogleMaps()
+
+    // Cleanup
+    return () => {
+      if (window.initMap) {
+        delete window.initMap
+      }
+    }
   }, [])
 
   // Agregar marcadores cuando el mapa esté listo
   useEffect(() => {
-    if (!map || !coches.length) return
+    if (!map || !window.google) return
 
     // Limpiar marcadores existentes
-    markers.forEach((marker) => marker.setMap(null))
+    markers.forEach((marker) => {
+      if (marker && marker.setMap) {
+        marker.setMap(null)
+      }
+    })
     setMarkers([])
+
+    const cochesConUbicacion = coches.filter(
+      (coche) =>
+        coche.latitud &&
+        coche.longitud &&
+        !coche.donante &&
+        typeof coche.latitud === "number" &&
+        typeof coche.longitud === "number",
+    )
+
+    if (cochesConUbicacion.length === 0) {
+      return
+    }
 
     const bounds = new window.google.maps.LatLngBounds()
     const newMarkers: any[] = []
-    let hasValidLocations = false
 
-    coches.forEach((coche) => {
-      if (coche.latitud && coche.longitud && !coche.donante) {
-        const position = { lat: coche.latitud, lng: coche.longitud }
+    cochesConUbicacion.forEach((coche) => {
+      try {
+        const position = { lat: Number(coche.latitud), lng: Number(coche.longitud) }
         const empleadoInfo = getEmpleadoInfo(coche)
         const isAssigned = !!empleadoInfo || !!coche.asignadoa
 
-        // Crear marcador personalizado
+        // Crear marcador
         const marker = new window.google.maps.Marker({
           position,
           map,
@@ -189,7 +223,11 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
         // Agregar evento click al marcador
         marker.addListener("click", () => {
           // Cerrar otras ventanas de información
-          newMarkers.forEach((m) => m.infoWindow?.close())
+          newMarkers.forEach((m) => {
+            if (m.infoWindow && m.infoWindow.close) {
+              m.infoWindow.close()
+            }
+          })
           infoWindow.open(map, marker)
         })
 
@@ -197,22 +235,27 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
         marker.infoWindow = infoWindow
         newMarkers.push(marker)
         bounds.extend(position)
-        hasValidLocations = true
+      } catch (err) {
+        console.error("Error creating marker for", coche.matricula, err)
       }
     })
 
     setMarkers(newMarkers)
 
     // Ajustar el mapa para mostrar todos los marcadores
-    if (hasValidLocations) {
-      map.fitBounds(bounds)
+    if (newMarkers.length > 0) {
+      try {
+        map.fitBounds(bounds)
 
-      // Evitar zoom excesivo si solo hay un marcador
-      window.google.maps.event.addListenerOnce(map, "bounds_changed", () => {
-        if (map.getZoom() && map.getZoom()! > 15) {
-          map.setZoom(15)
-        }
-      })
+        // Evitar zoom excesivo si solo hay un marcador
+        window.google.maps.event.addListenerOnce(map, "bounds_changed", () => {
+          if (map.getZoom() && map.getZoom() > 15) {
+            map.setZoom(15)
+          }
+        })
+      } catch (err) {
+        console.error("Error fitting bounds:", err)
+      }
     }
   }, [map, coches, empleados])
 
@@ -222,9 +265,17 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
 
   const handleCenterMap = () => {
     if (map && markers.length > 0) {
-      const bounds = new window.google.maps.LatLngBounds()
-      markers.forEach((marker) => bounds.extend(marker.getPosition()))
-      map.fitBounds(bounds)
+      try {
+        const bounds = new window.google.maps.LatLngBounds()
+        markers.forEach((marker) => {
+          if (marker && marker.getPosition) {
+            bounds.extend(marker.getPosition())
+          }
+        })
+        map.fitBounds(bounds)
+      } catch (err) {
+        console.error("Error centering map:", err)
+      }
     }
   }
 
@@ -245,6 +296,9 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
               Verifica que la API key de Google Maps esté configurada correctamente
               <br />y que las APIs necesarias estén habilitadas en Google Cloud Console.
             </p>
+            <Button onClick={handleRefresh} className="mt-4">
+              Reintentar
+            </Button>
           </div>
         </CardContent>
       </Card>
