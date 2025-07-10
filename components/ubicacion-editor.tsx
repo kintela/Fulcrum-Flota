@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -29,81 +29,54 @@ export function UbicacionEditor({
   direccion_actual: initialDireccion,
   onUbicacionGuardada,
 }: UbicacionEditorProps) {
-  const mapContainerRef = useRef<HTMLDivElement>(null)
-  const mapInstanceRef = useRef<any>(null)
-  const markerRef = useRef<any>(null)
-  const geocoderRef = useRef<any>(null)
+  const mapRef = useRef<HTMLDivElement>(null)
+  const mapInstance = useRef<any>(null)
+  const marker = useRef<any>(null)
+  const geocoder = useRef<any>(null)
+  const initAttempts = useRef(0)
+  const maxAttempts = 10
 
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
-  const [containerReady, setContainerReady] = useState(false)
-  const [googleMapsReady, setGoogleMapsReady] = useState(false)
+  const [debugInfo, setDebugInfo] = useState<string>("")
 
   // Estados del formulario
   const [latitud, setLatitud] = useState<string>(initialLatitud?.toString() || "")
   const [longitud, setLongitud] = useState<string>(initialLongitud?.toString() || "")
   const [direccion, setDireccion] = useState<string>(initialDireccion || "")
 
-  // Verificar contenedor con useLayoutEffect
-  useLayoutEffect(() => {
-    const checkContainer = () => {
-      if (mapContainerRef.current) {
-        const rect = mapContainerRef.current.getBoundingClientRect()
-        console.log("📦 Editor - Contenedor encontrado:", {
-          exists: !!mapContainerRef.current,
-          width: rect.width,
-          height: rect.height,
-          inDOM: document.contains(mapContainerRef.current),
-        })
-
-        if (rect.width > 0 && rect.height > 0) {
-          setContainerReady(true)
-          return true
-        }
-      }
+  // Función para verificar si el contenedor está listo
+  const isContainerReady = () => {
+    if (!mapRef.current) {
+      console.log("❌ Editor - Contenedor no existe")
       return false
     }
 
-    // Intentar inmediatamente
-    if (checkContainer()) return
+    const rect = mapRef.current.getBoundingClientRect()
+    const isVisible = rect.width > 0 && rect.height > 0
+    const isInDOM = document.contains(mapRef.current)
 
-    // Si no está listo, usar MutationObserver
-    const observer = new MutationObserver(() => {
-      if (checkContainer()) {
-        observer.disconnect()
-      }
+    console.log("📦 Editor - Verificando contenedor:", {
+      exists: true,
+      width: rect.width,
+      height: rect.height,
+      isVisible,
+      isInDOM,
+      offsetParent: !!mapRef.current.offsetParent,
     })
 
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-    })
-
-    // Timeout de seguridad
-    const timeout = setTimeout(() => {
-      observer.disconnect()
-      if (!containerReady) {
-        console.error("❌ Editor - Timeout esperando contenedor")
-        setError("No se pudo inicializar el contenedor del editor")
-        setIsLoading(false)
-      }
-    }, 5000)
-
-    return () => {
-      observer.disconnect()
-      clearTimeout(timeout)
-    }
-  }, [containerReady])
+    return isVisible && isInDOM
+  }
 
   // Función para obtener dirección desde coordenadas
-  const geocodeLatLng = useCallback(async (lat: number, lng: number) => {
-    if (!geocoderRef.current) return null
+  const geocodeLatLng = async (lat: number, lng: number) => {
+    if (!geocoder.current) return null
 
     try {
       const response = await new Promise((resolve, reject) => {
-        geocoderRef.current.geocode({ location: { lat, lng } }, (results: any[], status: string) => {
+        geocoder.current.geocode({ location: { lat, lng } }, (results: any[], status: string) => {
           if (status === "OK" && results[0]) {
             resolve(results[0].formatted_address)
           } else {
@@ -116,86 +89,98 @@ export function UbicacionEditor({
       console.error("Error en geocoding:", error)
       return null
     }
-  }, [])
+  }
 
   // Función para actualizar marcador
-  const updateMarker = useCallback(
-    async (lat: number, lng: number) => {
-      if (!mapInstanceRef.current || !window.google) return
+  const updateMarker = async (lat: number, lng: number) => {
+    if (!mapInstance.current || !window.google) return
 
-      const position = { lat, lng }
+    const position = { lat, lng }
 
-      if (markerRef.current) {
-        markerRef.current.setPosition(position)
-      } else {
-        const newMarker = new window.google.maps.Marker({
-          position,
-          map: mapInstanceRef.current,
-          draggable: true,
-          title: `Ubicación de ${matricula}`,
-        })
+    if (marker.current) {
+      marker.current.setPosition(position)
+    } else {
+      const newMarker = new window.google.maps.Marker({
+        position,
+        map: mapInstance.current,
+        draggable: true,
+        title: `Ubicación de ${matricula}`,
+      })
 
-        newMarker.addListener("dragend", async (event: any) => {
-          const newLat = event.latLng.lat()
-          const newLng = event.latLng.lng()
-          setLatitud(newLat.toFixed(6))
-          setLongitud(newLng.toFixed(6))
+      newMarker.addListener("dragend", async (event: any) => {
+        const newLat = event.latLng.lat()
+        const newLng = event.latLng.lng()
+        setLatitud(newLat.toFixed(6))
+        setLongitud(newLng.toFixed(6))
 
-          const address = await geocodeLatLng(newLat, newLng)
-          if (address) {
-            setDireccion(address)
-          }
-        })
+        const address = await geocodeLatLng(newLat, newLng)
+        if (address) {
+          setDireccion(address)
+        }
+      })
 
-        markerRef.current = newMarker
-      }
+      marker.current = newMarker
+    }
 
-      mapInstanceRef.current.setCenter(position)
-      mapInstanceRef.current.setZoom(15)
-    },
-    [matricula, geocodeLatLng],
-  )
+    mapInstance.current.setCenter(position)
+    mapInstance.current.setZoom(15)
+  }
 
   // Función para inicializar el mapa
-  const initializeMap = useCallback(() => {
-    console.log("🗺️ Editor - Inicializando mapa...")
+  const initializeMap = async () => {
+    initAttempts.current++
 
-    if (!mapContainerRef.current) {
-      console.error("❌ Editor - Contenedor no disponible")
-      setError("Contenedor del editor no disponible")
+    console.log(`🗺️ Editor - Intento ${initAttempts.current}/${maxAttempts}`)
+    setDebugInfo(`Intento ${initAttempts.current}/${maxAttempts}`)
+
+    // Verificar Google Maps
+    if (!window.google?.maps) {
+      console.error("❌ Editor - Google Maps no disponible")
+      if (initAttempts.current < maxAttempts) {
+        setTimeout(initializeMap, 1000)
+        return
+      }
+      setError("Google Maps no se cargó correctamente")
       setIsLoading(false)
       return
     }
 
-    if (!window.google?.maps) {
-      console.error("❌ Editor - Google Maps no disponible")
-      setError("Google Maps no está disponible")
+    // Verificar contenedor
+    if (!isContainerReady()) {
+      console.error("❌ Editor - Contenedor no está listo")
+      if (initAttempts.current < maxAttempts) {
+        setTimeout(initializeMap, 500)
+        return
+      }
+      setError("No se pudo inicializar el contenedor del editor")
       setIsLoading(false)
       return
     }
 
     try {
+      console.log("🏗️ Editor - Creando mapa...")
+
       const hasInitialLocation = initialLatitud && initialLongitud
       const center = hasInitialLocation
         ? { lat: Number(initialLatitud), lng: Number(initialLongitud) }
         : { lat: 40.4168, lng: -3.7038 }
 
-      const map = new window.google.maps.Map(mapContainerRef.current, {
+      const map = new window.google.maps.Map(mapRef.current, {
         zoom: hasInitialLocation ? 15 : 6,
         center,
         mapTypeId: window.google.maps.MapTypeId.ROADMAP,
       })
 
-      mapInstanceRef.current = map
+      mapInstance.current = map
 
       // Inicializar geocoder
-      geocoderRef.current = new window.google.maps.Geocoder()
+      geocoder.current = new window.google.maps.Geocoder()
 
       // Si hay ubicación inicial, crear marcador
       if (hasInitialLocation) {
         setTimeout(() => {
           updateMarker(Number(initialLatitud), Number(initialLongitud))
-        }, 100)
+        }, 200)
       }
 
       // Agregar listener para clicks en el mapa
@@ -219,12 +204,16 @@ export function UbicacionEditor({
       setError(null)
     } catch (err) {
       console.error("❌ Error creando editor:", err)
+      if (initAttempts.current < maxAttempts) {
+        setTimeout(initializeMap, 1000)
+        return
+      }
       setError("Error al crear el editor de ubicación")
       setIsLoading(false)
     }
-  }, [initialLatitud, initialLongitud, updateMarker, geocodeLatLng])
+  }
 
-  // Cargar Google Maps
+  // Cargar Google Maps y inicializar
   useEffect(() => {
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
@@ -234,29 +223,26 @@ export function UbicacionEditor({
       return
     }
 
+    // Función para inicializar cuando todo esté listo
+    const startInitialization = () => {
+      console.log("🚀 Editor - Iniciando inicialización...")
+      initAttempts.current = 0
+      setTimeout(initializeMap, 100)
+    }
+
     // Si Google Maps ya está cargado
     if (window.google?.maps) {
-      console.log("♻️ Editor - Google Maps ya está disponible")
-      setGoogleMapsReady(true)
+      console.log("♻️ Editor - Google Maps ya disponible")
+      startInitialization()
       return
     }
 
-    // Timeout de seguridad
-    const timeoutId = setTimeout(() => {
-      if (!googleMapsReady) {
-        console.error("⏰ Editor - Timeout cargando Google Maps")
-        setError("Timeout cargando Google Maps")
-        setIsLoading(false)
-      }
-    }, 20000)
-
     // Callback global único
-    const callbackName = `initEditorMaps_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    const callbackName = `initEditorMap_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
     window[callbackName as keyof Window] = () => {
       console.log("📞 Editor - Callback ejecutado")
-      clearTimeout(timeoutId)
-      setGoogleMapsReady(true)
+      startInitialization()
     }
 
     // Cargar script solo si no existe
@@ -266,10 +252,9 @@ export function UbicacionEditor({
       const checkInterval = setInterval(() => {
         if (window.google?.maps) {
           clearInterval(checkInterval)
-          clearTimeout(timeoutId)
-          setGoogleMapsReady(true)
+          startInitialization()
         }
-      }, 100)
+      }, 200)
 
       setTimeout(() => {
         clearInterval(checkInterval)
@@ -277,7 +262,7 @@ export function UbicacionEditor({
           setError("Google Maps no se cargó correctamente")
           setIsLoading(false)
         }
-      }, 5000)
+      }, 15000)
     } else {
       console.log("📝 Editor - Cargando script...")
       const script = document.createElement("script")
@@ -286,7 +271,6 @@ export function UbicacionEditor({
       script.defer = true
 
       script.onerror = () => {
-        clearTimeout(timeoutId)
         setError("Error al cargar Google Maps")
         setIsLoading(false)
       }
@@ -295,20 +279,11 @@ export function UbicacionEditor({
     }
 
     return () => {
-      clearTimeout(timeoutId)
       if (window[callbackName as keyof Window]) {
         delete window[callbackName as keyof Window]
       }
     }
-  }, [googleMapsReady])
-
-  // Inicializar mapa cuando todo esté listo
-  useEffect(() => {
-    if (containerReady && googleMapsReady && !mapInstanceRef.current) {
-      console.log("🚀 Editor - Todo listo, inicializando...")
-      initializeMap()
-    }
-  }, [containerReady, googleMapsReady, initializeMap])
+  }, [])
 
   // Función para obtener ubicación actual
   const handleGetCurrentLocation = () => {
@@ -329,7 +304,7 @@ export function UbicacionEditor({
         setLatitud(lat.toFixed(6))
         setLongitud(lng.toFixed(6))
 
-        if (mapInstanceRef.current) {
+        if (mapInstance.current) {
           await updateMarker(lat, lng)
           const address = await geocodeLatLng(lat, lng)
           if (address) {
@@ -424,9 +399,9 @@ export function UbicacionEditor({
       setLongitud("")
       setDireccion("")
 
-      if (markerRef.current) {
-        markerRef.current.setMap(null)
-        markerRef.current = null
+      if (marker.current) {
+        marker.current.setMap(null)
+        marker.current = null
       }
 
       toast({
@@ -453,7 +428,7 @@ export function UbicacionEditor({
     const lat = Number.parseFloat(newLat)
     const lng = Number.parseFloat(newLng)
 
-    if (!isNaN(lat) && !isNaN(lng) && mapInstanceRef.current) {
+    if (!isNaN(lat) && !isNaN(lng) && mapInstance.current) {
       await updateMarker(lat, lng)
       const address = await geocodeLatLng(lat, lng)
       if (address) {
@@ -475,6 +450,14 @@ export function UbicacionEditor({
           <div className="text-center py-8">
             <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
             <p className="text-red-600 mb-4">{error}</p>
+            <div className="bg-gray-100 p-4 rounded-lg mb-4 text-left">
+              <h4 className="font-semibold mb-2">Debug Info:</h4>
+              <pre className="text-xs text-gray-600">
+                {`Contenedor: ${mapRef.current ? "✓" : "✗"}
+Intentos: ${initAttempts.current}/${maxAttempts}
+Debug: ${debugInfo}`}
+              </pre>
+            </div>
             <Button onClick={() => window.location.reload()}>Reintentar</Button>
           </div>
         </CardContent>
@@ -559,16 +542,12 @@ export function UbicacionEditor({
         {/* Mapa */}
         <div className="w-full bg-white rounded-lg border shadow-sm overflow-hidden">
           <div
-            ref={mapContainerRef}
-            id="editor-map-container"
+            ref={mapRef}
+            className="w-full bg-gray-100"
             style={{
-              width: "100%",
               height: "400px",
               minHeight: "400px",
-              minWidth: "300px",
-              backgroundColor: "#f3f4f6",
               display: "block",
-              position: "relative",
             }}
           >
             {isLoading && (
@@ -577,8 +556,10 @@ export function UbicacionEditor({
                   <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-gray-400" />
                   <p className="text-gray-500 text-sm">Cargando editor...</p>
                   <div className="mt-2 text-xs text-gray-500">
-                    <div>Contenedor: {containerReady ? "✓" : "⏳"}</div>
-                    <div>Google Maps: {googleMapsReady ? "✓" : "⏳"}</div>
+                    <div>
+                      Intentos: {initAttempts.current}/{maxAttempts}
+                    </div>
+                    <div>Estado: {debugInfo}</div>
                   </div>
                 </div>
               </div>

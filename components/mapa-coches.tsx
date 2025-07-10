@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { MapPin, RefreshCw, Navigation, AlertCircle } from "lucide-react"
@@ -29,14 +29,15 @@ declare global {
 }
 
 export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
-  const mapContainerRef = useRef<HTMLDivElement>(null)
-  const mapInstanceRef = useRef<any>(null)
-  const markersRef = useRef<any[]>([])
+  const mapRef = useRef<HTMLDivElement>(null)
+  const mapInstance = useRef<any>(null)
+  const markers = useRef<any[]>([])
+  const initAttempts = useRef(0)
+  const maxAttempts = 10
 
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [containerReady, setContainerReady] = useState(false)
-  const [googleMapsReady, setGoogleMapsReady] = useState(false)
+  const [debugInfo, setDebugInfo] = useState<string>("")
 
   // Crear mapa de empleados
   const empleadosMap = new Map()
@@ -56,110 +57,81 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
     return null
   }
 
-  // Verificar contenedor con useLayoutEffect
-  useLayoutEffect(() => {
-    const checkContainer = () => {
-      if (mapContainerRef.current) {
-        const rect = mapContainerRef.current.getBoundingClientRect()
-        console.log("📦 Contenedor encontrado:", {
-          exists: !!mapContainerRef.current,
-          width: rect.width,
-          height: rect.height,
-          inDOM: document.contains(mapContainerRef.current),
-        })
-
-        if (rect.width > 0 && rect.height > 0) {
-          setContainerReady(true)
-          return true
-        }
-      }
+  // Función para verificar si el contenedor está listo
+  const isContainerReady = () => {
+    if (!mapRef.current) {
+      console.log("❌ Contenedor no existe")
       return false
     }
 
-    // Intentar inmediatamente
-    if (checkContainer()) return
+    const rect = mapRef.current.getBoundingClientRect()
+    const isVisible = rect.width > 0 && rect.height > 0
+    const isInDOM = document.contains(mapRef.current)
 
-    // Si no está listo, usar MutationObserver para detectar cuando esté disponible
-    const observer = new MutationObserver(() => {
-      if (checkContainer()) {
-        observer.disconnect()
-      }
+    console.log("📦 Verificando contenedor:", {
+      exists: true,
+      width: rect.width,
+      height: rect.height,
+      isVisible,
+      isInDOM,
+      offsetParent: !!mapRef.current.offsetParent,
     })
 
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-    })
-
-    // Timeout de seguridad
-    const timeout = setTimeout(() => {
-      observer.disconnect()
-      if (!containerReady) {
-        console.error("❌ Timeout esperando contenedor")
-        setError("No se pudo inicializar el contenedor del mapa")
-        setIsLoading(false)
-      }
-    }, 5000)
-
-    return () => {
-      observer.disconnect()
-      clearTimeout(timeout)
-    }
-  }, [containerReady])
+    return isVisible && isInDOM
+  }
 
   // Función para agregar marcadores
-  const addMarkers = useCallback(
-    (map: any) => {
-      // Limpiar marcadores existentes
-      markersRef.current.forEach((marker) => {
-        if (marker && marker.setMap) {
-          marker.setMap(null)
-        }
-      })
-      markersRef.current = []
-
-      const cochesConUbicacion = coches.filter(
-        (coche) =>
-          coche.latitud &&
-          coche.longitud &&
-          !coche.donante &&
-          !isNaN(Number(coche.latitud)) &&
-          !isNaN(Number(coche.longitud)),
-      )
-
-      console.log(`📍 Agregando ${cochesConUbicacion.length} marcadores`)
-
-      if (cochesConUbicacion.length === 0) {
-        return
+  const addMarkers = (map: any) => {
+    // Limpiar marcadores existentes
+    markers.current.forEach((marker) => {
+      if (marker && marker.setMap) {
+        marker.setMap(null)
       }
+    })
+    markers.current = []
 
-      const bounds = new window.google.maps.LatLngBounds()
+    const cochesConUbicacion = coches.filter(
+      (coche) =>
+        coche.latitud &&
+        coche.longitud &&
+        !coche.donante &&
+        !isNaN(Number(coche.latitud)) &&
+        !isNaN(Number(coche.longitud)),
+    )
 
-      cochesConUbicacion.forEach((coche) => {
-        const lat = Number(coche.latitud)
-        const lng = Number(coche.longitud)
-        const position = { lat, lng }
-        const empleadoInfo = getEmpleadoInfo(coche)
-        const isAssigned = !!empleadoInfo || !!coche.asignadoa
+    console.log(`📍 Agregando ${cochesConUbicacion.length} marcadores`)
 
-        // Crear marcador
-        const marker = new window.google.maps.Marker({
-          position,
-          map,
-          title: `${coche.matricula} - ${coche.marca} ${coche.modelo}`,
-          icon: {
-            path: window.google.maps.SymbolPath.CIRCLE,
-            scale: 10,
-            fillColor: isAssigned ? "#10b981" : "#3b82f6",
-            fillOpacity: 0.8,
-            strokeColor: "#ffffff",
-            strokeWeight: 2,
-          },
-        })
+    if (cochesConUbicacion.length === 0) {
+      return
+    }
 
-        // Crear ventana de información
-        const infoWindow = new window.google.maps.InfoWindow({
-          content: `
+    const bounds = new window.google.maps.LatLngBounds()
+
+    cochesConUbicacion.forEach((coche) => {
+      const lat = Number(coche.latitud)
+      const lng = Number(coche.longitud)
+      const position = { lat, lng }
+      const empleadoInfo = getEmpleadoInfo(coche)
+      const isAssigned = !!empleadoInfo || !!coche.asignadoa
+
+      // Crear marcador
+      const marker = new window.google.maps.Marker({
+        position,
+        map,
+        title: `${coche.matricula} - ${coche.marca} ${coche.modelo}`,
+        icon: {
+          path: window.google.maps.SymbolPath.CIRCLE,
+          scale: 10,
+          fillColor: isAssigned ? "#10b981" : "#3b82f6",
+          fillOpacity: 0.8,
+          strokeColor: "#ffffff",
+          strokeWeight: 2,
+        },
+      })
+
+      // Crear ventana de información
+      const infoWindow = new window.google.maps.InfoWindow({
+        content: `
           <div style="padding: 10px; font-family: Arial, sans-serif;">
             <h3 style="margin: 0 0 8px 0; color: #1f2937;">${coche.matricula}</h3>
             <p style="margin: 4px 0; color: #6b7280;"><strong>Vehículo:</strong> ${coche.marca} ${coche.modelo}</p>
@@ -178,55 +150,65 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
             </div>
           </div>
         `,
-        })
-
-        marker.addListener("click", () => {
-          infoWindow.open(map, marker)
-        })
-
-        markersRef.current.push(marker)
-        bounds.extend(position)
       })
 
-      // Ajustar vista del mapa
-      if (cochesConUbicacion.length > 0) {
-        map.fitBounds(bounds)
-        const listener = window.google.maps.event.addListenerOnce(map, "bounds_changed", () => {
-          if (map.getZoom() > 15) {
-            map.setZoom(15)
-          }
-        })
-      }
-    },
-    [coches, empleados],
-  )
+      marker.addListener("click", () => {
+        infoWindow.open(map, marker)
+      })
 
-  // Función para inicializar el mapa
-  const initializeMap = useCallback(() => {
-    console.log("🗺️ Inicializando mapa...")
-    console.log("📦 Contenedor:", {
-      ref: !!mapContainerRef.current,
-      ready: containerReady,
-      googleReady: googleMapsReady,
+      markers.current.push(marker)
+      bounds.extend(position)
     })
 
-    if (!mapContainerRef.current) {
-      console.error("❌ Contenedor no disponible")
-      setError("Contenedor del mapa no disponible")
+    // Ajustar vista del mapa
+    if (cochesConUbicacion.length > 0) {
+      map.fitBounds(bounds)
+      const listener = window.google.maps.event.addListenerOnce(map, "bounds_changed", () => {
+        if (map.getZoom() > 15) {
+          map.setZoom(15)
+        }
+      })
+    }
+  }
+
+  // Función para inicializar el mapa
+  const initializeMap = async () => {
+    initAttempts.current++
+
+    console.log(`🗺️ Intento ${initAttempts.current}/${maxAttempts} - Inicializando mapa...`)
+
+    // Actualizar debug info
+    setDebugInfo(`Intento ${initAttempts.current}/${maxAttempts}`)
+
+    // Verificar Google Maps
+    if (!window.google?.maps) {
+      console.error("❌ Google Maps no disponible")
+      if (initAttempts.current < maxAttempts) {
+        setTimeout(initializeMap, 1000)
+        return
+      }
+      setError("Google Maps no se cargó correctamente")
       setIsLoading(false)
       return
     }
 
-    if (!window.google?.maps) {
-      console.error("❌ Google Maps no disponible")
-      setError("Google Maps no está disponible")
+    // Verificar contenedor
+    if (!isContainerReady()) {
+      console.error("❌ Contenedor no está listo")
+      if (initAttempts.current < maxAttempts) {
+        setTimeout(initializeMap, 500)
+        return
+      }
+      setError("No se pudo inicializar el contenedor del mapa")
       setIsLoading(false)
       return
     }
 
     try {
+      console.log("🏗️ Creando instancia del mapa...")
+
       // Crear el mapa
-      const map = new window.google.maps.Map(mapContainerRef.current, {
+      const map = new window.google.maps.Map(mapRef.current, {
         zoom: 6,
         center: { lat: 40.4168, lng: -3.7038 }, // Madrid
         mapTypeId: window.google.maps.MapTypeId.ROADMAP,
@@ -239,38 +221,45 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
         ],
       })
 
-      mapInstanceRef.current = map
+      mapInstance.current = map
       console.log("✅ Mapa creado exitosamente")
 
       // Esperar a que el mapa esté completamente listo
-      window.google.maps.event.addListenerOnce(map, "tilesloaded", () => {
-        console.log("🎯 Mapa completamente cargado")
-        setIsLoading(false)
-        setError(null)
+      const waitForMapReady = () => {
+        return new Promise<void>((resolve) => {
+          const checkReady = () => {
+            if (map.getDiv() && map.getCenter()) {
+              resolve()
+            } else {
+              setTimeout(checkReady, 100)
+            }
+          }
+          checkReady()
+        })
+      }
 
-        // Agregar marcadores
-        setTimeout(() => {
-          addMarkers(map)
-        }, 100)
-      })
+      await waitForMapReady()
+      console.log("🎯 Mapa completamente listo")
 
-      // Fallback en caso de que tilesloaded no se dispare
+      setIsLoading(false)
+      setError(null)
+
+      // Agregar marcadores
       setTimeout(() => {
-        if (isLoading) {
-          console.log("⏰ Fallback: marcando mapa como listo")
-          setIsLoading(false)
-          setError(null)
-          addMarkers(map)
-        }
-      }, 3000)
+        addMarkers(map)
+      }, 200)
     } catch (err) {
       console.error("❌ Error creando el mapa:", err)
+      if (initAttempts.current < maxAttempts) {
+        setTimeout(initializeMap, 1000)
+        return
+      }
       setError(`Error al crear el mapa: ${err instanceof Error ? err.message : "Error desconocido"}`)
       setIsLoading(false)
     }
-  }, [containerReady, googleMapsReady, addMarkers, isLoading])
+  }
 
-  // Cargar Google Maps
+  // Cargar Google Maps y inicializar
   useEffect(() => {
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
     console.log("🔑 API Key disponible:", !!apiKey)
@@ -281,51 +270,50 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
       return
     }
 
+    // Función para inicializar cuando todo esté listo
+    const startInitialization = () => {
+      console.log("🚀 Iniciando proceso de inicialización...")
+      // Resetear intentos
+      initAttempts.current = 0
+      // Esperar un poco para que el DOM esté completamente renderizado
+      setTimeout(initializeMap, 100)
+    }
+
     // Si Google Maps ya está cargado
     if (window.google?.maps) {
       console.log("♻️ Google Maps ya está disponible")
-      setGoogleMapsReady(true)
+      startInitialization()
       return
     }
 
-    // Timeout de seguridad
-    const timeoutId = setTimeout(() => {
-      if (!googleMapsReady) {
-        console.error("⏰ Timeout cargando Google Maps")
-        setError("Timeout cargando Google Maps. Verifica tu conexión a internet.")
-        setIsLoading(false)
-      }
-    }, 20000)
-
     // Callback global único
-    const callbackName = `initGoogleMaps_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    const callbackName = `initMapaCoches_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
     window[callbackName as keyof Window] = () => {
       console.log("📞 Callback de Google Maps ejecutado")
-      clearTimeout(timeoutId)
-      setGoogleMapsReady(true)
+      startInitialization()
     }
 
     // Cargar script solo si no existe
     const existingScript = document.querySelector('script[src*="maps.googleapis.com"]')
     if (existingScript) {
-      console.log("🔄 Script de Google Maps ya existe")
-      // Esperar un poco y verificar si Google Maps está disponible
+      console.log("🔄 Script de Google Maps ya existe, esperando...")
+      // Verificar periódicamente si Google Maps está disponible
       const checkInterval = setInterval(() => {
         if (window.google?.maps) {
           clearInterval(checkInterval)
-          clearTimeout(timeoutId)
-          setGoogleMapsReady(true)
+          startInitialization()
         }
-      }, 100)
+      }, 200)
 
+      // Timeout de seguridad
       setTimeout(() => {
         clearInterval(checkInterval)
         if (!window.google?.maps) {
           setError("Google Maps no se cargó correctamente")
           setIsLoading(false)
         }
-      }, 5000)
+      }, 15000)
     } else {
       console.log("📝 Cargando script de Google Maps...")
       const script = document.createElement("script")
@@ -339,7 +327,6 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
 
       script.onerror = (e) => {
         console.error("❌ Error cargando script de Google Maps:", e)
-        clearTimeout(timeoutId)
         setError("Error al cargar Google Maps. Verifica tu API key y conexión a internet.")
         setIsLoading(false)
       }
@@ -348,34 +335,25 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
     }
 
     return () => {
-      clearTimeout(timeoutId)
       if (window[callbackName as keyof Window]) {
         delete window[callbackName as keyof Window]
       }
     }
-  }, [googleMapsReady])
-
-  // Inicializar mapa cuando todo esté listo
-  useEffect(() => {
-    if (containerReady && googleMapsReady && !mapInstanceRef.current) {
-      console.log("🚀 Todo listo, inicializando mapa...")
-      initializeMap()
-    }
-  }, [containerReady, googleMapsReady, initializeMap])
+  }, [])
 
   const handleRefresh = () => {
     window.location.reload()
   }
 
   const handleCenter = () => {
-    if (mapInstanceRef.current && coches.length > 0) {
+    if (mapInstance.current && coches.length > 0) {
       const cochesConUbicacion = coches.filter((c) => c.latitud && c.longitud && !c.donante)
       if (cochesConUbicacion.length > 0) {
         const bounds = new window.google.maps.LatLngBounds()
         cochesConUbicacion.forEach((coche) => {
           bounds.extend({ lat: Number(coche.latitud), lng: Number(coche.longitud) })
         })
-        mapInstanceRef.current.fitBounds(bounds)
+        mapInstance.current.fitBounds(bounds)
       }
     }
   }
@@ -414,9 +392,9 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
 Con ubicación: ${coches.filter((c) => c.latitud && c.longitud && !c.donante).length}
 API Key: ${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? "✓ Configurada" : "✗ No configurada"}
 Google Maps: ${typeof window !== "undefined" && window.google?.maps ? "✓ Disponible" : "✗ No disponible"}
-Contenedor: ${mapContainerRef.current ? "✓ Encontrado" : "✗ No encontrado"}
-Contenedor Listo: ${containerReady ? "✓" : "✗"}
-Google Maps Listo: ${googleMapsReady ? "✓" : "✗"}`}
+Contenedor: ${mapRef.current ? "✓ Encontrado" : "✗ No encontrado"}
+Intentos: ${initAttempts.current}/${maxAttempts}
+Debug: ${debugInfo}`}
               </pre>
             </div>
             <Button onClick={handleRefresh} className="mt-4">
@@ -441,7 +419,7 @@ Google Maps Listo: ${googleMapsReady ? "✓" : "✗"}`}
             Mapa de Vehículos
           </CardTitle>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handleCenter} disabled={isLoading || !mapInstanceRef.current}>
+            <Button variant="outline" size="sm" onClick={handleCenter} disabled={isLoading || !mapInstance.current}>
               <Navigation className="h-4 w-4 mr-2" />
               Centrar
             </Button>
@@ -462,8 +440,10 @@ Google Maps Listo: ${googleMapsReady ? "✓" : "✗"}`}
                 Total coches: {coches.length} | Con ubicación: {cochesConUbicacion.length}
               </p>
               <div className="mt-2 text-xs text-gray-500">
-                <div>Contenedor: {containerReady ? "✓" : "⏳"}</div>
-                <div>Google Maps: {googleMapsReady ? "✓" : "⏳"}</div>
+                <div>
+                  Intentos: {initAttempts.current}/{maxAttempts}
+                </div>
+                <div>Estado: {debugInfo}</div>
               </div>
             </div>
           </div>
@@ -497,19 +477,15 @@ Google Maps Listo: ${googleMapsReady ? "✓" : "✗"}`}
               </div>
             </div>
 
-            {/* Contenedor del mapa - FORZAR DIMENSIONES */}
+            {/* Contenedor del mapa - SIMPLIFICADO */}
             <div className="w-full bg-white rounded-lg border shadow-sm overflow-hidden">
               <div
-                ref={mapContainerRef}
-                id="google-map-container"
+                ref={mapRef}
+                className="w-full bg-gray-100"
                 style={{
-                  width: "100%",
                   height: "400px",
                   minHeight: "400px",
-                  minWidth: "300px",
-                  backgroundColor: "#f3f4f6",
                   display: "block",
-                  position: "relative",
                 }}
               />
             </div>
@@ -529,13 +505,13 @@ Google Maps Listo: ${googleMapsReady ? "✓" : "✗"}`}
               <details className="bg-gray-100 p-3 rounded text-xs">
                 <summary className="cursor-pointer font-semibold">Debug Info</summary>
                 <pre className="mt-2 whitespace-pre-wrap">
-                  {`Contenedor ref: ${mapContainerRef.current ? "✓" : "✗"}
-Contenedor listo: ${containerReady ? "✓" : "✗"}
-Google Maps listo: ${googleMapsReady ? "✓" : "✗"}
-Mapa instancia: ${mapInstanceRef.current ? "✓" : "✗"}
-Marcadores: ${markersRef.current.length}
+                  {`Contenedor ref: ${mapRef.current ? "✓" : "✗"}
+Mapa instancia: ${mapInstance.current ? "✓" : "✗"}
+Marcadores: ${markers.current.length}
+Intentos: ${initAttempts.current}/${maxAttempts}
 Cargando: ${isLoading ? "✓" : "✗"}
-Error: ${error || "Ninguno"}`}
+Error: ${error || "Ninguno"}
+Debug: ${debugInfo}`}
                 </pre>
               </details>
             )}
