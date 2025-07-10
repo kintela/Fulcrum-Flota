@@ -32,20 +32,21 @@ declare global {
 export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<any>(null)
+  const [isClient, setIsClient] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [markers, setMarkers] = useState<any[]>([])
   const [debugInfo, setDebugInfo] = useState<string>("")
-  const [isMounted, setIsMounted] = useState(false)
 
-  // Marcar componente como montado
+  // Asegurar que estamos en el cliente
   useEffect(() => {
-    setIsMounted(true)
-    return () => setIsMounted(false)
+    setIsClient(true)
   }, [])
 
   // Debug: Log initial data
   useEffect(() => {
+    if (!isClient) return
+
     const cochesConUbicacion = coches.filter((c) => c.latitud && c.longitud && !c.donante)
     console.log("MapaCoches - Datos recibidos:", {
       totalCoches: coches.length,
@@ -61,10 +62,10 @@ Total coches: ${coches.length}
 Con ubicación: ${cochesConUbicacion.length}
 No donantes: ${coches.filter((c) => !c.donante).length}
 API Key: ${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? "✓" : "✗"}
-Componente montado: ${isMounted ? "✓" : "✗"}
+Cliente: ${isClient ? "✓" : "✗"}
     `.trim(),
     )
-  }, [coches, isMounted])
+  }, [coches, isClient])
 
   // Crear mapa de empleados para búsqueda rápida
   const empleadosMap = new Map()
@@ -88,36 +89,20 @@ Componente montado: ${isMounted ? "✓" : "✗"}
     return null
   }
 
-  // Inicializar el mapa
+  // Inicializar el mapa solo en el cliente
   useEffect(() => {
-    if (!isMounted) return
-
-    let retryCount = 0
-    const maxRetries = 10
+    if (!isClient) return
 
     const initMap = () => {
-      console.log(`Intento ${retryCount + 1} de inicializar mapa...`)
+      console.log("Iniciando mapa...")
       console.log("mapRef.current:", !!mapRef.current)
       console.log("window.google:", !!window.google)
-      console.log("isMounted:", isMounted)
-
-      if (!isMounted) {
-        console.log("Componente no montado, cancelando...")
-        return
-      }
 
       if (!mapRef.current) {
-        console.log("mapRef.current no disponible, reintentando...")
-        retryCount++
-        if (retryCount < maxRetries) {
-          setTimeout(initMap, 100)
-          return
-        } else {
-          console.error("mapRef.current no está disponible después de múltiples intentos")
-          setError("Error: Contenedor del mapa no encontrado después de múltiples intentos")
-          setIsLoading(false)
-          return
-        }
+        console.error("mapRef.current no está disponible")
+        setError("Error: Contenedor del mapa no encontrado")
+        setIsLoading(false)
+        return
       }
 
       if (!window.google || !window.google.maps) {
@@ -165,7 +150,7 @@ Componente montado: ${isMounted ? "✓" : "✗"}
             setIsLoading(false)
             setError(null)
           }
-        }, 2000)
+        }, 3000)
       } catch (err) {
         console.error("Error creando mapa:", err)
         setError(`Error al crear el mapa: ${err instanceof Error ? err.message : "Error desconocido"}`)
@@ -189,8 +174,8 @@ Componente montado: ${isMounted ? "✓" : "✗"}
 
       if (window.google && window.google.maps) {
         console.log("Google Maps ya está cargado")
-        // Pequeño delay para asegurar que el componente esté montado
-        setTimeout(initMap, 100)
+        // Esperar un tick para asegurar que el DOM esté listo
+        setTimeout(initMap, 0)
         return
       }
 
@@ -202,8 +187,10 @@ Componente montado: ${isMounted ? "✓" : "✗"}
       // Crear callback global único
       window.initMapaCoches = () => {
         console.log("Callback de Google Maps ejecutado")
-        // Delay para asegurar que el componente esté completamente montado
-        setTimeout(initMap, 200)
+        // Usar requestAnimationFrame para asegurar que el DOM esté listo
+        requestAnimationFrame(() => {
+          setTimeout(initMap, 100)
+        })
       }
 
       // Remover script anterior si existe
@@ -234,7 +221,10 @@ Componente montado: ${isMounted ? "✓" : "✗"}
       document.head.appendChild(script)
     }
 
-    loadGoogleMaps()
+    // Usar requestAnimationFrame para asegurar que el componente esté completamente renderizado
+    requestAnimationFrame(() => {
+      loadGoogleMaps()
+    })
 
     // Cleanup
     return () => {
@@ -242,16 +232,16 @@ Componente montado: ${isMounted ? "✓" : "✗"}
         delete window.initMapaCoches
       }
     }
-  }, [isMounted])
+  }, [isClient])
 
   // Agregar marcadores cuando el mapa esté listo
   useEffect(() => {
-    if (isLoading || !mapInstanceRef.current || !window.google || !isMounted) {
+    if (!isClient || isLoading || !mapInstanceRef.current || !window.google) {
       console.log("Esperando mapa:", {
+        isClient,
         isLoading,
         map: !!mapInstanceRef.current,
         google: !!window.google,
-        isMounted,
       })
       return
     }
@@ -400,7 +390,7 @@ Componente montado: ${isMounted ? "✓" : "✗"}
         console.error("Error ajustando vista del mapa:", err)
       }
     }
-  }, [isLoading, coches, empleados, isMounted])
+  }, [isClient, isLoading, coches, empleados])
 
   const handleRefresh = () => {
     console.log("Refrescando página...")
@@ -422,6 +412,28 @@ Componente montado: ${isMounted ? "✓" : "✗"}
         console.error("Error centrando mapa:", err)
       }
     }
+  }
+
+  // No renderizar nada hasta que estemos en el cliente
+  if (!isClient) {
+    return (
+      <Card className="w-full">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MapPin className="h-5 w-5" />
+            Mapa de Vehículos
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center h-96 bg-gray-100 rounded-lg">
+            <div className="text-center">
+              <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-gray-400" />
+              <p className="text-gray-500">Inicializando mapa...</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    )
   }
 
   if (error) {
@@ -558,6 +570,8 @@ Componente montado: ${isMounted ? "✓" : "✗"}
                   <strong>Mapa ref disponible:</strong> {mapRef.current ? "✓" : "✗"}
                   <br />
                   <strong>Mapa instancia:</strong> {mapInstanceRef.current ? "✓" : "✗"}
+                  <br />
+                  <strong>Es cliente:</strong> {isClient ? "✓" : "✗"}
                 </div>
               </details>
             )}
