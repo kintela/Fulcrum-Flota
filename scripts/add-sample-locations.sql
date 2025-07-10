@@ -1,87 +1,57 @@
 -- Script para agregar ubicaciones de ejemplo a los coches existentes
--- Actualiza algunos coches con coordenadas de ciudades españolas
+-- Actualizar algunos coches con ubicaciones en España
 
 UPDATE coches 
 SET 
   latitud = 40.4168,
   longitud = -3.7038,
-  ultima_ubicacion = NOW(),
-  direccion_actual = 'Madrid, España'
+  direccion_actual = 'Madrid, España',
+  ultima_ubicacion = NOW()
 WHERE matricula IN (
-  SELECT matricula FROM coches 
+  SELECT matricula 
+  FROM coches 
   WHERE donante = false 
-  LIMIT 1
+  LIMIT 3
 );
 
 UPDATE coches 
 SET 
   latitud = 41.3851,
   longitud = 2.1734,
-  ultima_ubicacion = NOW(),
-  direccion_actual = 'Barcelona, España'
+  direccion_actual = 'Barcelona, España',
+  ultima_ubicacion = NOW()
 WHERE matricula IN (
-  SELECT matricula FROM coches 
+  SELECT matricula 
+  FROM coches 
   WHERE donante = false 
-  AND matricula NOT IN (
-    SELECT matricula FROM coches WHERE latitud IS NOT NULL
-  )
-  LIMIT 1
+  AND latitud IS NULL
+  LIMIT 2
 );
 
 UPDATE coches 
 SET 
   latitud = 37.3891,
   longitud = -5.9845,
-  ultima_ubicacion = NOW(),
-  direccion_actual = 'Sevilla, España'
+  direccion_actual = 'Sevilla, España',
+  ultima_ubicacion = NOW()
 WHERE matricula IN (
-  SELECT matricula FROM coches 
+  SELECT matricula 
+  FROM coches 
   WHERE donante = false 
-  AND matricula NOT IN (
-    SELECT matricula FROM coches WHERE latitud IS NOT NULL
-  )
-  LIMIT 1
+  AND latitud IS NULL
+  LIMIT 2
 );
 
 UPDATE coches 
 SET 
   latitud = 39.4699,
   longitud = -0.3763,
-  ultima_ubicacion = NOW(),
-  direccion_actual = 'Valencia, España'
+  direccion_actual = 'Valencia, España',
+  ultima_ubicacion = NOW()
 WHERE matricula IN (
-  SELECT matricula FROM coches 
+  SELECT matricula 
+  FROM coches 
   WHERE donante = false 
-  AND matricula NOT IN (
-    SELECT matricula FROM coches WHERE latitud IS NOT NULL
-  )
+  AND latitud IS NULL
   LIMIT 1
 );
-
-UPDATE coches 
-SET 
-  latitud = 43.2627,
-  longitud = -2.9253,
-  ultima_ubicacion = NOW(),
-  direccion_actual = 'Bilbao, España'
-WHERE matricula IN (
-  SELECT matricula FROM coches 
-  WHERE donante = false 
-  AND matricula NOT IN (
-    SELECT matricula FROM coches WHERE latitud IS NOT NULL
-  )
-  LIMIT 1
-);
-
--- Mostrar resultados
-SELECT 
-  matricula, 
-  marca, 
-  modelo, 
-  latitud, 
-  longitud, 
-  direccion_actual,
-  donante
-FROM coches 
-WHERE latitud IS NOT NULL 
-ORDER BY ultima_ubicacion DESC;
