@@ -3,10 +3,11 @@ import { Car, Users, AlertTriangle, CreditCard, Calendar } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import Link from "next/link"
 import { Suspense } from "react"
+import { MapaCoches } from "@/components/mapa-coches"
 
 async function getDashboardData() {
   try {
-    // Obtener estadísticas de coches
+    // Obtener estadísticas de coches CON ubicación
     const { data: coches, error: cochesError } = await supabase.from("coches").select("*")
 
     if (cochesError) {
@@ -19,17 +20,6 @@ async function getDashboardData() {
     if (empleadosError) {
       console.error("Error fetching empleados:", empleadosError)
     }
-
-    // Obtener coches recientes
-    // const { data: cochesRecientes, error: recientesError } = await supabase
-    //   .from("coches")
-    //   .select("*")
-    //   .order("created_at", { ascending: false })
-    //   .limit(3)
-
-    // if (recientesError) {
-    //   console.error("Error fetching coches recientes:", recientesError)
-    // }
 
     // Obtener TODOS los registros de ITVs con información del vehículo
     const { data: allItvs, error: itvsError } = await supabase
@@ -846,96 +836,6 @@ function AlquilerAlertsSection({ alquilerAlerts, empleados }: { alquilerAlerts: 
   )
 }
 
-// function RecentVehicles({ cochesRecientes, empleados }: { cochesRecientes: any[]; empleados: any[] }) {
-//   // Crear mapa de empleados para búsqueda rápida
-//   const empleadosMap = new Map()
-//   empleados.forEach((empleado) => {
-//     empleadosMap.set(empleado.id, empleado)
-//   })
-
-//   if (cochesRecientes.length === 0) {
-//     return (
-//       <Card className="mb-8">
-//         <CardContent className="p-6">
-//           <h2 className="text-2xl font-bold mb-4">Vehículos Recientes</h2>
-//           <div className="text-center py-8">
-//             <Car className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-//             <p className="text-gray-500 mb-4">No hay vehículos registrados</p>
-//             <Link
-//               href="/coches/nuevo"
-//               className="inline-flex items-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md"
-//             >
-//               <Car className="h-5 w-5 mr-2" />
-//               Agregar Primer Vehículo
-//             </Link>
-//           </div>
-//         </CardContent>
-//       </Card>
-//     )
-//   }
-
-//   return (
-//     <Card className="mb-8">
-//       <CardContent className="p-6">
-//         <h2 className="text-2xl font-bold mb-4">Vehículos Recientes</h2>
-//         <div className="space-y-3">
-//           {cochesRecientes.map((coche) => {
-//             // Buscar el empleado asociado si asignadoa es un número
-//             let empleadoInfo = null
-//             if (coche.asignadoa && !isNaN(Number(coche.asignadoa))) {
-//               empleadoInfo = empleadosMap.get(Number(coche.asignadoa))
-//             }
-
-//             const isAssigned =
-//               empleadoInfo ||
-//               (coche.asignadoa &&
-//                 ((typeof coche.asignadoa === "string" && coche.asignadoa.trim() !== "") ||
-//                   typeof coche.asignadoa !== "string"))
-
-//             return (
-//               <div
-//                 key={coche.matricula}
-//                 className="flex justify-between items-center p-3 border rounded hover:bg-gray-50"
-//               >
-//                 <div>
-//                   <h3 className="font-semibold">
-//                     {coche.matricula} - {coche.marca} {coche.modelo}
-//                   </h3>
-//                   <p className="text-gray-600 text-sm">
-//                     {empleadoInfo
-//                       ? `Asignado a: ${empleadoInfo.nombre} ${empleadoInfo.apellidos}`
-//                       : coche.asignadoa && typeof coche.asignadoa === "string" && coche.asignadoa.trim() !== ""
-//                         ? `Asignado a: ${coche.asignadoa}`
-//                         : coche.alquiler
-//                           ? "Vehículo de alquiler"
-//                           : "Disponible para asignación"}
-//                   </p>
-//                 </div>
-//                 <span
-//                   className={`px-2 py-1 rounded text-sm ${
-//                     isAssigned
-//                       ? "bg-green-100 text-green-800"
-//                       : coche.alquiler
-//                         ? "bg-yellow-100 text-yellow-800"
-//                         : "bg-blue-100 text-blue-800"
-//                   }`}
-//                 >
-//                   {isAssigned ? "Asignado" : coche.alquiler ? "Alquiler" : "Disponible"}
-//                 </span>
-//               </div>
-//             )
-//           })}
-//           <div className="text-center mt-4">
-//             <Link href="/coches" className="text-blue-600 hover:underline">
-//               Ver todos los vehículos
-//             </Link>
-//           </div>
-//         </div>
-//       </CardContent>
-//     </Card>
-//   )
-// }
-
 export default async function HomePage() {
   const { coches, empleados, itvAlerts, solredAlerts, alquilerAlerts } = await getDashboardData()
 
@@ -969,9 +869,10 @@ export default async function HomePage() {
           <AlquilerAlertsSection alquilerAlerts={alquilerAlerts} empleados={empleados} />
         </Suspense>
 
-        {/* <Suspense fallback={<div>Cargando vehículos recientes...</div>}>
-          <RecentVehicles cochesRecientes={cochesRecientes} empleados={empleados} />
-        </Suspense> */}
+        {/* Mapa de vehículos */}
+        <Suspense fallback={<div>Cargando mapa...</div>}>
+          <MapaCoches coches={coches} empleados={empleados} />
+        </Suspense>
       </div>
     </div>
   )
