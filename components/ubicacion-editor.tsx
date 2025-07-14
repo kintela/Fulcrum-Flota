@@ -19,7 +19,7 @@ interface UbicacionEditorProps {
 declare global {
   interface Window {
     google: any
-    initEditorCallback?: () => void
+    googleMapsLoaded?: boolean
   }
 }
 
@@ -35,7 +35,6 @@ export function UbicacionEditor({
   const marker = useRef<any>(null)
   const geocoder = useRef<any>(null)
 
-  const [isClient, setIsClient] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
@@ -45,11 +44,6 @@ export function UbicacionEditor({
   const [latitud, setLatitud] = useState<string>(initialLatitud?.toString() || "")
   const [longitud, setLongitud] = useState<string>(initialLongitud?.toString() || "")
   const [direccion, setDireccion] = useState<string>(initialDireccion || "")
-
-  // Verificar que estamos en el cliente
-  useEffect(() => {
-    setIsClient(true)
-  }, [])
 
   // Función para obtener dirección desde coordenadas
   const geocodeLatLng = async (lat: number, lng: number) => {
@@ -107,9 +101,11 @@ export function UbicacionEditor({
     mapInstance.current.setZoom(15)
   }
 
-  // Función para crear el editor
-  const createEditor = () => {
-    console.log("🗺️ Creando editor...")
+  // Función para inicializar el editor
+  const initializeEditor = () => {
+    console.log("🗺️ Inicializando editor...")
+    console.log("📦 Contenedor disponible:", !!mapRef.current)
+    console.log("🌍 Google Maps disponible:", !!(window.google && window.google.maps))
 
     if (!mapRef.current) {
       console.error("❌ Editor - Contenedor no disponible")
@@ -175,10 +171,8 @@ export function UbicacionEditor({
     }
   }
 
-  // Cargar Google Maps
+  // Efecto principal
   useEffect(() => {
-    if (!isClient) return
-
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
     if (!apiKey) {
@@ -190,74 +184,74 @@ export function UbicacionEditor({
     // Si Google Maps ya está disponible
     if (window.google?.maps) {
       console.log("♻️ Editor - Google Maps ya disponible")
-      const checkContainer = () => {
-        if (mapRef.current) {
-          console.log("📦 Editor - Contenedor encontrado")
-          createEditor()
-        } else {
-          console.log("⏳ Editor - Esperando contenedor...")
-          setTimeout(checkContainer, 100)
-        }
-      }
-      checkContainer()
+      // Usar requestAnimationFrame para asegurar que el DOM esté listo
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          initializeEditor()
+        })
+      })
       return
     }
 
-    // Callback global
-    window.initEditorCallback = () => {
-      console.log("📞 Editor - Callback ejecutado")
-      const checkContainer = () => {
-        if (mapRef.current) {
-          console.log("📦 Editor - Contenedor encontrado después del callback")
-          createEditor()
-        } else {
-          console.log("⏳ Editor - Esperando contenedor después del callback...")
-          setTimeout(checkContainer, 100)
+    // Si ya se está cargando, esperar
+    if (window.googleMapsLoaded) {
+      console.log("🔄 Editor - Google Maps ya se está cargando...")
+      const checkInterval = setInterval(() => {
+        if (window.google?.maps) {
+          clearInterval(checkInterval)
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              initializeEditor()
+            })
+          })
         }
-      }
-      checkContainer()
+      }, 100)
+
+      setTimeout(() => {
+        clearInterval(checkInterval)
+        if (!window.google?.maps) {
+          setError("Timeout esperando Google Maps")
+          setIsLoading(false)
+        }
+      }, 10000)
+      return
+    }
+
+    window.googleMapsLoaded = true
+
+    // Función de callback
+    const callbackName = "initGoogleMapsEditorCallback"
+    ;(window as any)[callbackName] = () => {
+      console.log("📞 Editor - Callback ejecutado")
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          initializeEditor()
+        })
+      })
     }
 
     // Cargar script
-    const existingScript = document.querySelector('script[src*="maps.googleapis.com"]')
-    if (!existingScript) {
-      console.log("📝 Editor - Cargando Google Maps...")
-      const script = document.createElement("script")
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initEditorCallback`
-      script.async = true
-      script.defer = true
+    console.log("📝 Editor - Cargando Google Maps...")
+    const script = document.createElement("script")
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=${callbackName}&loading=async`
+    script.async = true
+    script.defer = true
 
-      script.onerror = () => {
-        setError("Error al cargar Google Maps")
-        setIsLoading(false)
-      }
-
-      document.head.appendChild(script)
-    } else {
-      // Script ya existe
-      const checkGoogleMaps = () => {
-        if (window.google?.maps) {
-          const checkContainer = () => {
-            if (mapRef.current) {
-              createEditor()
-            } else {
-              setTimeout(checkContainer, 100)
-            }
-          }
-          checkContainer()
-        } else {
-          setTimeout(checkGoogleMaps, 100)
-        }
-      }
-      checkGoogleMaps()
+    script.onerror = () => {
+      console.error("❌ Editor - Error cargando Google Maps")
+      setError("Error al cargar Google Maps")
+      setIsLoading(false)
+      window.googleMapsLoaded = false
     }
+
+    document.head.appendChild(script)
 
     return () => {
-      if (window.initEditorCallback) {
-        delete window.initEditorCallback
+      if ((window as any)[callbackName]) {
+        delete (window as any)[callbackName]
       }
     }
-  }, [isClient])
+  }, [])
 
   // Función para obtener ubicación actual
   const handleGetCurrentLocation = () => {
@@ -411,25 +405,6 @@ export function UbicacionEditor({
     }
   }
 
-  // No renderizar nada hasta que estemos en el cliente
-  if (!isClient) {
-    return (
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MapPin className="h-5 w-5" />
-            Editor de Ubicación
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center h-64 bg-gray-100 rounded-lg">
-            <RefreshCw className="h-6 w-6 animate-spin text-gray-400" />
-          </div>
-        </CardContent>
-      </Card>
-    )
-  }
-
   if (error) {
     return (
       <Card className="w-full">
@@ -446,8 +421,8 @@ export function UbicacionEditor({
             <div className="bg-gray-100 p-4 rounded-lg mb-4 text-left">
               <h4 className="font-semibold mb-2">Debug Info:</h4>
               <pre className="text-xs text-gray-600">
-                {`Cliente: ${isClient ? "✓" : "✗"}
-Contenedor ref: ${mapRef.current ? "✓" : "✗"}`}
+                {`Contenedor ref: ${mapRef.current ? "✓" : "✗"}
+Google Maps Loaded: ${window.googleMapsLoaded ? "✓" : "✗"}`}
               </pre>
             </div>
             <Button onClick={() => window.location.reload()}>Reintentar</Button>

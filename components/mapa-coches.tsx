@@ -25,7 +25,7 @@ interface MapaCochesProps {
 declare global {
   interface Window {
     google: any
-    initMapCallback?: () => void
+    googleMapsLoaded?: boolean
   }
 }
 
@@ -33,11 +33,8 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstance = useRef<any>(null)
   const markers = useRef<any[]>([])
-
-  const [isClient, setIsClient] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [mapReady, setMapReady] = useState(false)
 
   // Crear mapa de empleados
   const empleadosMap = new Map()
@@ -56,11 +53,6 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
     }
     return null
   }
-
-  // Verificar que estamos en el cliente
-  useEffect(() => {
-    setIsClient(true)
-  }, [])
 
   // Función para agregar marcadores
   const addMarkers = (map: any) => {
@@ -153,9 +145,11 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
     }
   }
 
-  // Función para crear el mapa
-  const createMap = () => {
-    console.log("🗺️ Creando mapa...")
+  // Función para inicializar el mapa
+  const initializeMap = () => {
+    console.log("🗺️ Inicializando mapa...")
+    console.log("📦 Contenedor disponible:", !!mapRef.current)
+    console.log("🌍 Google Maps disponible:", !!(window.google && window.google.maps))
 
     if (!mapRef.current) {
       console.error("❌ Contenedor no disponible")
@@ -192,7 +186,6 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
       // Esperar a que el mapa esté listo
       window.google.maps.event.addListenerOnce(map, "idle", () => {
         console.log("🎯 Mapa completamente listo")
-        setMapReady(true)
         setIsLoading(false)
         setError(null)
         addMarkers(map)
@@ -200,9 +193,8 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
 
       // Fallback
       setTimeout(() => {
-        if (!mapReady) {
+        if (isLoading) {
           console.log("⏰ Fallback: marcando como listo")
-          setMapReady(true)
           setIsLoading(false)
           setError(null)
           addMarkers(map)
@@ -215,10 +207,8 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
     }
   }
 
-  // Cargar Google Maps
+  // Efecto principal
   useEffect(() => {
-    if (!isClient) return
-
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
     console.log("🔑 API Key disponible:", !!apiKey)
 
@@ -231,76 +221,58 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
     // Si Google Maps ya está disponible
     if (window.google?.maps) {
       console.log("♻️ Google Maps ya disponible")
-      // Esperar a que el contenedor esté en el DOM
-      const checkContainer = () => {
-        if (mapRef.current) {
-          console.log("📦 Contenedor encontrado, creando mapa...")
-          createMap()
-        } else {
-          console.log("⏳ Esperando contenedor...")
-          setTimeout(checkContainer, 100)
-        }
-      }
-      checkContainer()
+      // Usar requestAnimationFrame para asegurar que el DOM esté listo
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          initializeMap()
+        })
+      })
       return
     }
 
-    // Callback global
-    window.initMapCallback = () => {
+    // Marcar que estamos cargando Google Maps
+    if (window.googleMapsLoaded) {
+      console.log("🔄 Google Maps ya se está cargando...")
+      return
+    }
+
+    window.googleMapsLoaded = true
+
+    // Función de callback
+    const callbackName = "initGoogleMapsCallback"
+    ;(window as any)[callbackName] = () => {
       console.log("📞 Callback ejecutado")
-      // Esperar a que el contenedor esté disponible
-      const checkContainer = () => {
-        if (mapRef.current) {
-          console.log("📦 Contenedor encontrado después del callback")
-          createMap()
-        } else {
-          console.log("⏳ Esperando contenedor después del callback...")
-          setTimeout(checkContainer, 100)
-        }
-      }
-      checkContainer()
+      // Usar requestAnimationFrame para asegurar que el DOM esté listo
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          initializeMap()
+        })
+      })
     }
 
     // Cargar script
-    const existingScript = document.querySelector('script[src*="maps.googleapis.com"]')
-    if (!existingScript) {
-      console.log("📝 Cargando Google Maps...")
-      const script = document.createElement("script")
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initMapCallback`
-      script.async = true
-      script.defer = true
+    console.log("📝 Cargando Google Maps...")
+    const script = document.createElement("script")
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=${callbackName}&loading=async`
+    script.async = true
+    script.defer = true
 
-      script.onerror = () => {
-        setError("Error al cargar Google Maps")
-        setIsLoading(false)
-      }
-
-      document.head.appendChild(script)
-    } else {
-      // Script ya existe
-      const checkGoogleMaps = () => {
-        if (window.google?.maps) {
-          const checkContainer = () => {
-            if (mapRef.current) {
-              createMap()
-            } else {
-              setTimeout(checkContainer, 100)
-            }
-          }
-          checkContainer()
-        } else {
-          setTimeout(checkGoogleMaps, 100)
-        }
-      }
-      checkGoogleMaps()
+    script.onerror = () => {
+      console.error("❌ Error cargando Google Maps")
+      setError("Error al cargar Google Maps")
+      setIsLoading(false)
+      window.googleMapsLoaded = false
     }
+
+    document.head.appendChild(script)
 
     return () => {
-      if (window.initMapCallback) {
-        delete window.initMapCallback
+      // Cleanup
+      if ((window as any)[callbackName]) {
+        delete (window as any)[callbackName]
       }
     }
-  }, [isClient])
+  }, []) // Solo ejecutar una vez
 
   const handleRefresh = () => {
     window.location.reload()
@@ -317,28 +289,6 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
         mapInstance.current.fitBounds(bounds)
       }
     }
-  }
-
-  // No renderizar nada hasta que estemos en el cliente
-  if (!isClient) {
-    return (
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MapPin className="h-5 w-5" />
-            Mapa de Vehículos
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center h-96 bg-gray-100 rounded-lg">
-            <div className="text-center">
-              <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-gray-400" />
-              <p className="text-gray-500">Inicializando...</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    )
   }
 
   if (error) {
@@ -375,7 +325,6 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
 Con ubicación: ${coches.filter((c) => c.latitud && c.longitud && !c.donante).length}
 API Key: ${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? "✓ Configurada" : "✗ No configurada"}
 Google Maps: ${typeof window !== "undefined" && window.google?.maps ? "✓ Disponible" : "✗ No disponible"}
-Cliente: ${isClient ? "✓" : "✗"}
 Contenedor ref: ${mapRef.current ? "✓ Encontrado" : "✗ No encontrado"}`}
               </pre>
             </div>
@@ -453,7 +402,7 @@ Contenedor ref: ${mapRef.current ? "✓ Encontrado" : "✗ No encontrado"}`}
               </div>
             </div>
 
-            {/* Contenedor del mapa - RENDERIZADO CONDICIONAL */}
+            {/* Contenedor del mapa */}
             <div className="w-full bg-white rounded-lg border shadow-sm overflow-hidden">
               <div
                 ref={mapRef}
@@ -483,13 +432,12 @@ Contenedor ref: ${mapRef.current ? "✓ Encontrado" : "✗ No encontrado"}`}
               <details className="bg-gray-100 p-3 rounded text-xs">
                 <summary className="cursor-pointer font-semibold">Debug Info</summary>
                 <pre className="mt-2 whitespace-pre-wrap">
-                  {`Cliente: ${isClient ? "✓" : "✗"}
-Contenedor ref: ${mapRef.current ? "✓" : "✗"}
+                  {`Contenedor ref: ${mapRef.current ? "✓" : "✗"}
 Mapa instancia: ${mapInstance.current ? "✓" : "✗"}
-Mapa listo: ${mapReady ? "✓" : "✗"}
 Marcadores: ${markers.current.length}
 Cargando: ${isLoading ? "✓" : "✗"}
-Error: ${error || "Ninguno"}`}
+Error: ${error || "Ninguno"}
+Google Maps Loaded: ${window.googleMapsLoaded ? "✓" : "✗"}`}
                 </pre>
               </details>
             )}
