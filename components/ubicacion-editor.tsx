@@ -34,8 +34,8 @@ export function UbicacionEditor({
   const mapInstance = useRef<any>(null)
   const marker = useRef<any>(null)
   const geocoder = useRef<any>(null)
+  const initAttempts = useRef(0)
 
-  const [isMounted, setIsMounted] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [googleMapsReady, setGoogleMapsReady] = useState(false)
@@ -46,12 +46,6 @@ export function UbicacionEditor({
   const [latitud, setLatitud] = useState<string>(initialLatitud?.toString() || "")
   const [longitud, setLongitud] = useState<string>(initialLongitud?.toString() || "")
   const [direccion, setDireccion] = useState<string>(initialDireccion || "")
-
-  // Marcar como montado
-  useEffect(() => {
-    setIsMounted(true)
-    console.log("🔄 Editor montado")
-  }, [])
 
   // Función para obtener dirección desde coordenadas
   const geocodeLatLng = async (lat: number, lng: number) => {
@@ -109,23 +103,27 @@ export function UbicacionEditor({
     mapInstance.current.setZoom(15)
   }
 
-  // Función para inicializar el editor
-  const initializeEditor = () => {
-    console.log("🗺️ Inicializando editor...")
-    console.log("📦 Contenedor disponible:", !!mapRef.current)
-    console.log("🌍 Google Maps disponible:", !!(window.google && window.google.maps))
-    console.log("🔄 Editor montado:", isMounted)
-
-    if (!isMounted) {
-      console.log("⏳ Esperando que el editor esté montado...")
-      return
-    }
+  // Función para intentar inicializar el editor con reintentos
+  const attemptEditorInitialization = () => {
+    initAttempts.current += 1
+    console.log(`🗺️ Editor - Intento de inicialización #${initAttempts.current}`)
+    console.log("📦 Editor - Contenedor disponible:", !!mapRef.current)
+    console.log("🌍 Editor - Google Maps disponible:", !!(window.google && window.google.maps))
 
     if (!mapRef.current) {
-      console.error("❌ Editor - Contenedor no disponible")
-      setError("Contenedor del editor no disponible")
-      setIsLoading(false)
-      return
+      console.log("❌ Editor - Contenedor no disponible")
+
+      // Reintentar hasta 10 veces con intervalos crecientes
+      if (initAttempts.current < 10) {
+        const delay = initAttempts.current * 200 // 200ms, 400ms, 600ms, etc.
+        console.log(`⏳ Editor - Reintentando en ${delay}ms...`)
+        setTimeout(attemptEditorInitialization, delay)
+        return
+      } else {
+        setError("Contenedor del editor no disponible después de múltiples intentos")
+        setIsLoading(false)
+        return
+      }
     }
 
     if (!window.google?.maps) {
@@ -199,6 +197,7 @@ export function UbicacionEditor({
     if (window.google?.maps) {
       console.log("♻️ Editor - Google Maps ya disponible")
       setGoogleMapsReady(true)
+      setTimeout(attemptEditorInitialization, 100)
       return
     }
 
@@ -209,6 +208,7 @@ export function UbicacionEditor({
         if (window.google?.maps) {
           clearInterval(checkInterval)
           setGoogleMapsReady(true)
+          setTimeout(attemptEditorInitialization, 100)
         }
       }, 100)
 
@@ -229,6 +229,7 @@ export function UbicacionEditor({
     ;(window as any)[callbackName] = () => {
       console.log("📞 Editor - Callback ejecutado")
       setGoogleMapsReady(true)
+      setTimeout(attemptEditorInitialization, 100)
     }
 
     // Cargar script
@@ -253,17 +254,6 @@ export function UbicacionEditor({
       }
     }
   }, [])
-
-  // Efecto para inicializar el editor cuando todo esté listo
-  useEffect(() => {
-    if (isMounted && googleMapsReady) {
-      console.log("🚀 Editor - Todo listo, inicializando...")
-      // Pequeño delay para asegurar que el DOM esté completamente renderizado
-      setTimeout(() => {
-        initializeEditor()
-      }, 100)
-    }
-  }, [isMounted, googleMapsReady])
 
   // Función para obtener ubicación actual
   const handleGetCurrentLocation = () => {
@@ -417,35 +407,6 @@ export function UbicacionEditor({
     }
   }
 
-  if (error) {
-    return (
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MapPin className="h-5 w-5" />
-            Editor de Ubicación
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-8">
-            <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
-            <p className="text-red-600 mb-4">{error}</p>
-            <div className="bg-gray-100 p-4 rounded-lg mb-4 text-left">
-              <h4 className="font-semibold mb-2">Debug Info:</h4>
-              <pre className="text-xs text-gray-600">
-                {`Contenedor ref: ${mapRef.current ? "✓" : "✗"}
-Montado: ${isMounted ? "✓" : "✗"}
-Google Maps Ready: ${googleMapsReady ? "✓" : "✗"}
-Google Maps Loaded: ${window.googleMapsLoaded ? "✓" : "✗"}`}
-              </pre>
-            </div>
-            <Button onClick={() => window.location.reload()}>Reintentar</Button>
-          </div>
-        </CardContent>
-      </Card>
-    )
-  }
-
   return (
     <Card className="w-full">
       <CardHeader>
@@ -520,11 +481,11 @@ Google Maps Loaded: ${window.googleMapsLoaded ? "✓" : "✗"}`}
           )}
         </div>
 
-        {/* Mapa */}
+        {/* Mapa - SIEMPRE RENDERIZADO */}
         <div className="w-full bg-white rounded-lg border shadow-sm overflow-hidden">
           <div
             ref={mapRef}
-            className="w-full bg-gray-100"
+            className="w-full bg-gray-100 relative"
             style={{
               height: "400px",
               minHeight: "400px",
@@ -533,14 +494,35 @@ Google Maps Loaded: ${window.googleMapsLoaded ? "✓" : "✗"}`}
               position: "relative",
             }}
           >
+            {/* Overlay de carga */}
             {isLoading && (
-              <div className="flex items-center justify-center h-full">
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-100 z-10">
                 <div className="text-center">
                   <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-gray-400" />
                   <p className="text-gray-500 text-sm">Cargando editor...</p>
                   <p className="text-xs text-gray-400 mt-1">
-                    Montado: {isMounted ? "✓" : "✗"} | Google Maps: {googleMapsReady ? "✓" : "✗"}
+                    Intentos: {initAttempts.current} | Google Maps: {googleMapsReady ? "✓" : "✗"}
                   </p>
+                </div>
+              </div>
+            )}
+
+            {/* Overlay de error */}
+            {error && (
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-100 z-10">
+                <div className="text-center p-4">
+                  <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
+                  <p className="text-red-600 mb-4">{error}</p>
+                  <div className="bg-gray-100 p-4 rounded-lg mb-4 text-left">
+                    <h4 className="font-semibold mb-2">Debug Info:</h4>
+                    <pre className="text-xs text-gray-600">
+                      {`Contenedor ref: ${mapRef.current ? "✓" : "✗"}
+Google Maps Ready: ${googleMapsReady ? "✓" : "✗"}
+Google Maps Loaded: ${window.googleMapsLoaded ? "✓" : "✗"}
+Intentos: ${initAttempts.current}`}
+                    </pre>
+                  </div>
+                  <Button onClick={() => window.location.reload()}>Reintentar</Button>
                 </div>
               </div>
             )}

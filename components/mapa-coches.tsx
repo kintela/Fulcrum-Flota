@@ -33,8 +33,8 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstance = useRef<any>(null)
   const markers = useRef<any[]>([])
+  const initAttempts = useRef(0)
 
-  const [isMounted, setIsMounted] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [googleMapsReady, setGoogleMapsReady] = useState(false)
@@ -56,12 +56,6 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
     }
     return null
   }
-
-  // Marcar como montado
-  useEffect(() => {
-    setIsMounted(true)
-    console.log("🔄 Componente montado")
-  }, [])
 
   // Función para agregar marcadores
   const addMarkers = (map: any) => {
@@ -154,23 +148,27 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
     }
   }
 
-  // Función para inicializar el mapa
-  const initializeMap = () => {
-    console.log("🗺️ Inicializando mapa...")
+  // Función para intentar inicializar el mapa con reintentos
+  const attemptMapInitialization = () => {
+    initAttempts.current += 1
+    console.log(`🗺️ Intento de inicialización #${initAttempts.current}`)
     console.log("📦 Contenedor disponible:", !!mapRef.current)
     console.log("🌍 Google Maps disponible:", !!(window.google && window.google.maps))
-    console.log("🔄 Componente montado:", isMounted)
-
-    if (!isMounted) {
-      console.log("⏳ Esperando que el componente esté montado...")
-      return
-    }
 
     if (!mapRef.current) {
-      console.error("❌ Contenedor no disponible")
-      setError("Contenedor del mapa no disponible")
-      setIsLoading(false)
-      return
+      console.log("❌ Contenedor no disponible")
+
+      // Reintentar hasta 10 veces con intervalos crecientes
+      if (initAttempts.current < 10) {
+        const delay = initAttempts.current * 200 // 200ms, 400ms, 600ms, etc.
+        console.log(`⏳ Reintentando en ${delay}ms...`)
+        setTimeout(attemptMapInitialization, delay)
+        return
+      } else {
+        setError("Contenedor del mapa no disponible después de múltiples intentos")
+        setIsLoading(false)
+        return
+      }
     }
 
     if (!window.google?.maps) {
@@ -237,6 +235,8 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
     if (window.google?.maps) {
       console.log("♻️ Google Maps ya disponible")
       setGoogleMapsReady(true)
+      // Intentar inicializar inmediatamente
+      setTimeout(attemptMapInitialization, 100)
       return
     }
 
@@ -248,6 +248,7 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
         if (window.google?.maps) {
           clearInterval(checkInterval)
           setGoogleMapsReady(true)
+          setTimeout(attemptMapInitialization, 100)
         }
       }, 100)
 
@@ -268,6 +269,7 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
     ;(window as any)[callbackName] = () => {
       console.log("📞 Callback ejecutado")
       setGoogleMapsReady(true)
+      setTimeout(attemptMapInitialization, 100)
     }
 
     // Cargar script
@@ -294,17 +296,6 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
     }
   }, [])
 
-  // Efecto para inicializar el mapa cuando todo esté listo
-  useEffect(() => {
-    if (isMounted && googleMapsReady) {
-      console.log("🚀 Todo listo, inicializando mapa...")
-      // Pequeño delay para asegurar que el DOM esté completamente renderizado
-      setTimeout(() => {
-        initializeMap()
-      }, 100)
-    }
-  }, [isMounted, googleMapsReady])
-
   const handleRefresh = () => {
     window.location.reload()
   }
@@ -320,54 +311,6 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
         mapInstance.current.fitBounds(bounds)
       }
     }
-  }
-
-  if (error) {
-    return (
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MapPin className="h-5 w-5" />
-            Mapa de Vehículos
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-8">
-            <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
-            <p className="text-red-600 mb-4 font-medium">{error}</p>
-            <div className="text-sm text-gray-500 mb-4">
-              <p>
-                <strong>Posibles soluciones:</strong>
-              </p>
-              <ul className="text-left mt-2 space-y-1">
-                <li>• Verifica que NEXT_PUBLIC_GOOGLE_MAPS_API_KEY esté configurada</li>
-                <li>• Asegúrate de que las APIs estén habilitadas en Google Cloud Console:</li>
-                <li>&nbsp;&nbsp;&nbsp;- Maps JavaScript API</li>
-                <li>&nbsp;&nbsp;&nbsp;- Places API</li>
-                <li>&nbsp;&nbsp;&nbsp;- Geocoding API</li>
-                <li>• Verifica que la API key tenga permisos para tu dominio</li>
-                <li>• Intenta refrescar la página</li>
-              </ul>
-            </div>
-            <div className="bg-gray-100 p-4 rounded-lg mb-4 text-left">
-              <h4 className="font-semibold mb-2">Información de Debug:</h4>
-              <pre className="text-xs text-gray-600">
-                {`Total coches: ${coches.length}
-Con ubicación: ${coches.filter((c) => c.latitud && c.longitud && !c.donante).length}
-API Key: ${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? "✓ Configurada" : "✗ No configurada"}
-Google Maps: ${typeof window !== "undefined" && window.google?.maps ? "✓ Disponible" : "✗ No disponible"}
-Contenedor ref: ${mapRef.current ? "✓ Encontrado" : "✗ No encontrado"}
-Montado: ${isMounted ? "✓" : "✗"}
-Google Maps Ready: ${googleMapsReady ? "✓" : "✗"}`}
-              </pre>
-            </div>
-            <Button onClick={handleRefresh} className="mt-4">
-              Reintentar
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    )
   }
 
   const cochesConUbicacion = coches.filter((c) => c.latitud && c.longitud && !c.donante)
@@ -395,92 +338,132 @@ Google Maps Ready: ${googleMapsReady ? "✓" : "✗"}`}
         </div>
       </CardHeader>
       <CardContent>
-        {isLoading ? (
-          <div className="flex items-center justify-center h-96 bg-gray-100 rounded-lg">
+        <div className="space-y-4">
+          {/* Estadísticas */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
             <div className="text-center">
-              <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-gray-400" />
-              <p className="text-gray-500 mb-2">Cargando mapa...</p>
-              <p className="text-xs text-gray-400">
-                Total coches: {coches.length} | Con ubicación: {cochesConUbicacion.length}
-              </p>
-              <p className="text-xs text-gray-400 mt-1">
-                Montado: {isMounted ? "✓" : "✗"} | Google Maps: {googleMapsReady ? "✓" : "✗"}
-              </p>
+              <div className="text-2xl font-bold text-blue-600">{cochesConUbicacion.length}</div>
+              <div className="text-sm text-gray-600">Total con ubicación</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-green-600">{cochesAsignados.length}</div>
+              <div className="text-sm text-gray-600">Asignados</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-blue-500">{cochesDisponibles.length}</div>
+              <div className="text-sm text-gray-600">Disponibles</div>
             </div>
           </div>
-        ) : (
-          <div className="space-y-4">
-            {/* Estadísticas */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-blue-600">{cochesConUbicacion.length}</div>
-                <div className="text-sm text-gray-600">Total con ubicación</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-green-600">{cochesAsignados.length}</div>
-                <div className="text-sm text-gray-600">Asignados</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-blue-500">{cochesDisponibles.length}</div>
-                <div className="text-sm text-gray-600">Disponibles</div>
-              </div>
+
+          {/* Leyenda */}
+          <div className="flex items-center justify-center gap-6 text-sm text-gray-600 bg-white p-3 rounded-lg border">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
+              <span>Disponible</span>
             </div>
-
-            {/* Leyenda */}
-            <div className="flex items-center justify-center gap-6 text-sm text-gray-600 bg-white p-3 rounded-lg border">
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
-                <span>Disponible</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 bg-green-500 rounded-full"></div>
-                <span>Asignado</span>
-              </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-green-500 rounded-full"></div>
+              <span>Asignado</span>
             </div>
+          </div>
 
-            {/* Contenedor del mapa */}
-            <div className="w-full bg-white rounded-lg border shadow-sm overflow-hidden">
-              <div
-                ref={mapRef}
-                className="w-full bg-gray-100"
-                style={{
-                  height: "400px",
-                  minHeight: "400px",
-                  width: "100%",
-                  display: "block",
-                  position: "relative",
-                }}
-              />
+          {/* Contenedor del mapa - SIEMPRE RENDERIZADO */}
+          <div className="w-full bg-white rounded-lg border shadow-sm overflow-hidden">
+            <div
+              ref={mapRef}
+              className="w-full bg-gray-100 relative"
+              style={{
+                height: "400px",
+                minHeight: "400px",
+                width: "100%",
+                display: "block",
+                position: "relative",
+              }}
+            >
+              {/* Overlay de carga */}
+              {isLoading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-100 z-10">
+                  <div className="text-center">
+                    <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-gray-400" />
+                    <p className="text-gray-500 mb-2">Cargando mapa...</p>
+                    <p className="text-xs text-gray-400">
+                      Total coches: {coches.length} | Con ubicación: {cochesConUbicacion.length}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Intentos: {initAttempts.current} | Google Maps: {googleMapsReady ? "✓" : "✗"}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Overlay de error */}
+              {error && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-100 z-10">
+                  <div className="text-center p-4">
+                    <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
+                    <p className="text-red-600 mb-4 font-medium">{error}</p>
+                    <div className="text-sm text-gray-500 mb-4">
+                      <p>
+                        <strong>Posibles soluciones:</strong>
+                      </p>
+                      <ul className="text-left mt-2 space-y-1">
+                        <li>• Verifica que NEXT_PUBLIC_GOOGLE_MAPS_API_KEY esté configurada</li>
+                        <li>• Asegúrate de que las APIs estén habilitadas en Google Cloud Console:</li>
+                        <li>&nbsp;&nbsp;&nbsp;- Maps JavaScript API</li>
+                        <li>&nbsp;&nbsp;&nbsp;- Places API</li>
+                        <li>&nbsp;&nbsp;&nbsp;- Geocoding API</li>
+                        <li>• Verifica que la API key tenga permisos para tu dominio</li>
+                        <li>• Intenta refrescar la página</li>
+                      </ul>
+                    </div>
+                    <div className="bg-gray-100 p-4 rounded-lg mb-4 text-left">
+                      <h4 className="font-semibold mb-2">Información de Debug:</h4>
+                      <pre className="text-xs text-gray-600">
+                        {`Total coches: ${coches.length}
+Con ubicación: ${cochesConUbicacion.length}
+API Key: ${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? "✓ Configurada" : "✗ No configurada"}
+Google Maps: ${typeof window !== "undefined" && window.google?.maps ? "✓ Disponible" : "✗ No disponible"}
+Contenedor ref: ${mapRef.current ? "✓ Encontrado" : "✗ No encontrado"}
+Google Maps Ready: ${googleMapsReady ? "✓" : "✗"}
+Intentos: ${initAttempts.current}`}
+                      </pre>
+                    </div>
+                    <Button onClick={handleRefresh} className="mt-4">
+                      Reintentar
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
+          </div>
 
-            {cochesConUbicacion.length === 0 && (
-              <div className="text-center py-4">
-                <p className="text-gray-500 text-sm">
-                  No hay vehículos con ubicación registrada.
-                  <br />
-                  <span className="text-xs">Ejecuta el script SQL para agregar ubicaciones de ejemplo.</span>
-                </p>
-              </div>
-            )}
+          {cochesConUbicacion.length === 0 && !isLoading && !error && (
+            <div className="text-center py-4">
+              <p className="text-gray-500 text-sm">
+                No hay vehículos con ubicación registrada.
+                <br />
+                <span className="text-xs">Ejecuta el script SQL para agregar ubicaciones de ejemplo.</span>
+              </p>
+            </div>
+          )}
 
-            {/* Debug info en desarrollo */}
-            {process.env.NODE_ENV === "development" && (
-              <details className="bg-gray-100 p-3 rounded text-xs">
-                <summary className="cursor-pointer font-semibold">Debug Info</summary>
-                <pre className="mt-2 whitespace-pre-wrap">
-                  {`Contenedor ref: ${mapRef.current ? "✓" : "✗"}
+          {/* Debug info en desarrollo */}
+          {process.env.NODE_ENV === "development" && (
+            <details className="bg-gray-100 p-3 rounded text-xs">
+              <summary className="cursor-pointer font-semibold">Debug Info</summary>
+              <pre className="mt-2 whitespace-pre-wrap">
+                {`Contenedor ref: ${mapRef.current ? "✓" : "✗"}
 Mapa instancia: ${mapInstance.current ? "✓" : "✗"}
 Marcadores: ${markers.current.length}
 Cargando: ${isLoading ? "✓" : "✗"}
 Error: ${error || "Ninguno"}
-Montado: ${isMounted ? "✓" : "✗"}
 Google Maps Ready: ${googleMapsReady ? "✓" : "✗"}
-Google Maps Loaded: ${window.googleMapsLoaded ? "✓" : "✗"}`}
-                </pre>
-              </details>
-            )}
-          </div>
-        )}
+Google Maps Loaded: ${window.googleMapsLoaded ? "✓" : "✗"}
+Intentos de inicialización: ${initAttempts.current}`}
+              </pre>
+            </details>
+          )}
+        </div>
       </CardContent>
     </Card>
   )

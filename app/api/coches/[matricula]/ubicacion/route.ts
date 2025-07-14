@@ -1,20 +1,32 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
+
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
 
 export async function POST(request: NextRequest, { params }: { params: { matricula: string } }) {
   try {
-    const supabase = createClient()
+    const { matricula } = params
     const { latitud, longitud, direccion_actual } = await request.json()
 
+    // Validar datos
+    if (!latitud || !longitud) {
+      return NextResponse.json({ error: "Latitud y longitud son requeridas" }, { status: 400 })
+    }
+
+    if (isNaN(Number(latitud)) || isNaN(Number(longitud))) {
+      return NextResponse.json({ error: "Latitud y longitud deben ser números válidos" }, { status: 400 })
+    }
+
+    // Actualizar ubicación en la base de datos
     const { data, error } = await supabase
       .from("coches")
       .update({
-        latitud,
-        longitud,
-        direccion_actual,
+        latitud: Number(latitud),
+        longitud: Number(longitud),
+        direccion_actual: direccion_actual || null,
         ultima_ubicacion: new Date().toISOString(),
       })
-      .eq("matricula", params.matricula)
+      .eq("matricula", matricula)
       .select()
 
     if (error) {
@@ -39,8 +51,9 @@ export async function POST(request: NextRequest, { params }: { params: { matricu
 
 export async function DELETE(request: NextRequest, { params }: { params: { matricula: string } }) {
   try {
-    const supabase = createClient()
+    const { matricula } = params
 
+    // Eliminar ubicación en la base de datos
     const { data, error } = await supabase
       .from("coches")
       .update({
@@ -49,7 +62,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { matri
         direccion_actual: null,
         ultima_ubicacion: null,
       })
-      .eq("matricula", params.matricula)
+      .eq("matricula", matricula)
       .select()
 
     if (error) {
