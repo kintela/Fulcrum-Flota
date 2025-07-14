@@ -20,7 +20,7 @@ declare global {
   interface Window {
     google: any
     googleMapsLoaded?: boolean
-    initGoogleMapsEditorCallback?: () => void
+    googleMapsCallbacks?: (() => void)[]
   }
 }
 
@@ -36,7 +36,7 @@ export function UbicacionEditor({
   const marker = useRef<any>(null)
   const geocoder = useRef<any>(null)
   const initAttempts = useRef(0)
-  const scriptRef = useRef<HTMLScriptElement | null>(null)
+  const componentMounted = useRef(true)
 
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -106,18 +106,14 @@ export function UbicacionEditor({
 
   // Función para intentar inicializar el editor con reintentos
   const attemptEditorInitialization = () => {
+    if (!componentMounted.current) return
+
     initAttempts.current += 1
     console.log(`🗺️ Editor - Intento de inicialización #${initAttempts.current}`)
-    console.log("📦 Editor - Contenedor disponible:", !!mapRef.current)
-    console.log("🌍 Editor - Google Maps disponible:", !!(window.google && window.google.maps))
 
     if (!mapRef.current) {
-      console.log("❌ Editor - Contenedor no disponible")
-
-      // Reintentar hasta 10 veces con intervalos crecientes
       if (initAttempts.current < 10) {
-        const delay = initAttempts.current * 200 // 200ms, 400ms, 600ms, etc.
-        console.log(`⏳ Editor - Reintentando en ${delay}ms...`)
+        const delay = initAttempts.current * 200
         setTimeout(attemptEditorInitialization, delay)
         return
       } else {
@@ -128,7 +124,6 @@ export function UbicacionEditor({
     }
 
     if (!window.google?.maps) {
-      console.error("❌ Editor - Google Maps no disponible")
       setError("Google Maps no está disponible")
       setIsLoading(false)
       return
@@ -184,8 +179,8 @@ export function UbicacionEditor({
     }
   }
 
-  // Cargar Google Maps
-  useEffect(() => {
+  // Función para cargar Google Maps de forma segura
+  const loadGoogleMaps = () => {
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
     if (!apiKey) {
@@ -204,18 +199,25 @@ export function UbicacionEditor({
     // Verificar si ya hay un script cargándose
     const existingScript = document.querySelector('script[src*="maps.googleapis.com"]')
     if (existingScript) {
-      console.log("🔄 Editor - Script de Google Maps ya existe")
-      // Esperar a que esté listo
+      console.log("🔄 Editor - Script de Google Maps ya existe, esperando...")
+
+      // Agregar callback a la cola
+      if (!window.googleMapsCallbacks) {
+        window.googleMapsCallbacks = []
+      }
+      window.googleMapsCallbacks.push(attemptEditorInitialization)
+
+      // Verificar periódicamente si está listo
       const checkInterval = setInterval(() => {
         if (window.google?.maps) {
           clearInterval(checkInterval)
-          setTimeout(attemptEditorInitialization, 100)
+          attemptEditorInitialization()
         }
       }, 100)
 
       setTimeout(() => {
         clearInterval(checkInterval)
-        if (!window.google?.maps) {
+        if (!window.google?.maps && componentMounted.current) {
           setError("Timeout esperando Google Maps")
           setIsLoading(false)
         }
@@ -223,46 +225,65 @@ export function UbicacionEditor({
       return
     }
 
-    // Función de callback global
-    window.initGoogleMapsEditorCallback = () => {
-      console.log("📞 Editor - Callback ejecutado")
-      setTimeout(attemptEditorInitialization, 100)
+    // El script principal debería manejar la carga
+    // Solo agregamos nuestro callback a la cola
+    if (!window.googleMapsCallbacks) {
+      window.googleMapsCallbacks = []
     }
+    window.googleMapsCallbacks.push(attemptEditorInitialization)
 
-    // Cargar script
-    console.log("📝 Editor - Cargando Google Maps...")
-    const script = document.createElement("script")
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initGoogleMapsEditorCallback&loading=async`
-    script.async = true
-    script.defer = true
-    script.id = "google-maps-editor-script"
+    // Si no hay script, crear uno (fallback)
+    if (!document.querySelector('script[src*="maps.googleapis.com"]')) {
+      console.log("📝 Editor - Cargando Google Maps como fallback...")
 
-    script.onload = () => {
-      console.log("✅ Editor - Script de Google Maps cargado")
+      const callbackName = "initGoogleMaps"
+      if (!window[callbackName as keyof Window]) {
+        ;(window as any)[callbackName] = () => {
+          console.log("📞 Google Maps callback ejecutado desde editor")
+
+          if (window.googleMapsCallbacks) {
+            window.googleMapsCallbacks.forEach((callback) => {
+              try {
+                callback()
+              } catch (error) {
+                console.error("Error ejecutando callback:", error)
+              }
+            })
+            window.googleMapsCallbacks = []
+          }
+        }
+      }
+
+      const script = document.createElement("script")
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=${callbackName}&loading=async`
+      script.async = true
+      script.defer = true
+      script.id = "google-maps-editor-fallback-script"
+
+      script.onerror = () => {
+        console.error("❌ Editor - Error cargando Google Maps")
+        if (componentMounted.current) {
+          setError("Error al cargar Google Maps")
+          setIsLoading(false)
+        }
+      }
+
+      document.head.appendChild(script)
     }
+  }
 
-    script.onerror = () => {
-      console.error("❌ Editor - Error cargando Google Maps")
-      setError("Error al cargar Google Maps")
-      setIsLoading(false)
-    }
-
-    scriptRef.current = script
-    document.head.appendChild(script)
+  // Effect principal
+  useEffect(() => {
+    componentMounted.current = true
+    loadGoogleMaps()
 
     return () => {
-      // Cleanup más seguro
-      try {
-        if (window.initGoogleMapsEditorCallback) {
-          delete window.initGoogleMapsEditorCallback
-        }
+      componentMounted.current = false
 
-        // Solo intentar remover si el script existe y tiene un padre
-        if (scriptRef.current && scriptRef.current.parentNode) {
-          scriptRef.current.parentNode.removeChild(scriptRef.current)
-        }
-      } catch (error) {
-        console.log("Editor - Error durante cleanup (ignorado):", error)
+      // Limpiar marcador
+      if (marker.current) {
+        marker.current.setMap(null)
+        marker.current = null
       }
     }
   }, [])
@@ -493,7 +514,7 @@ export function UbicacionEditor({
           )}
         </div>
 
-        {/* Mapa - SIEMPRE RENDERIZADO */}
+        {/* Mapa */}
         <div className="w-full bg-white rounded-lg border shadow-sm overflow-hidden">
           <div
             ref={mapRef}
@@ -523,13 +544,6 @@ export function UbicacionEditor({
                 <div className="text-center p-4">
                   <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
                   <p className="text-red-600 mb-4">{error}</p>
-                  <div className="bg-gray-100 p-4 rounded-lg mb-4 text-left">
-                    <h4 className="font-semibold mb-2">Debug Info:</h4>
-                    <pre className="text-xs text-gray-600">
-                      {`Contenedor ref: ${mapRef.current ? "✓" : "✗"}
-Intentos: ${initAttempts.current}`}
-                    </pre>
-                  </div>
                   <Button onClick={() => window.location.reload()}>Reintentar</Button>
                 </div>
               </div>
