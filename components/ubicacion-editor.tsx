@@ -35,8 +35,10 @@ export function UbicacionEditor({
   const marker = useRef<any>(null)
   const geocoder = useRef<any>(null)
 
+  const [isMounted, setIsMounted] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [googleMapsReady, setGoogleMapsReady] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
@@ -44,6 +46,12 @@ export function UbicacionEditor({
   const [latitud, setLatitud] = useState<string>(initialLatitud?.toString() || "")
   const [longitud, setLongitud] = useState<string>(initialLongitud?.toString() || "")
   const [direccion, setDireccion] = useState<string>(initialDireccion || "")
+
+  // Marcar como montado
+  useEffect(() => {
+    setIsMounted(true)
+    console.log("🔄 Editor montado")
+  }, [])
 
   // Función para obtener dirección desde coordenadas
   const geocodeLatLng = async (lat: number, lng: number) => {
@@ -106,6 +114,12 @@ export function UbicacionEditor({
     console.log("🗺️ Inicializando editor...")
     console.log("📦 Contenedor disponible:", !!mapRef.current)
     console.log("🌍 Google Maps disponible:", !!(window.google && window.google.maps))
+    console.log("🔄 Editor montado:", isMounted)
+
+    if (!isMounted) {
+      console.log("⏳ Esperando que el editor esté montado...")
+      return
+    }
 
     if (!mapRef.current) {
       console.error("❌ Editor - Contenedor no disponible")
@@ -171,7 +185,7 @@ export function UbicacionEditor({
     }
   }
 
-  // Efecto principal
+  // Cargar Google Maps
   useEffect(() => {
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
@@ -184,12 +198,7 @@ export function UbicacionEditor({
     // Si Google Maps ya está disponible
     if (window.google?.maps) {
       console.log("♻️ Editor - Google Maps ya disponible")
-      // Usar requestAnimationFrame para asegurar que el DOM esté listo
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          initializeEditor()
-        })
-      })
+      setGoogleMapsReady(true)
       return
     }
 
@@ -199,11 +208,7 @@ export function UbicacionEditor({
       const checkInterval = setInterval(() => {
         if (window.google?.maps) {
           clearInterval(checkInterval)
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-              initializeEditor()
-            })
-          })
+          setGoogleMapsReady(true)
         }
       }, 100)
 
@@ -223,11 +228,7 @@ export function UbicacionEditor({
     const callbackName = "initGoogleMapsEditorCallback"
     ;(window as any)[callbackName] = () => {
       console.log("📞 Editor - Callback ejecutado")
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          initializeEditor()
-        })
-      })
+      setGoogleMapsReady(true)
     }
 
     // Cargar script
@@ -252,6 +253,17 @@ export function UbicacionEditor({
       }
     }
   }, [])
+
+  // Efecto para inicializar el editor cuando todo esté listo
+  useEffect(() => {
+    if (isMounted && googleMapsReady) {
+      console.log("🚀 Editor - Todo listo, inicializando...")
+      // Pequeño delay para asegurar que el DOM esté completamente renderizado
+      setTimeout(() => {
+        initializeEditor()
+      }, 100)
+    }
+  }, [isMounted, googleMapsReady])
 
   // Función para obtener ubicación actual
   const handleGetCurrentLocation = () => {
@@ -422,6 +434,8 @@ export function UbicacionEditor({
               <h4 className="font-semibold mb-2">Debug Info:</h4>
               <pre className="text-xs text-gray-600">
                 {`Contenedor ref: ${mapRef.current ? "✓" : "✗"}
+Montado: ${isMounted ? "✓" : "✗"}
+Google Maps Ready: ${googleMapsReady ? "✓" : "✗"}
 Google Maps Loaded: ${window.googleMapsLoaded ? "✓" : "✗"}`}
               </pre>
             </div>
@@ -524,6 +538,9 @@ Google Maps Loaded: ${window.googleMapsLoaded ? "✓" : "✗"}`}
                 <div className="text-center">
                   <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-gray-400" />
                   <p className="text-gray-500 text-sm">Cargando editor...</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Montado: {isMounted ? "✓" : "✗"} | Google Maps: {googleMapsReady ? "✓" : "✗"}
+                  </p>
                 </div>
               </div>
             )}

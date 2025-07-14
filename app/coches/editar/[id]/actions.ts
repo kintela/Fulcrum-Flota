@@ -1,8 +1,8 @@
 "use server"
 
 import { createClient } from "@/lib/supabase"
-import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
+import { redirect } from "next/navigation"
 
 export async function editarCoche(formData: FormData) {
   const supabase = createClient()
@@ -12,8 +12,8 @@ export async function editarCoche(formData: FormData) {
   const modelo = formData.get("modelo") as string
   const año = formData.get("año") as string
   const color = formData.get("color") as string
-  const combustible = formData.get("combustible") as string
   const kilometraje = formData.get("kilometraje") as string
+  const combustible = formData.get("combustible") as string
   const asignadoa = formData.get("asignadoa") as string
   const extras = formData.get("extras") as string
   const donante = formData.get("donante") === "on"
@@ -32,13 +32,10 @@ export async function editarCoche(formData: FormData) {
     if (año) {
       updateData.año = Number.parseInt(año)
     }
-
     if (kilometraje) {
       updateData.kilometraje = Number.parseInt(kilometraje)
     }
-
-    // Manejar asignación de empleado
-    if (asignadoa && asignadoa !== "") {
+    if (asignadoa) {
       updateData.asignadoa = Number.parseInt(asignadoa)
     } else {
       updateData.asignadoa = null
@@ -52,11 +49,11 @@ export async function editarCoche(formData: FormData) {
     }
 
     revalidatePath("/coches")
-    revalidatePath(`/coches/editar/${matricula}`)
     revalidatePath(`/coches/detalle/${matricula}`)
+    revalidatePath(`/coches/editar/${matricula}`)
   } catch (error) {
     console.error("Error en editarCoche:", error)
-    throw new Error("Error al actualizar el vehículo")
+    throw error
   }
 
   redirect(`/coches/detalle/${matricula}`)

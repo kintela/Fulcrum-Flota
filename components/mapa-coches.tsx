@@ -33,8 +33,11 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstance = useRef<any>(null)
   const markers = useRef<any[]>([])
+
+  const [isMounted, setIsMounted] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [googleMapsReady, setGoogleMapsReady] = useState(false)
 
   // Crear mapa de empleados
   const empleadosMap = new Map()
@@ -53,6 +56,12 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
     }
     return null
   }
+
+  // Marcar como montado
+  useEffect(() => {
+    setIsMounted(true)
+    console.log("🔄 Componente montado")
+  }, [])
 
   // Función para agregar marcadores
   const addMarkers = (map: any) => {
@@ -150,6 +159,12 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
     console.log("🗺️ Inicializando mapa...")
     console.log("📦 Contenedor disponible:", !!mapRef.current)
     console.log("🌍 Google Maps disponible:", !!(window.google && window.google.maps))
+    console.log("🔄 Componente montado:", isMounted)
+
+    if (!isMounted) {
+      console.log("⏳ Esperando que el componente esté montado...")
+      return
+    }
 
     if (!mapRef.current) {
       console.error("❌ Contenedor no disponible")
@@ -207,7 +222,7 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
     }
   }
 
-  // Efecto principal
+  // Cargar Google Maps
   useEffect(() => {
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
     console.log("🔑 API Key disponible:", !!apiKey)
@@ -221,18 +236,28 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
     // Si Google Maps ya está disponible
     if (window.google?.maps) {
       console.log("♻️ Google Maps ya disponible")
-      // Usar requestAnimationFrame para asegurar que el DOM esté listo
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          initializeMap()
-        })
-      })
+      setGoogleMapsReady(true)
       return
     }
 
     // Marcar que estamos cargando Google Maps
     if (window.googleMapsLoaded) {
       console.log("🔄 Google Maps ya se está cargando...")
+      // Esperar a que esté listo
+      const checkInterval = setInterval(() => {
+        if (window.google?.maps) {
+          clearInterval(checkInterval)
+          setGoogleMapsReady(true)
+        }
+      }, 100)
+
+      setTimeout(() => {
+        clearInterval(checkInterval)
+        if (!window.google?.maps) {
+          setError("Timeout esperando Google Maps")
+          setIsLoading(false)
+        }
+      }, 10000)
       return
     }
 
@@ -242,12 +267,7 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
     const callbackName = "initGoogleMapsCallback"
     ;(window as any)[callbackName] = () => {
       console.log("📞 Callback ejecutado")
-      // Usar requestAnimationFrame para asegurar que el DOM esté listo
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          initializeMap()
-        })
-      })
+      setGoogleMapsReady(true)
     }
 
     // Cargar script
@@ -272,7 +292,18 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
         delete (window as any)[callbackName]
       }
     }
-  }, []) // Solo ejecutar una vez
+  }, [])
+
+  // Efecto para inicializar el mapa cuando todo esté listo
+  useEffect(() => {
+    if (isMounted && googleMapsReady) {
+      console.log("🚀 Todo listo, inicializando mapa...")
+      // Pequeño delay para asegurar que el DOM esté completamente renderizado
+      setTimeout(() => {
+        initializeMap()
+      }, 100)
+    }
+  }, [isMounted, googleMapsReady])
 
   const handleRefresh = () => {
     window.location.reload()
@@ -325,7 +356,9 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
 Con ubicación: ${coches.filter((c) => c.latitud && c.longitud && !c.donante).length}
 API Key: ${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? "✓ Configurada" : "✗ No configurada"}
 Google Maps: ${typeof window !== "undefined" && window.google?.maps ? "✓ Disponible" : "✗ No disponible"}
-Contenedor ref: ${mapRef.current ? "✓ Encontrado" : "✗ No encontrado"}`}
+Contenedor ref: ${mapRef.current ? "✓ Encontrado" : "✗ No encontrado"}
+Montado: ${isMounted ? "✓" : "✗"}
+Google Maps Ready: ${googleMapsReady ? "✓" : "✗"}`}
               </pre>
             </div>
             <Button onClick={handleRefresh} className="mt-4">
@@ -369,6 +402,9 @@ Contenedor ref: ${mapRef.current ? "✓ Encontrado" : "✗ No encontrado"}`}
               <p className="text-gray-500 mb-2">Cargando mapa...</p>
               <p className="text-xs text-gray-400">
                 Total coches: {coches.length} | Con ubicación: {cochesConUbicacion.length}
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                Montado: {isMounted ? "✓" : "✗"} | Google Maps: {googleMapsReady ? "✓" : "✗"}
               </p>
             </div>
           </div>
@@ -437,6 +473,8 @@ Mapa instancia: ${mapInstance.current ? "✓" : "✗"}
 Marcadores: ${markers.current.length}
 Cargando: ${isLoading ? "✓" : "✗"}
 Error: ${error || "Ninguno"}
+Montado: ${isMounted ? "✓" : "✗"}
+Google Maps Ready: ${googleMapsReady ? "✓" : "✗"}
 Google Maps Loaded: ${window.googleMapsLoaded ? "✓" : "✗"}`}
                 </pre>
               </details>
