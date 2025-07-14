@@ -20,6 +20,7 @@ declare global {
   interface Window {
     google: any
     googleMapsLoaded?: boolean
+    initGoogleMapsEditorCallback?: () => void
   }
 }
 
@@ -35,10 +36,10 @@ export function UbicacionEditor({
   const marker = useRef<any>(null)
   const geocoder = useRef<any>(null)
   const initAttempts = useRef(0)
+  const scriptRef = useRef<HTMLScriptElement | null>(null)
 
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [googleMapsReady, setGoogleMapsReady] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
@@ -196,18 +197,18 @@ export function UbicacionEditor({
     // Si Google Maps ya está disponible
     if (window.google?.maps) {
       console.log("♻️ Editor - Google Maps ya disponible")
-      setGoogleMapsReady(true)
       setTimeout(attemptEditorInitialization, 100)
       return
     }
 
-    // Si ya se está cargando, esperar
-    if (window.googleMapsLoaded) {
-      console.log("🔄 Editor - Google Maps ya se está cargando...")
+    // Verificar si ya hay un script cargándose
+    const existingScript = document.querySelector('script[src*="maps.googleapis.com"]')
+    if (existingScript) {
+      console.log("🔄 Editor - Script de Google Maps ya existe")
+      // Esperar a que esté listo
       const checkInterval = setInterval(() => {
         if (window.google?.maps) {
           clearInterval(checkInterval)
-          setGoogleMapsReady(true)
           setTimeout(attemptEditorInitialization, 100)
         }
       }, 100)
@@ -222,35 +223,46 @@ export function UbicacionEditor({
       return
     }
 
-    window.googleMapsLoaded = true
-
-    // Función de callback
-    const callbackName = "initGoogleMapsEditorCallback"
-    ;(window as any)[callbackName] = () => {
+    // Función de callback global
+    window.initGoogleMapsEditorCallback = () => {
       console.log("📞 Editor - Callback ejecutado")
-      setGoogleMapsReady(true)
       setTimeout(attemptEditorInitialization, 100)
     }
 
     // Cargar script
     console.log("📝 Editor - Cargando Google Maps...")
     const script = document.createElement("script")
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=${callbackName}&loading=async`
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initGoogleMapsEditorCallback&loading=async`
     script.async = true
     script.defer = true
+    script.id = "google-maps-editor-script"
+
+    script.onload = () => {
+      console.log("✅ Editor - Script de Google Maps cargado")
+    }
 
     script.onerror = () => {
       console.error("❌ Editor - Error cargando Google Maps")
       setError("Error al cargar Google Maps")
       setIsLoading(false)
-      window.googleMapsLoaded = false
     }
 
+    scriptRef.current = script
     document.head.appendChild(script)
 
     return () => {
-      if ((window as any)[callbackName]) {
-        delete (window as any)[callbackName]
+      // Cleanup más seguro
+      try {
+        if (window.initGoogleMapsEditorCallback) {
+          delete window.initGoogleMapsEditorCallback
+        }
+
+        // Solo intentar remover si el script existe y tiene un padre
+        if (scriptRef.current && scriptRef.current.parentNode) {
+          scriptRef.current.parentNode.removeChild(scriptRef.current)
+        }
+      } catch (error) {
+        console.log("Editor - Error durante cleanup (ignorado):", error)
       }
     }
   }, [])
@@ -500,9 +512,7 @@ export function UbicacionEditor({
                 <div className="text-center">
                   <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-gray-400" />
                   <p className="text-gray-500 text-sm">Cargando editor...</p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Intentos: {initAttempts.current} | Google Maps: {googleMapsReady ? "✓" : "✗"}
-                  </p>
+                  <p className="text-xs text-gray-400 mt-1">Intentos: {initAttempts.current}</p>
                 </div>
               </div>
             )}
@@ -517,8 +527,6 @@ export function UbicacionEditor({
                     <h4 className="font-semibold mb-2">Debug Info:</h4>
                     <pre className="text-xs text-gray-600">
                       {`Contenedor ref: ${mapRef.current ? "✓" : "✗"}
-Google Maps Ready: ${googleMapsReady ? "✓" : "✗"}
-Google Maps Loaded: ${window.googleMapsLoaded ? "✓" : "✗"}
 Intentos: ${initAttempts.current}`}
                     </pre>
                   </div>

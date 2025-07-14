@@ -36,7 +36,8 @@ export async function editarCocheAction(formData: FormData) {
     if (color) updateData.color = color.trim()
     if (kilometraje) updateData.kilometraje = Number.parseInt(kilometraje)
     if (combustible) updateData.combustible = combustible
-    if (asignadoa) updateData.asignadoa = Number.parseInt(asignadoa)
+    if (asignadoa && asignadoa !== "0") updateData.asignadoa = Number.parseInt(asignadoa)
+    else updateData.asignadoa = null
     if (extras) updateData.extras = extras.trim()
 
     // Actualizar en la base de datos

@@ -26,6 +26,7 @@ declare global {
   interface Window {
     google: any
     googleMapsLoaded?: boolean
+    initGoogleMapsCallback?: () => void
   }
 }
 
@@ -34,10 +35,10 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
   const mapInstance = useRef<any>(null)
   const markers = useRef<any[]>([])
   const initAttempts = useRef(0)
+  const scriptRef = useRef<HTMLScriptElement | null>(null)
 
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [googleMapsReady, setGoogleMapsReady] = useState(false)
 
   // Crear mapa de empleados
   const empleadosMap = new Map()
@@ -234,20 +235,19 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
     // Si Google Maps ya está disponible
     if (window.google?.maps) {
       console.log("♻️ Google Maps ya disponible")
-      setGoogleMapsReady(true)
       // Intentar inicializar inmediatamente
       setTimeout(attemptMapInitialization, 100)
       return
     }
 
-    // Marcar que estamos cargando Google Maps
-    if (window.googleMapsLoaded) {
-      console.log("🔄 Google Maps ya se está cargando...")
+    // Verificar si ya hay un script cargándose
+    const existingScript = document.querySelector('script[src*="maps.googleapis.com"]')
+    if (existingScript) {
+      console.log("🔄 Script de Google Maps ya existe")
       // Esperar a que esté listo
       const checkInterval = setInterval(() => {
         if (window.google?.maps) {
           clearInterval(checkInterval)
-          setGoogleMapsReady(true)
           setTimeout(attemptMapInitialization, 100)
         }
       }, 100)
@@ -262,36 +262,46 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
       return
     }
 
-    window.googleMapsLoaded = true
-
-    // Función de callback
-    const callbackName = "initGoogleMapsCallback"
-    ;(window as any)[callbackName] = () => {
+    // Función de callback global
+    window.initGoogleMapsCallback = () => {
       console.log("📞 Callback ejecutado")
-      setGoogleMapsReady(true)
       setTimeout(attemptMapInitialization, 100)
     }
 
     // Cargar script
     console.log("📝 Cargando Google Maps...")
     const script = document.createElement("script")
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=${callbackName}&loading=async`
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initGoogleMapsCallback&loading=async`
     script.async = true
     script.defer = true
+    script.id = "google-maps-script"
+
+    script.onload = () => {
+      console.log("✅ Script de Google Maps cargado")
+    }
 
     script.onerror = () => {
       console.error("❌ Error cargando Google Maps")
       setError("Error al cargar Google Maps")
       setIsLoading(false)
-      window.googleMapsLoaded = false
     }
 
+    scriptRef.current = script
     document.head.appendChild(script)
 
     return () => {
-      // Cleanup
-      if ((window as any)[callbackName]) {
-        delete (window as any)[callbackName]
+      // Cleanup más seguro
+      try {
+        if (window.initGoogleMapsCallback) {
+          delete window.initGoogleMapsCallback
+        }
+
+        // Solo intentar remover si el script existe y tiene un padre
+        if (scriptRef.current && scriptRef.current.parentNode) {
+          scriptRef.current.parentNode.removeChild(scriptRef.current)
+        }
+      } catch (error) {
+        console.log("Error durante cleanup (ignorado):", error)
       }
     }
   }, [])
@@ -389,9 +399,7 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
                     <p className="text-xs text-gray-400">
                       Total coches: {coches.length} | Con ubicación: {cochesConUbicacion.length}
                     </p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      Intentos: {initAttempts.current} | Google Maps: {googleMapsReady ? "✓" : "✗"}
-                    </p>
+                    <p className="text-xs text-gray-400 mt-1">Intentos: {initAttempts.current}</p>
                   </div>
                 </div>
               )}
@@ -424,7 +432,6 @@ Con ubicación: ${cochesConUbicacion.length}
 API Key: ${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? "✓ Configurada" : "✗ No configurada"}
 Google Maps: ${typeof window !== "undefined" && window.google?.maps ? "✓ Disponible" : "✗ No disponible"}
 Contenedor ref: ${mapRef.current ? "✓ Encontrado" : "✗ No encontrado"}
-Google Maps Ready: ${googleMapsReady ? "✓" : "✗"}
 Intentos: ${initAttempts.current}`}
                       </pre>
                     </div>
@@ -457,8 +464,6 @@ Mapa instancia: ${mapInstance.current ? "✓" : "✗"}
 Marcadores: ${markers.current.length}
 Cargando: ${isLoading ? "✓" : "✗"}
 Error: ${error || "Ninguno"}
-Google Maps Ready: ${googleMapsReady ? "✓" : "✗"}
-Google Maps Loaded: ${window.googleMapsLoaded ? "✓" : "✗"}
 Intentos de inicialización: ${initAttempts.current}`}
               </pre>
             </details>
