@@ -33,6 +33,7 @@ function useGoogleMaps() {
       window.google.maps.LatLngBounds &&
       window.google.maps.MapTypeId &&
       window.google.maps.MapTypeId.ROADMAP &&
+      window.google.maps.MapTypeId.SATELLITE &&
       window.google.maps.Geocoder &&
       window.google.maps.event
     )
@@ -163,7 +164,7 @@ export function UbicacionEditor({
   const [longitud, setLongitud] = useState<string>(initialLongitud?.toString() || "")
   const [direccion, setDireccion] = useState<string>(initialDireccion || "")
 
-  // Coordenadas de la sede de Fulcrum en Leioa (Calle Aldapa 13)
+  // Coordenadas exactas de Fulcrum, S.A. en Leioa (Calle Aldapa 13)
   const FULCRUM_SEDE = {
     lat: 43.3297,
     lng: -2.9847,
@@ -228,7 +229,7 @@ export function UbicacionEditor({
         }
 
         mapInstance.current.setCenter(position)
-        mapInstance.current.setZoom(15)
+        mapInstance.current.setZoom(18) // Zoom más alto para ver mejor la ubicación exacta
       } catch (error) {
         console.error("Error actualizando marcador:", error)
       }
@@ -253,11 +254,12 @@ export function UbicacionEditor({
         Map: !!window.google?.maps?.Map,
         MapTypeId: !!window.google?.maps?.MapTypeId,
         ROADMAP: !!window.google?.maps?.MapTypeId?.ROADMAP,
+        SATELLITE: !!window.google?.maps?.MapTypeId?.SATELLITE,
         Geocoder: !!window.google?.maps?.Geocoder,
       })
 
       // Verificación adicional
-      if (!window.google?.maps?.MapTypeId?.ROADMAP) {
+      if (!window.google?.maps?.MapTypeId?.SATELLITE) {
         throw new Error("Google Maps MapTypeId no está disponible")
       }
 
@@ -266,10 +268,22 @@ export function UbicacionEditor({
       // Si hay ubicación inicial, usar esa; si no, usar la sede de Fulcrum
       const center = hasInitialLocation ? { lat: Number(initialLatitud), lng: Number(initialLongitud) } : FULCRUM_SEDE
 
+      // Determinar el tipo de mapa y zoom
+      const mapTypeId = hasInitialLocation
+        ? window.google.maps.MapTypeId.ROADMAP
+        : window.google.maps.MapTypeId.SATELLITE
+
+      const zoom = hasInitialLocation ? 15 : 18 // Zoom más alto para la sede
+
       const map = new window.google.maps.Map(mapRef.current, {
-        zoom: hasInitialLocation ? 15 : 16, // Zoom un poco más alto para la sede
+        zoom,
         center,
-        mapTypeId: window.google.maps.MapTypeId.ROADMAP,
+        mapTypeId,
+        mapTypeControl: true,
+        mapTypeControlOptions: {
+          style: window.google.maps.MapTypeControlStyle.HORIZONTAL_BAR,
+          position: window.google.maps.ControlPosition.TOP_CENTER,
+        },
       })
 
       mapInstance.current = map
@@ -383,11 +397,12 @@ export function UbicacionEditor({
   const handleCenterOnSede = useCallback(() => {
     if (mapInstance.current && isGoogleMapsReady()) {
       mapInstance.current.setCenter(FULCRUM_SEDE)
-      mapInstance.current.setZoom(16)
+      mapInstance.current.setZoom(18)
+      mapInstance.current.setMapTypeId(window.google.maps.MapTypeId.SATELLITE)
 
       toast({
         title: "Mapa centrado",
-        description: "Vista centrada en la sede de Fulcrum",
+        description: "Vista centrada en la sede de Fulcrum (modo satélite)",
       })
     }
   }, [isGoogleMapsReady])
@@ -630,7 +645,7 @@ export function UbicacionEditor({
             <li>• Haz clic en el mapa para establecer la ubicación</li>
             <li>• Arrastra el marcador para ajustar la posición</li>
             <li>• Usa "Mi Ubicación" para obtener tu posición actual</li>
-            <li>• Usa "Sede Fulcrum" para centrar en Calle Aldapa 13, Leioa</li>
+            <li>• Usa "Sede Fulcrum" para centrar en Calle Aldapa 13, Leioa (modo satélite)</li>
             <li>• La dirección se completará automáticamente</li>
             <li>• Haz clic en "Guardar Ubicación" para confirmar los cambios</li>
           </ul>
