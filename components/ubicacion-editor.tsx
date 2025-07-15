@@ -1,13 +1,12 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { MapPin, Navigation, Save, Trash2, RefreshCw, AlertCircle } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
-import { googleMapsLoader } from "@/lib/google-maps-loader"
 
 interface UbicacionEditorProps {
   matricula: string
@@ -15,6 +14,89 @@ interface UbicacionEditorProps {
   longitud?: number | null
   direccion_actual?: string | null
   onUbicacionGuardada?: () => void
+}
+
+// Hook personalizado para Google Maps (reutilizado)
+function useGoogleMaps() {
+  const [isLoaded, setIsLoaded] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const loadingRef = useRef(false)
+
+  const loadGoogleMaps = useCallback(async () => {
+    if (loadingRef.current || isLoaded || window.google?.maps) {
+      if (window.google?.maps) {
+        setIsLoaded(true)
+      }
+      return
+    }
+
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+    if (!apiKey) {
+      setError("API key de Google Maps no configurada")
+      return
+    }
+
+    loadingRef.current = true
+
+    try {
+      // Verificar si ya existe el script
+      if (document.querySelector('script[src*="maps.googleapis.com"]')) {
+        // Esperar a que se cargue
+        let attempts = 0
+        const checkLoaded = () => {
+          if (window.google?.maps) {
+            setIsLoaded(true)
+            loadingRef.current = false
+            return
+          }
+          attempts++
+          if (attempts < 50) {
+            setTimeout(checkLoaded, 200)
+          } else {
+            setError("Timeout cargando Google Maps")
+            loadingRef.current = false
+          }
+        }
+        checkLoaded()
+        return
+      }
+
+      // Crear script
+      const script = document.createElement("script")
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&loading=async`
+      script.async = true
+      script.defer = true
+
+      script.onload = () => {
+        // Esperar a que Google Maps esté completamente disponible
+        const checkReady = () => {
+          if (window.google?.maps) {
+            setIsLoaded(true)
+            loadingRef.current = false
+          } else {
+            setTimeout(checkReady, 100)
+          }
+        }
+        checkReady()
+      }
+
+      script.onerror = () => {
+        setError("Error cargando Google Maps")
+        loadingRef.current = false
+      }
+
+      document.head.appendChild(script)
+    } catch (err) {
+      setError("Error al cargar Google Maps")
+      loadingRef.current = false
+    }
+  }, [isLoaded])
+
+  useEffect(() => {
+    loadGoogleMaps()
+  }, [loadGoogleMaps])
+
+  return { isLoaded, error, loadGoogleMaps }
 }
 
 export function UbicacionEditor({
@@ -28,11 +110,10 @@ export function UbicacionEditor({
   const mapInstance = useRef<any>(null)
   const marker = useRef<any>(null)
   const geocoder = useRef<any>(null)
-  const isMounted = useRef(true)
-  const initCallback = useRef<(() => void) | null>(null)
+  const { isLoaded, error } = useGoogleMaps()
 
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [isInitializing, setIsInitializing] = useState(false)
+  const [mapError, setMapError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
@@ -42,7 +123,7 @@ export function UbicacionEditor({
   const [direccion, setDireccion] = useState<string>(initialDireccion || "")
 
   // Función para obtener dirección desde coordenadas
-  const geocodeLatLng = async (lat: number, lng: number) => {
+  const geocodeLatLng = useCallback(async (lat: number, lng: number) => {
     if (!geocoder.current) return null
 
     try {
@@ -60,48 +141,58 @@ export function UbicacionEditor({
       console.error("Error en geocoding:", error)
       return null
     }
-  }
+  }, [])
 
   // Función para actualizar marcador
-  const updateMarker = async (lat: number, lng: number) => {
-    if (!mapInstance.current || !window.google || !isMounted.current) return
+  const updateMarker = useCallback(
+    async (lat: number, lng: number) => {
+      if (!mapInstance.current || !window.google) return
 
-    const position = { lat, lng }
+      const position = { lat, lng }
 
-    if (marker.current) {
-      marker.current.setPosition(position)
-    } else {
-      const newMarker = new window.google.maps.Marker({
-        position,
-        map: mapInstance.current,
-        draggable: true,
-        title: `Ubicación de ${matricula}`,
-      })
+      try {
+        if (marker.current) {
+          marker.current.setPosition(position)
+        } else {
+          const newMarker = new window.google.maps.Marker({
+            position,
+            map: mapInstance.current,
+            draggable: true,
+            title: `Ubicación de ${matricula}`,
+          })
 
-      newMarker.addListener("dragend", async (event: any) => {
-        if (!isMounted.current) return
+          newMarker.addListener("dragend", async (event: any) => {
+            const newLat = event.latLng.lat()
+            const newLng = event.latLng.lng()
+            setLatitud(newLat.toFixed(6))
+            setLongitud(newLng.toFixed(6))
 
-        const newLat = event.latLng.lat()
-        const newLng = event.latLng.lng()
-        setLatitud(newLat.toFixed(6))
-        setLongitud(newLng.toFixed(6))
+            const address = await geocodeLatLng(newLat, newLng)
+            if (address) {
+              setDireccion(address)
+            }
+          })
 
-        const address = await geocodeLatLng(newLat, newLng)
-        if (address && isMounted.current) {
-          setDireccion(address)
+          marker.current = newMarker
         }
-      })
 
-      marker.current = newMarker
-    }
-
-    mapInstance.current.setCenter(position)
-    mapInstance.current.setZoom(15)
-  }
+        mapInstance.current.setCenter(position)
+        mapInstance.current.setZoom(15)
+      } catch (error) {
+        console.error("Error actualizando marcador:", error)
+      }
+    },
+    [matricula, geocodeLatLng],
+  )
 
   // Función para inicializar el editor
-  const initializeEditor = async () => {
-    if (!isMounted.current || !mapRef.current) return
+  const initializeEditor = useCallback(async () => {
+    if (!mapRef.current || !isLoaded || !window.google?.maps || mapInstance.current) {
+      return
+    }
+
+    setIsInitializing(true)
+    setMapError(null)
 
     try {
       console.log("🗺️ Editor - Inicializando...")
@@ -131,8 +222,6 @@ export function UbicacionEditor({
 
       // Agregar listener para clicks en el mapa
       map.addListener("click", async (event: any) => {
-        if (!isMounted.current) return
-
         const lat = event.latLng.lat()
         const lng = event.latLng.lng()
 
@@ -142,70 +231,47 @@ export function UbicacionEditor({
         await updateMarker(lat, lng)
 
         const address = await geocodeLatLng(lat, lng)
-        if (address && isMounted.current) {
+        if (address) {
           setDireccion(address)
         }
       })
 
       console.log("✅ Editor creado exitosamente")
-      if (isMounted.current) {
-        setIsLoading(false)
-        setError(null)
-      }
+      setIsInitializing(false)
     } catch (err) {
       console.error("❌ Error creando editor:", err)
-      if (isMounted.current) {
-        setError("Error al crear el editor de ubicación")
-        setIsLoading(false)
-      }
+      setMapError("Error al crear el editor de ubicación")
+      setIsInitializing(false)
     }
-  }
+  }, [isLoaded, initialLatitud, initialLongitud, updateMarker, geocodeLatLng])
 
-  // Effect principal
+  // Effect para inicializar el editor cuando esté listo
   useEffect(() => {
-    isMounted.current = true
+    if (isLoaded && !mapInstance.current) {
+      initializeEditor()
+    }
+  }, [isLoaded, initializeEditor])
 
-    // Crear callback para este componente
-    initCallback.current = initializeEditor
-
-    // Cargar Google Maps
-    googleMapsLoader
-      .load()
-      .then(() => {
-        if (isMounted.current) {
-          initializeEditor()
-        }
-      })
-      .catch((error) => {
-        console.error("Error cargando Google Maps:", error)
-        if (isMounted.current) {
-          setError(error.message)
-          setIsLoading(false)
-        }
-      })
-
+  // Cleanup al desmontar
+  useEffect(() => {
     return () => {
-      isMounted.current = false
-
-      // Remover callback si existe
-      if (initCallback.current) {
-        googleMapsLoader.removeCallback(initCallback.current)
-      }
-
-      // Limpiar marcador
       if (marker.current) {
-        marker.current.setMap(null)
+        try {
+          marker.current.setMap(null)
+        } catch (e) {
+          console.warn("Error limpiando marcador:", e)
+        }
         marker.current = null
       }
-
-      // Limpiar instancia del mapa
-      mapInstance.current = null
+      if (mapInstance.current) {
+        mapInstance.current = null
+      }
       geocoder.current = null
     }
   }, [])
 
   // Función para obtener ubicación actual
-  const handleGetCurrentLocation = () => {
+  const handleGetCurrentLocation = useCallback(() => {
     if (!navigator.geolocation) {
       toast({
         title: "Error",
@@ -226,7 +292,7 @@ export function UbicacionEditor({
         if (mapInstance.current) {
           await updateMarker(lat, lng)
           const address = await geocodeLatLng(lat, lng)
-          if (address && isMounted.current) {
+          if (address) {
             setDireccion(address)
           }
         }
@@ -244,10 +310,10 @@ export function UbicacionEditor({
         })
       },
     )
-  }
+  }, [updateMarker, geocodeLatLng])
 
   // Función para guardar ubicación
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     if (!latitud || !longitud) {
       toast({
         title: "Error",
@@ -293,10 +359,10 @@ export function UbicacionEditor({
     } finally {
       setIsSaving(false)
     }
-  }
+  }, [latitud, longitud, direccion, matricula, onUbicacionGuardada])
 
   // Función para eliminar ubicación
-  const handleDelete = async () => {
+  const handleDelete = useCallback(async () => {
     if (!confirm("¿Estás seguro de que quieres eliminar la ubicación?")) {
       return
     }
@@ -340,21 +406,27 @@ export function UbicacionEditor({
     } finally {
       setIsDeleting(false)
     }
-  }
+  }, [matricula, onUbicacionGuardada])
 
   // Actualizar marcador cuando cambien las coordenadas manualmente
-  const handleCoordinateChange = async (newLat: string, newLng: string) => {
-    const lat = Number.parseFloat(newLat)
-    const lng = Number.parseFloat(newLng)
+  const handleCoordinateChange = useCallback(
+    async (newLat: string, newLng: string) => {
+      const lat = Number.parseFloat(newLat)
+      const lng = Number.parseFloat(newLng)
 
-    if (!isNaN(lat) && !isNaN(lng) && mapInstance.current) {
-      await updateMarker(lat, lng)
-      const address = await geocodeLatLng(lat, lng)
-      if (address && isMounted.current) {
-        setDireccion(address)
+      if (!isNaN(lat) && !isNaN(lng) && mapInstance.current) {
+        await updateMarker(lat, lng)
+        const address = await geocodeLatLng(lat, lng)
+        if (address) {
+          setDireccion(address)
+        }
       }
-    }
-  }
+    },
+    [updateMarker, geocodeLatLng],
+  )
+
+  const isLoading = !isLoaded || isInitializing
+  const displayError = error || mapError
 
   return (
     <Card className="w-full">
@@ -454,11 +526,11 @@ export function UbicacionEditor({
             )}
 
             {/* Overlay de error */}
-            {error && (
+            {displayError && (
               <div className="absolute inset-0 flex items-center justify-center bg-gray-100 z-10">
                 <div className="text-center p-4">
                   <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
-                  <p className="text-red-600 mb-4">{error}</p>
+                  <p className="text-red-600 mb-4">{displayError}</p>
                   <Button onClick={() => window.location.reload()}>Reintentar</Button>
                 </div>
               </div>
