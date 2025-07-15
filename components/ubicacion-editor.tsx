@@ -164,10 +164,10 @@ export function UbicacionEditor({
   const [longitud, setLongitud] = useState<string>(initialLongitud?.toString() || "")
   const [direccion, setDireccion] = useState<string>(initialDireccion || "")
 
-  // Coordenadas exactas de Fulcrum, S.A. en Leioa (Calle Aldapa 13)
+  // Coordenadas exactas de Fulcrum, S.A. en Leioa (Calle Aldapa 13) - obtenidas del enlace de Google Maps
   const FULCRUM_SEDE = {
-    lat: 43.3297,
-    lng: -2.9847,
+    lat: 43.32969,
+    lng: -2.98469,
     address: "Calle Aldapa, 13, 48940 Leioa, Bizkaia, España",
   }
 
@@ -229,7 +229,7 @@ export function UbicacionEditor({
         }
 
         mapInstance.current.setCenter(position)
-        mapInstance.current.setZoom(18) // Zoom más alto para ver mejor la ubicación exacta
+        mapInstance.current.setZoom(19) // Zoom muy alto para ver la ubicación exacta
       } catch (error) {
         console.error("Error actualizando marcador:", error)
       }
@@ -265,7 +265,7 @@ export function UbicacionEditor({
 
       const hasInitialLocation = initialLatitud && initialLongitud
 
-      // Si hay ubicación inicial, usar esa; si no, usar la sede de Fulcrum
+      // Si hay ubicación inicial, usar esa; si no, usar la sede exacta de Fulcrum
       const center = hasInitialLocation ? { lat: Number(initialLatitud), lng: Number(initialLongitud) } : FULCRUM_SEDE
 
       // Determinar el tipo de mapa y zoom
@@ -273,7 +273,9 @@ export function UbicacionEditor({
         ? window.google.maps.MapTypeId.ROADMAP
         : window.google.maps.MapTypeId.SATELLITE
 
-      const zoom = hasInitialLocation ? 15 : 18 // Zoom más alto para la sede
+      const zoom = hasInitialLocation ? 15 : 19 // Zoom máximo para la sede
+
+      console.log("🎯 Centrando mapa en:", center)
 
       const map = new window.google.maps.Map(mapRef.current, {
         zoom,
@@ -284,6 +286,8 @@ export function UbicacionEditor({
           style: window.google.maps.MapTypeControlStyle.HORIZONTAL_BAR,
           position: window.google.maps.ControlPosition.TOP_CENTER,
         },
+        streetViewControl: true,
+        fullscreenControl: true,
       })
 
       mapInstance.current = map
@@ -296,6 +300,31 @@ export function UbicacionEditor({
         setTimeout(() => {
           updateMarker(Number(initialLatitud), Number(initialLongitud))
         }, 200)
+      } else {
+        // Si no hay ubicación inicial, mostrar un marcador en la sede de Fulcrum como referencia
+        setTimeout(() => {
+          const sedeMarker = new window.google.maps.Marker({
+            position: FULCRUM_SEDE,
+            map: mapInstance.current,
+            title: "Sede Fulcrum, S.A.",
+            icon: {
+              url: "https://maps.google.com/mapfiles/ms/icons/blue-dot.png",
+            },
+          })
+
+          const infoWindow = new window.google.maps.InfoWindow({
+            content: `
+              <div style="padding: 8px;">
+                <strong>Sede Fulcrum, S.A.</strong><br>
+                <small>${FULCRUM_SEDE.address}</small>
+              </div>
+            `,
+          })
+
+          sedeMarker.addListener("click", () => {
+            infoWindow.open(mapInstance.current, sedeMarker)
+          })
+        }, 300)
       }
 
       // Agregar listener para clicks en el mapa
@@ -397,7 +426,7 @@ export function UbicacionEditor({
   const handleCenterOnSede = useCallback(() => {
     if (mapInstance.current && isGoogleMapsReady()) {
       mapInstance.current.setCenter(FULCRUM_SEDE)
-      mapInstance.current.setZoom(18)
+      mapInstance.current.setZoom(19)
       mapInstance.current.setMapTypeId(window.google.maps.MapTypeId.SATELLITE)
 
       toast({
@@ -547,7 +576,7 @@ export function UbicacionEditor({
                   handleCoordinateChange(e.target.value, longitud)
                 }
               }}
-              placeholder="Ej: 43.329700"
+              placeholder="Ej: 43.329690"
             />
           </div>
           <div>
@@ -563,7 +592,7 @@ export function UbicacionEditor({
                   handleCoordinateChange(latitud, e.target.value)
                 }
               }}
-              placeholder="Ej: -2.984700"
+              placeholder="Ej: -2.984690"
             />
           </div>
         </div>
