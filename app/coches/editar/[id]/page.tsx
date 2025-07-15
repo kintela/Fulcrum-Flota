@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
 import { notFound } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -6,165 +6,151 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Checkbox } from "@/components/ui/checkbox"
-import { ArrowLeft, Save } from "lucide-react"
+import { ArrowLeft, Car } from "lucide-react"
 import Link from "next/link"
-import { editarCoche } from "./actions"
 import { UbicacionEditor } from "@/components/ubicacion-editor"
+import { editarCoche } from "./actions"
 
-async function getCoche(matricula: string) {
-  const { data, error } = await supabase.from("coches").select("*").eq("matricula", matricula).single()
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
 
-  if (error || !data) {
-    return null
+interface PageProps {
+  params: {
+    id: string
   }
-
-  return data
 }
 
-async function getEmpleados() {
-  const { data, error } = await supabase.from("empleados").select("*").order("nombre")
+export default async function EditarCochePage({ params }: PageProps) {
+  const { id } = params
 
-  if (error) {
-    console.error("Error fetching empleados:", error)
-    return []
-  }
+  // Obtener datos del coche
+  const { data: coche, error } = await supabase.from("coches").select("*").eq("matricula", id).single()
 
-  return data || []
-}
-
-export default async function EditarCochePage({ params }: { params: { id: string } }) {
-  const coche = await getCoche(params.id)
-  const empleados = await getEmpleados()
-
-  if (!coche) {
+  if (error || !coche) {
     notFound()
   }
 
+  // Obtener empleados para el select
+  const { data: empleados } = await supabase.from("empleados").select("id, nombre, apellidos").order("nombre")
+
   return (
-    <div className="min-h-screen bg-gray-100 p-8">
-      <div className="max-w-4xl mx-auto">
-        <div className="mb-8">
-          <div className="flex items-center gap-4 mb-4">
-            <Link href={`/coches/detalle/${coche.matricula}`}>
-              <Button variant="outline" size="sm">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Volver
-              </Button>
-            </Link>
-            <h1 className="text-3xl font-bold text-gray-900">Editar Vehículo</h1>
-          </div>
-          <p className="text-gray-600">Modificar información del vehículo {coche.matricula}</p>
+    <div className="container mx-auto py-6 space-y-6">
+      {/* Header */}
+      <div className="flex items-center gap-4">
+        <Link href="/coches">
+          <Button variant="outline" size="sm">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Volver
+          </Button>
+        </Link>
+        <div>
+          <h1 className="text-3xl font-bold">Editar Vehículo</h1>
+          <p className="text-muted-foreground">Modificar información del vehículo {coche.matricula}</p>
         </div>
+      </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Formulario principal */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Información del Vehículo</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form action={editarCoche} className="space-y-6">
-                <input type="hidden" name="matricula" value={coche.matricula} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Formulario de edición */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Car className="h-5 w-5" />
+              Información del Vehículo
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form action={editarCoche} className="space-y-4">
+              <input type="hidden" name="matricula" value={coche.matricula} />
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="marca">Marca</Label>
-                    <Input id="marca" name="marca" defaultValue={coche.marca || ""} required />
-                  </div>
-                  <div>
-                    <Label htmlFor="modelo">Modelo</Label>
-                    <Input id="modelo" name="modelo" defaultValue={coche.modelo || ""} required />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="color">Color</Label>
-                    <Input id="color" name="color" defaultValue={coche.color || ""} />
-                  </div>
-                  <div>
-                    <Label htmlFor="año">Año</Label>
-                    <Input id="año" name="año" type="number" defaultValue={coche.año || ""} />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="kilometros">Kilómetros</Label>
-                    <Input id="kilometros" name="kilometros" type="number" defaultValue={coche.kilometros || ""} />
-                  </div>
-                  <div>
-                    <Label htmlFor="combustible">Combustible</Label>
-                    <Select name="combustible" defaultValue={coche.combustible || "Gasolina"}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar combustible" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Gasolina">Gasolina</SelectItem>
-                        <SelectItem value="Diesel">Diesel</SelectItem>
-                        <SelectItem value="Híbrido">Híbrido</SelectItem>
-                        <SelectItem value="Eléctrico">Eléctrico</SelectItem>
-                        <SelectItem value="GLP">GLP</SelectItem>
-                        <SelectItem value="GNC">GNC</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="asignadoa">Asignado a</Label>
-                  <Select name="asignadoa" defaultValue={coche.asignadoa?.toString() || "0"}>
+                  <Label htmlFor="marca">Marca</Label>
+                  <Input id="marca" name="marca" defaultValue={coche.marca} required />
+                </div>
+                <div>
+                  <Label htmlFor="modelo">Modelo</Label>
+                  <Input id="modelo" name="modelo" defaultValue={coche.modelo} required />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="año">Año</Label>
+                  <Input id="año" name="año" type="number" defaultValue={coche.año} min="1900" max="2030" />
+                </div>
+                <div>
+                  <Label htmlFor="color">Color</Label>
+                  <Input id="color" name="color" defaultValue={coche.color || ""} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="kilometraje">Kilometraje</Label>
+                  <Input
+                    id="kilometraje"
+                    name="kilometraje"
+                    type="number"
+                    defaultValue={coche.kilometraje || ""}
+                    min="0"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="combustible">Combustible</Label>
+                  <Select name="combustible" defaultValue={coche.combustible || "gasolina"}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar empleado" />
+                      <SelectValue placeholder="Seleccionar combustible" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="0">Sin asignar</SelectItem>
-                      {empleados.map((empleado) => (
-                        <SelectItem key={empleado.id} value={empleado.id.toString()}>
-                          {empleado.nombre} {empleado.apellidos}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="gasolina">Gasolina</SelectItem>
+                      <SelectItem value="diesel">Diésel</SelectItem>
+                      <SelectItem value="hibrido">Híbrido</SelectItem>
+                      <SelectItem value="electrico">Eléctrico</SelectItem>
+                      <SelectItem value="gas">Gas</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
 
-                <div>
-                  <Label htmlFor="extras">Extras</Label>
-                  <Textarea
-                    id="extras"
-                    name="extras"
-                    defaultValue={coche.extras || ""}
-                    placeholder="Describe los extras del vehículo..."
-                    rows={3}
-                  />
-                </div>
+              <div>
+                <Label htmlFor="asignadoa">Asignado a</Label>
+                <Select name="asignadoa" defaultValue={coche.asignadoa?.toString() || "0"}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar empleado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">Sin asignar</SelectItem>
+                    {empleados?.map((empleado) => (
+                      <SelectItem key={empleado.id} value={empleado.id.toString()}>
+                        {empleado.nombre} {empleado.apellidos}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-                <div className="flex items-center space-x-2">
-                  <Checkbox id="donante" name="donante" defaultChecked={coche.donante || false} />
-                  <Label htmlFor="donante">Vehículo donante (para piezas)</Label>
-                </div>
+              <div>
+                <Label htmlFor="observaciones">Observaciones</Label>
+                <Textarea id="observaciones" name="observaciones" defaultValue={coche.observaciones || ""} rows={3} />
+              </div>
 
-                <Button type="submit" className="w-full">
-                  <Save className="h-4 w-4 mr-2" />
-                  Guardar Cambios
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
+              <Button type="submit" className="w-full">
+                Guardar Cambios
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
 
-          {/* Editor de ubicación */}
-          <UbicacionEditor
-            matricula={coche.matricula}
-            latitud={coche.latitud}
-            longitud={coche.longitud}
-            direccion_actual={coche.direccion_actual}
-            onUbicacionGuardada={() => {
-              // Opcional: recargar la página o actualizar datos
-              window.location.reload()
-            }}
-          />
-        </div>
+        {/* Editor de ubicación */}
+        <UbicacionEditor
+          matricula={coche.matricula}
+          latitud={coche.latitud}
+          longitud={coche.longitud}
+          direccion_actual={coche.direccion_actual}
+          onUbicacionGuardada={() => {
+            // Recargar la página para mostrar los cambios
+            window.location.reload()
+          }}
+        />
       </div>
     </div>
   )

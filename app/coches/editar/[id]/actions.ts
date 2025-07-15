@@ -1,21 +1,22 @@
 "use server"
 
-import { supabase } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
 import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
+
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
 
 export async function editarCoche(formData: FormData) {
   try {
     const matricula = formData.get("matricula") as string
     const marca = formData.get("marca") as string
     const modelo = formData.get("modelo") as string
-    const color = formData.get("color") as string
     const año = formData.get("año") as string
-    const kilometros = formData.get("kilometros") as string
+    const color = formData.get("color") as string
+    const kilometraje = formData.get("kilometraje") as string
     const combustible = formData.get("combustible") as string
     const asignadoa = formData.get("asignadoa") as string
-    const extras = formData.get("extras") as string
-    const donante = formData.get("donante") === "on"
+    const observaciones = formData.get("observaciones") as string
 
     // Validaciones básicas
     if (!matricula || !marca || !modelo) {
@@ -24,34 +25,33 @@ export async function editarCoche(formData: FormData) {
 
     // Preparar datos para actualizar
     const updateData: any = {
-      marca,
-      modelo,
-      color: color || null,
+      marca: marca.trim(),
+      modelo: modelo.trim(),
       año: año ? Number.parseInt(año) : null,
-      kilometros: kilometros ? Number.parseInt(kilometros) : null,
+      color: color?.trim() || null,
+      kilometraje: kilometraje ? Number.parseInt(kilometraje) : null,
       combustible: combustible || null,
       asignadoa: asignadoa ? Number.parseInt(asignadoa) : null,
-      extras: extras || null,
-      donante,
+      observaciones: observaciones?.trim() || null,
     }
 
     // Actualizar en la base de datos
     const { error } = await supabase.from("coches").update(updateData).eq("matricula", matricula)
 
     if (error) {
-      console.error("Error updating coche:", error)
+      console.error("Error actualizando coche:", error)
       throw new Error("Error al actualizar el vehículo")
     }
 
     // Revalidar las páginas relacionadas
     revalidatePath("/coches")
     revalidatePath(`/coches/detalle/${matricula}`)
-    revalidatePath("/")
+    revalidatePath(`/coches/editar/${matricula}`)
 
-    // Redirigir a la página de detalle
+    // Redirigir a la página de detalles
     redirect(`/coches/detalle/${matricula}`)
   } catch (error) {
-    console.error("Error in editarCoche:", error)
+    console.error("Error en editarCoche:", error)
     throw error
   }
 }

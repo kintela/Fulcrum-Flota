@@ -16,17 +16,36 @@ interface UbicacionEditorProps {
   onUbicacionGuardada?: () => void
 }
 
-// Hook personalizado para Google Maps (reutilizado)
+// Hook personalizado para Google Maps (mejorado)
 function useGoogleMaps() {
   const [isLoaded, setIsLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const loadingRef = useRef(false)
 
+  // Función para verificar si Google Maps está completamente cargado
+  const isGoogleMapsReady = useCallback(() => {
+    return !!(
+      window.google &&
+      window.google.maps &&
+      window.google.maps.Map &&
+      window.google.maps.Marker &&
+      window.google.maps.InfoWindow &&
+      window.google.maps.LatLngBounds &&
+      window.google.maps.MapTypeId &&
+      window.google.maps.MapTypeId.ROADMAP &&
+      window.google.maps.Geocoder &&
+      window.google.maps.event
+    )
+  }, [])
+
   const loadGoogleMaps = useCallback(async () => {
-    if (loadingRef.current || isLoaded || window.google?.maps) {
-      if (window.google?.maps) {
-        setIsLoaded(true)
-      }
+    if (loadingRef.current || isLoaded) {
+      return
+    }
+
+    // Verificar si ya está cargado
+    if (isGoogleMapsReady()) {
+      setIsLoaded(true)
       return
     }
 
@@ -40,20 +59,22 @@ function useGoogleMaps() {
 
     try {
       // Verificar si ya existe el script
-      if (document.querySelector('script[src*="maps.googleapis.com"]')) {
-        // Esperar a que se cargue
+      const existingScript = document.querySelector('script[src*="maps.googleapis.com"]')
+
+      if (existingScript) {
+        // Script ya existe, esperar a que se cargue completamente
         let attempts = 0
         const checkLoaded = () => {
-          if (window.google?.maps) {
+          if (isGoogleMapsReady()) {
             setIsLoaded(true)
             loadingRef.current = false
             return
           }
           attempts++
-          if (attempts < 50) {
-            setTimeout(checkLoaded, 200)
+          if (attempts < 100) {
+            setTimeout(checkLoaded, 100)
           } else {
-            setError("Timeout cargando Google Maps")
+            setError("Timeout: Google Maps no se cargó completamente")
             loadingRef.current = false
           }
         }
@@ -61,42 +82,62 @@ function useGoogleMaps() {
         return
       }
 
+      // Crear callback único para este intento de carga
+      const callbackName = `initGoogleMapsEditor_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+      // Definir callback global
+      ;(window as any)[callbackName] = () => {
+        console.log("🗺️ Callback de Google Maps Editor ejecutado")
+
+        // Verificar que todo esté disponible
+        let checkAttempts = 0
+        const verifyComplete = () => {
+          if (isGoogleMapsReady()) {
+            console.log("✅ Google Maps Editor completamente cargado")
+            setIsLoaded(true)
+            loadingRef.current = false
+            // Limpiar callback
+            delete (window as any)[callbackName]
+          } else {
+            checkAttempts++
+            if (checkAttempts < 50) {
+              setTimeout(verifyComplete, 100)
+            } else {
+              setError("Google Maps no se cargó completamente")
+              loadingRef.current = false
+              delete (window as any)[callbackName]
+            }
+          }
+        }
+        verifyComplete()
+      }
+
       // Crear script
       const script = document.createElement("script")
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&loading=async`
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=${callbackName}&loading=async`
       script.async = true
       script.defer = true
 
-      script.onload = () => {
-        // Esperar a que Google Maps esté completamente disponible
-        const checkReady = () => {
-          if (window.google?.maps) {
-            setIsLoaded(true)
-            loadingRef.current = false
-          } else {
-            setTimeout(checkReady, 100)
-          }
-        }
-        checkReady()
-      }
-
       script.onerror = () => {
-        setError("Error cargando Google Maps")
+        setError("Error cargando el script de Google Maps")
         loadingRef.current = false
+        delete (window as any)[callbackName]
       }
 
+      console.log("🔄 Cargando Google Maps Editor...")
       document.head.appendChild(script)
     } catch (err) {
+      console.error("Error al cargar Google Maps:", err)
       setError("Error al cargar Google Maps")
       loadingRef.current = false
     }
-  }, [isLoaded])
+  }, [isLoaded, isGoogleMapsReady])
 
   useEffect(() => {
     loadGoogleMaps()
   }, [loadGoogleMaps])
 
-  return { isLoaded, error, loadGoogleMaps }
+  return { isLoaded, error, loadGoogleMaps, isGoogleMapsReady }
 }
 
 export function UbicacionEditor({
@@ -110,7 +151,7 @@ export function UbicacionEditor({
   const mapInstance = useRef<any>(null)
   const marker = useRef<any>(null)
   const geocoder = useRef<any>(null)
-  const { isLoaded, error } = useGoogleMaps()
+  const { isLoaded, error, isGoogleMapsReady } = useGoogleMaps()
 
   const [isInitializing, setIsInitializing] = useState(false)
   const [mapError, setMapError] = useState<string | null>(null)
@@ -123,30 +164,33 @@ export function UbicacionEditor({
   const [direccion, setDireccion] = useState<string>(initialDireccion || "")
 
   // Función para obtener dirección desde coordenadas
-  const geocodeLatLng = useCallback(async (lat: number, lng: number) => {
-    if (!geocoder.current) return null
+  const geocodeLatLng = useCallback(
+    async (lat: number, lng: number) => {
+      if (!geocoder.current || !isGoogleMapsReady()) return null
 
-    try {
-      const response = await new Promise((resolve, reject) => {
-        geocoder.current.geocode({ location: { lat, lng } }, (results: any[], status: string) => {
-          if (status === "OK" && results[0]) {
-            resolve(results[0].formatted_address)
-          } else {
-            reject(new Error(`Geocoding failed: ${status}`))
-          }
+      try {
+        const response = await new Promise((resolve, reject) => {
+          geocoder.current.geocode({ location: { lat, lng } }, (results: any[], status: string) => {
+            if (status === "OK" && results[0]) {
+              resolve(results[0].formatted_address)
+            } else {
+              reject(new Error(`Geocoding failed: ${status}`))
+            }
+          })
         })
-      })
-      return response as string
-    } catch (error) {
-      console.error("Error en geocoding:", error)
-      return null
-    }
-  }, [])
+        return response as string
+      } catch (error) {
+        console.error("Error en geocoding:", error)
+        return null
+      }
+    },
+    [isGoogleMapsReady],
+  )
 
   // Función para actualizar marcador
   const updateMarker = useCallback(
     async (lat: number, lng: number) => {
-      if (!mapInstance.current || !window.google) return
+      if (!mapInstance.current || !isGoogleMapsReady()) return
 
       const position = { lat, lng }
 
@@ -182,12 +226,12 @@ export function UbicacionEditor({
         console.error("Error actualizando marcador:", error)
       }
     },
-    [matricula, geocodeLatLng],
+    [matricula, geocodeLatLng, isGoogleMapsReady],
   )
 
   // Función para inicializar el editor
   const initializeEditor = useCallback(async () => {
-    if (!mapRef.current || !isLoaded || !window.google?.maps || mapInstance.current) {
+    if (!mapRef.current || !isLoaded || !isGoogleMapsReady() || mapInstance.current) {
       return
     }
 
@@ -196,6 +240,19 @@ export function UbicacionEditor({
 
     try {
       console.log("🗺️ Editor - Inicializando...")
+      console.log("Verificando Google Maps Editor:", {
+        google: !!window.google,
+        maps: !!window.google?.maps,
+        Map: !!window.google?.maps?.Map,
+        MapTypeId: !!window.google?.maps?.MapTypeId,
+        ROADMAP: !!window.google?.maps?.MapTypeId?.ROADMAP,
+        Geocoder: !!window.google?.maps?.Geocoder,
+      })
+
+      // Verificación adicional
+      if (!window.google?.maps?.MapTypeId?.ROADMAP) {
+        throw new Error("Google Maps MapTypeId no está disponible")
+      }
 
       const hasInitialLocation = initialLatitud && initialLongitud
       const center = hasInitialLocation
@@ -240,17 +297,20 @@ export function UbicacionEditor({
       setIsInitializing(false)
     } catch (err) {
       console.error("❌ Error creando editor:", err)
-      setMapError("Error al crear el editor de ubicación")
+      setMapError(`Error al crear el editor de ubicación: ${err instanceof Error ? err.message : "Error desconocido"}`)
       setIsInitializing(false)
     }
-  }, [isLoaded, initialLatitud, initialLongitud, updateMarker, geocodeLatLng])
+  }, [isLoaded, initialLatitud, initialLongitud, updateMarker, geocodeLatLng, isGoogleMapsReady])
 
   // Effect para inicializar el editor cuando esté listo
   useEffect(() => {
-    if (isLoaded && !mapInstance.current) {
-      initializeEditor()
+    if (isLoaded && isGoogleMapsReady() && !mapInstance.current) {
+      // Pequeño delay para asegurar que todo esté listo
+      setTimeout(() => {
+        initializeEditor()
+      }, 100)
     }
-  }, [isLoaded, initializeEditor])
+  }, [isLoaded, initializeEditor, isGoogleMapsReady])
 
   // Cleanup al desmontar
   useEffect(() => {
@@ -414,7 +474,7 @@ export function UbicacionEditor({
       const lat = Number.parseFloat(newLat)
       const lng = Number.parseFloat(newLng)
 
-      if (!isNaN(lat) && !isNaN(lng) && mapInstance.current) {
+      if (!isNaN(lat) && !isNaN(lng) && mapInstance.current && isGoogleMapsReady()) {
         await updateMarker(lat, lng)
         const address = await geocodeLatLng(lat, lng)
         if (address) {
@@ -422,7 +482,7 @@ export function UbicacionEditor({
         }
       }
     },
-    [updateMarker, geocodeLatLng],
+    [updateMarker, geocodeLatLng, isGoogleMapsReady],
   )
 
   const isLoading = !isLoaded || isInitializing
@@ -521,6 +581,7 @@ export function UbicacionEditor({
                 <div className="text-center">
                   <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-gray-400" />
                   <p className="text-gray-500 text-sm">Cargando editor...</p>
+                  {!isLoaded && <p className="text-xs text-gray-400 mt-2">Cargando Google Maps...</p>}
                 </div>
               </div>
             )}

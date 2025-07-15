@@ -22,17 +22,36 @@ interface MapaCochesProps {
   empleados?: any[]
 }
 
-// Hook personalizado para Google Maps
+// Hook personalizado para Google Maps con verificación completa
 function useGoogleMaps() {
   const [isLoaded, setIsLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const loadingRef = useRef(false)
 
+  // Función para verificar si Google Maps está completamente cargado
+  const isGoogleMapsReady = useCallback(() => {
+    return !!(
+      window.google &&
+      window.google.maps &&
+      window.google.maps.Map &&
+      window.google.maps.Marker &&
+      window.google.maps.InfoWindow &&
+      window.google.maps.LatLngBounds &&
+      window.google.maps.MapTypeId &&
+      window.google.maps.MapTypeId.ROADMAP &&
+      window.google.maps.SymbolPath &&
+      window.google.maps.event
+    )
+  }, [])
+
   const loadGoogleMaps = useCallback(async () => {
-    if (loadingRef.current || isLoaded || window.google?.maps) {
-      if (window.google?.maps) {
-        setIsLoaded(true)
-      }
+    if (loadingRef.current || isLoaded) {
+      return
+    }
+
+    // Verificar si ya está cargado
+    if (isGoogleMapsReady()) {
+      setIsLoaded(true)
       return
     }
 
@@ -46,20 +65,23 @@ function useGoogleMaps() {
 
     try {
       // Verificar si ya existe el script
-      if (document.querySelector('script[src*="maps.googleapis.com"]')) {
-        // Esperar a que se cargue
+      const existingScript = document.querySelector('script[src*="maps.googleapis.com"]')
+
+      if (existingScript) {
+        // Script ya existe, esperar a que se cargue completamente
         let attempts = 0
         const checkLoaded = () => {
-          if (window.google?.maps) {
+          if (isGoogleMapsReady()) {
             setIsLoaded(true)
             loadingRef.current = false
             return
           }
           attempts++
-          if (attempts < 50) {
-            setTimeout(checkLoaded, 200)
+          if (attempts < 100) {
+            // Aumentar intentos
+            setTimeout(checkLoaded, 100)
           } else {
-            setError("Timeout cargando Google Maps")
+            setError("Timeout: Google Maps no se cargó completamente")
             loadingRef.current = false
           }
         }
@@ -67,49 +89,69 @@ function useGoogleMaps() {
         return
       }
 
+      // Crear callback único para este intento de carga
+      const callbackName = `initGoogleMaps_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+      // Definir callback global
+      ;(window as any)[callbackName] = () => {
+        console.log("🗺️ Callback de Google Maps ejecutado")
+
+        // Verificar que todo esté disponible
+        let checkAttempts = 0
+        const verifyComplete = () => {
+          if (isGoogleMapsReady()) {
+            console.log("✅ Google Maps completamente cargado")
+            setIsLoaded(true)
+            loadingRef.current = false
+            // Limpiar callback
+            delete (window as any)[callbackName]
+          } else {
+            checkAttempts++
+            if (checkAttempts < 50) {
+              setTimeout(verifyComplete, 100)
+            } else {
+              setError("Google Maps no se cargó completamente")
+              loadingRef.current = false
+              delete (window as any)[callbackName]
+            }
+          }
+        }
+        verifyComplete()
+      }
+
       // Crear script
       const script = document.createElement("script")
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&loading=async`
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=${callbackName}&loading=async`
       script.async = true
       script.defer = true
 
-      script.onload = () => {
-        // Esperar a que Google Maps esté completamente disponible
-        const checkReady = () => {
-          if (window.google?.maps) {
-            setIsLoaded(true)
-            loadingRef.current = false
-          } else {
-            setTimeout(checkReady, 100)
-          }
-        }
-        checkReady()
-      }
-
       script.onerror = () => {
-        setError("Error cargando Google Maps")
+        setError("Error cargando el script de Google Maps")
         loadingRef.current = false
+        delete (window as any)[callbackName]
       }
 
+      console.log("🔄 Cargando Google Maps...")
       document.head.appendChild(script)
     } catch (err) {
+      console.error("Error al cargar Google Maps:", err)
       setError("Error al cargar Google Maps")
       loadingRef.current = false
     }
-  }, [isLoaded])
+  }, [isLoaded, isGoogleMapsReady])
 
   useEffect(() => {
     loadGoogleMaps()
   }, [loadGoogleMaps])
 
-  return { isLoaded, error, loadGoogleMaps }
+  return { isLoaded, error, loadGoogleMaps, isGoogleMapsReady }
 }
 
 export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstance = useRef<any>(null)
   const markers = useRef<any[]>([])
-  const { isLoaded, error } = useGoogleMaps()
+  const { isLoaded, error, isGoogleMapsReady } = useGoogleMaps()
 
   const [isInitializing, setIsInitializing] = useState(false)
   const [mapError, setMapError] = useState<string | null>(null)
@@ -152,7 +194,10 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
   // Función para agregar marcadores
   const addMarkers = useCallback(
     (map: any) => {
-      if (!map || !window.google?.maps) return
+      if (!map || !isGoogleMapsReady()) {
+        console.warn("Mapa o Google Maps no están listos para agregar marcadores")
+        return
+      }
 
       // Limpiar marcadores existentes
       clearMarkers()
@@ -245,12 +290,12 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
         }
       }
     },
-    [coches, getEmpleadoInfo, clearMarkers],
+    [coches, getEmpleadoInfo, clearMarkers, isGoogleMapsReady],
   )
 
   // Función para inicializar el mapa
   const initializeMap = useCallback(async () => {
-    if (!mapRef.current || !isLoaded || !window.google?.maps || mapInstance.current) {
+    if (!mapRef.current || !isLoaded || !isGoogleMapsReady() || mapInstance.current) {
       return
     }
 
@@ -259,6 +304,18 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
 
     try {
       console.log("🗺️ Inicializando mapa...")
+      console.log("Verificando Google Maps:", {
+        google: !!window.google,
+        maps: !!window.google?.maps,
+        Map: !!window.google?.maps?.Map,
+        MapTypeId: !!window.google?.maps?.MapTypeId,
+        ROADMAP: !!window.google?.maps?.MapTypeId?.ROADMAP,
+      })
+
+      // Verificación adicional
+      if (!window.google?.maps?.MapTypeId?.ROADMAP) {
+        throw new Error("Google Maps MapTypeId no está disponible")
+      }
 
       // Crear el mapa
       const map = new window.google.maps.Map(mapRef.current, {
@@ -297,21 +354,24 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
       setMapError(`Error al crear el mapa: ${err instanceof Error ? err.message : "Error desconocido"}`)
       setIsInitializing(false)
     }
-  }, [isLoaded, addMarkers, isInitializing])
+  }, [isLoaded, addMarkers, isInitializing, isGoogleMapsReady])
 
   // Effect para inicializar el mapa cuando esté listo
   useEffect(() => {
-    if (isLoaded && !mapInstance.current) {
-      initializeMap()
+    if (isLoaded && isGoogleMapsReady() && !mapInstance.current) {
+      // Pequeño delay para asegurar que todo esté listo
+      setTimeout(() => {
+        initializeMap()
+      }, 100)
     }
-  }, [isLoaded, initializeMap])
+  }, [isLoaded, initializeMap, isGoogleMapsReady])
 
   // Effect para actualizar marcadores cuando cambien los datos
   useEffect(() => {
-    if (mapInstance.current && isLoaded) {
+    if (mapInstance.current && isLoaded && isGoogleMapsReady()) {
       addMarkers(mapInstance.current)
     }
-  }, [coches, empleados, addMarkers, isLoaded])
+  }, [coches, empleados, addMarkers, isLoaded, isGoogleMapsReady])
 
   // Cleanup al desmontar
   useEffect(() => {
@@ -328,7 +388,7 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
   }, [])
 
   const handleCenter = useCallback(() => {
-    if (mapInstance.current && coches.length > 0) {
+    if (mapInstance.current && coches.length > 0 && isGoogleMapsReady()) {
       const cochesConUbicacion = coches.filter((c) => c.latitud && c.longitud && !c.donante)
       if (cochesConUbicacion.length > 0) {
         try {
@@ -342,7 +402,7 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
         }
       }
     }
-  }, [coches])
+  }, [coches, isGoogleMapsReady])
 
   const cochesConUbicacion = coches.filter((c) => c.latitud && c.longitud && !c.donante)
   const cochesAsignados = cochesConUbicacion.filter((c) => getEmpleadoInfo(c) || c.asignadoa)
@@ -423,6 +483,7 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
                     <p className="text-xs text-gray-400">
                       Total coches: {coches.length} | Con ubicación: {cochesConUbicacion.length}
                     </p>
+                    {!isLoaded && <p className="text-xs text-gray-400 mt-2">Cargando Google Maps...</p>}
                   </div>
                 </div>
               )}

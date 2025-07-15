@@ -1,19 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
+
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
 
 export async function POST(request: NextRequest, { params }: { params: { matricula: string } }) {
   try {
     const { matricula } = params
-    const body = await request.json()
-    const { latitud, longitud, direccion_actual } = body
+    const { latitud, longitud, direccion_actual } = await request.json()
 
     // Validar datos
     if (!latitud || !longitud) {
       return NextResponse.json({ error: "Latitud y longitud son requeridas" }, { status: 400 })
-    }
-
-    if (isNaN(Number(latitud)) || isNaN(Number(longitud))) {
-      return NextResponse.json({ error: "Latitud y longitud deben ser números válidos" }, { status: 400 })
     }
 
     // Actualizar ubicación en la base de datos
@@ -30,14 +27,18 @@ export async function POST(request: NextRequest, { params }: { params: { matricu
 
     if (error) {
       console.error("Error actualizando ubicación:", error)
-      return NextResponse.json({ error: "Error al actualizar ubicación" }, { status: 500 })
+      return NextResponse.json({ error: "Error al actualizar la ubicación" }, { status: 500 })
     }
 
     if (!data || data.length === 0) {
       return NextResponse.json({ error: "Vehículo no encontrado" }, { status: 404 })
     }
 
-    return NextResponse.json({ success: true, data: data[0] })
+    return NextResponse.json({
+      success: true,
+      message: "Ubicación actualizada correctamente",
+      data: data[0],
+    })
   } catch (error) {
     console.error("Error en POST /api/coches/[matricula]/ubicacion:", error)
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
@@ -48,7 +49,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { matri
   try {
     const { matricula } = params
 
-    // Eliminar ubicación de la base de datos
+    // Eliminar ubicación en la base de datos
     const { data, error } = await supabase
       .from("coches")
       .update({
@@ -62,14 +63,18 @@ export async function DELETE(request: NextRequest, { params }: { params: { matri
 
     if (error) {
       console.error("Error eliminando ubicación:", error)
-      return NextResponse.json({ error: "Error al eliminar ubicación" }, { status: 500 })
+      return NextResponse.json({ error: "Error al eliminar la ubicación" }, { status: 500 })
     }
 
     if (!data || data.length === 0) {
       return NextResponse.json({ error: "Vehículo no encontrado" }, { status: 404 })
     }
 
-    return NextResponse.json({ success: true, data: data[0] })
+    return NextResponse.json({
+      success: true,
+      message: "Ubicación eliminada correctamente",
+      data: data[0],
+    })
   } catch (error) {
     console.error("Error en DELETE /api/coches/[matricula]/ubicacion:", error)
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
