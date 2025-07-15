@@ -8,38 +8,99 @@ export async function editarCoche(formData: FormData) {
   const supabase = createClient()
 
   const matricula = formData.get("matricula") as string
-  const marca = formData.get("marca") as string
-  const modelo = formData.get("modelo") as string
-  const año = Number.parseInt(formData.get("año") as string)
-  const color = formData.get("color") as string
-  const combustible = formData.get("combustible") as string
-  const kilometraje = formData.get("kilometraje") as string
+
+  // Extraer todos los campos del formulario
+  const updateData: any = {}
+
+  // Campos de texto
+  const textFields = [
+    "marca",
+    "modelo",
+    "color",
+    "combustible",
+    "extras",
+    "numero_bastidor",
+    "numero_motor",
+    "notas_mantenimiento",
+    "direccion_actual",
+  ]
+
+  textFields.forEach((field) => {
+    const value = formData.get(field) as string
+    if (value !== null && value !== "") {
+      updateData[field] = value
+    }
+  })
+
+  // Campos numéricos
+  const numberFields = [
+    "año",
+    "kilometraje",
+    "precio",
+    "km_ultimo_mantenimiento",
+    "km_proximo_mantenimiento",
+    "latitud",
+    "longitud",
+  ]
+
+  numberFields.forEach((field) => {
+    const value = formData.get(field) as string
+    if (value !== null && value !== "") {
+      const numValue = Number(value)
+      if (!isNaN(numValue)) {
+        updateData[field] = numValue
+      }
+    }
+  })
+
+  // Campos de fecha
+  const dateFields = [
+    "fecha_compra",
+    "fecha_matriculacion",
+    "ultimo_mantenimiento",
+    "proximo_mantenimiento",
+    "ultima_ubicacion",
+  ]
+
+  dateFields.forEach((field) => {
+    const value = formData.get(field) as string
+    if (value !== null && value !== "") {
+      updateData[field] = value
+    }
+  })
+
+  // Campo de asignación (puede ser número o null)
   const asignadoa = formData.get("asignadoa") as string
-  const extras = formData.get("extras") as string
+  if (asignadoa !== null) {
+    if (asignadoa === "" || asignadoa === "null") {
+      updateData.asignadoa = null
+    } else {
+      const numValue = Number(asignadoa)
+      if (!isNaN(numValue)) {
+        updateData.asignadoa = numValue
+      }
+    }
+  }
+
+  // Campo booleano
   const donante = formData.get("donante") === "on"
+  updateData.donante = donante
 
   try {
-    const updateData: any = {
-      marca,
-      modelo,
-      año,
-      color: color || null,
-      combustible: combustible || null,
-      kilometraje: kilometraje ? Number.parseInt(kilometraje) : null,
-      asignadoa: asignadoa ? Number.parseInt(asignadoa) : null,
-      extras: extras || null,
-      donante,
-    }
-
-    const { error } = await supabase.from("coches").update(updateData).eq("matricula", matricula)
+    const { data, error } = await supabase.from("coches").update(updateData).eq("matricula", matricula).select()
 
     if (error) {
       console.error("Error actualizando coche:", error)
       throw new Error("Error al actualizar el vehículo")
     }
 
+    if (!data || data.length === 0) {
+      throw new Error("Vehículo no encontrado")
+    }
+
     revalidatePath("/coches")
     revalidatePath(`/coches/detalle/${matricula}`)
+    revalidatePath(`/coches/editar/${matricula}`)
   } catch (error) {
     console.error("Error en editarCoche:", error)
     throw error

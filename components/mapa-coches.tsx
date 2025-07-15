@@ -25,8 +25,9 @@ interface MapaCochesProps {
 declare global {
   interface Window {
     google: any
-    googleMapsLoaded?: boolean
-    googleMapsCallbacks?: (() => void)[]
+    googleMapsInitialized?: boolean
+    googleMapsCallbacks?: Set<() => void>
+    initGoogleMapsGlobal?: () => void
   }
 }
 
@@ -35,7 +36,8 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
   const mapInstance = useRef<any>(null)
   const markers = useRef<any[]>([])
   const initAttempts = useRef(0)
-  const componentMounted = useRef(true)
+  const isMounted = useRef(true)
+  const callbackRef = useRef<() => void>()
 
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -60,6 +62,8 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
 
   // Función para agregar marcadores
   const addMarkers = (map: any) => {
+    if (!isMounted.current) return
+
     // Limpiar marcadores existentes
     markers.current.forEach((marker) => {
       if (marker && marker.setMap) {
@@ -149,9 +153,9 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
     }
   }
 
-  // Función para intentar inicializar el mapa con reintentos
+  // Función para intentar inicializar el mapa
   const attemptMapInitialization = () => {
-    if (!componentMounted.current) return
+    if (!isMounted.current) return
 
     initAttempts.current += 1
     console.log(`🗺️ Intento de inicialización #${initAttempts.current}`)
@@ -162,15 +166,19 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
         setTimeout(attemptMapInitialization, delay)
         return
       } else {
-        setError("Contenedor del mapa no disponible después de múltiples intentos")
-        setIsLoading(false)
+        if (isMounted.current) {
+          setError("Contenedor del mapa no disponible después de múltiples intentos")
+          setIsLoading(false)
+        }
         return
       }
     }
 
     if (!window.google?.maps) {
-      setError("Google Maps no está disponible")
-      setIsLoading(false)
+      if (isMounted.current) {
+        setError("Google Maps no está disponible")
+        setIsLoading(false)
+      }
       return
     }
 
@@ -194,7 +202,7 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
 
       // Esperar a que el mapa esté listo
       window.google.maps.event.addListenerOnce(map, "idle", () => {
-        if (componentMounted.current) {
+        if (isMounted.current) {
           console.log("🎯 Mapa completamente listo")
           setIsLoading(false)
           setError(null)
@@ -204,7 +212,7 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
 
       // Fallback
       setTimeout(() => {
-        if (isLoading && componentMounted.current) {
+        if (isLoading && isMounted.current) {
           console.log("⏰ Fallback: marcando como listo")
           setIsLoading(false)
           setError(null)
@@ -213,12 +221,14 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
       }, 3000)
     } catch (err) {
       console.error("❌ Error creando el mapa:", err)
-      setError(`Error al crear el mapa: ${err instanceof Error ? err.message : "Error desconocido"}`)
-      setIsLoading(false)
+      if (isMounted.current) {
+        setError(`Error al crear el mapa: ${err instanceof Error ? err.message : "Error desconocido"}`)
+        setIsLoading(false)
+      }
     }
   }
 
-  // Función para cargar Google Maps de forma segura
+  // Función para cargar Google Maps
   const loadGoogleMaps = () => {
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
@@ -235,42 +245,32 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
       return
     }
 
-    // Verificar si ya hay un script cargándose
-    const existingScript = document.querySelector('script[src*="maps.googleapis.com"]')
-    if (existingScript) {
-      console.log("🔄 Script de Google Maps ya existe, esperando...")
+    // Crear callback para este componente
+    callbackRef.current = attemptMapInitialization
 
-      // Agregar callback a la cola
-      if (!window.googleMapsCallbacks) {
-        window.googleMapsCallbacks = []
-      }
-      window.googleMapsCallbacks.push(attemptMapInitialization)
+    // Inicializar el sistema de callbacks si no existe
+    if (!window.googleMapsCallbacks) {
+      window.googleMapsCallbacks = new Set()
+    }
 
-      // Verificar periódicamente si está listo
-      const checkInterval = setInterval(() => {
-        if (window.google?.maps) {
-          clearInterval(checkInterval)
-          attemptMapInitialization()
-        }
-      }, 100)
+    // Agregar nuestro callback
+    window.googleMapsCallbacks.add(callbackRef.current)
 
-      setTimeout(() => {
-        clearInterval(checkInterval)
-        if (!window.google?.maps && componentMounted.current) {
-          setError("Timeout esperando Google Maps")
-          setIsLoading(false)
-        }
-      }, 10000)
+    // Si ya se está inicializando, solo esperar
+    if (window.googleMapsInitialized) {
+      console.log("🔄 Google Maps ya se está inicializando...")
       return
     }
 
-    // Crear callback global único
-    const callbackName = "initGoogleMaps"
-    if (!window[callbackName as keyof Window]) {
-      ;(window as any)[callbackName] = () => {
-        console.log("📞 Google Maps callback ejecutado")
+    // Marcar como inicializando
+    window.googleMapsInitialized = true
 
-        // Ejecutar todos los callbacks pendientes
+    // Crear callback global único
+    if (!window.initGoogleMapsGlobal) {
+      window.initGoogleMapsGlobal = () => {
+        console.log("📞 Google Maps callback global ejecutado")
+
+        // Ejecutar todos los callbacks registrados
         if (window.googleMapsCallbacks) {
           window.googleMapsCallbacks.forEach((callback) => {
             try {
@@ -279,34 +279,31 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
               console.error("Error ejecutando callback:", error)
             }
           })
-          window.googleMapsCallbacks = []
         }
       }
     }
 
-    // Agregar nuestro callback a la cola
-    if (!window.googleMapsCallbacks) {
-      window.googleMapsCallbacks = []
+    // Verificar si ya existe el script
+    const existingScript = document.querySelector('script[src*="maps.googleapis.com"]')
+    if (existingScript) {
+      console.log("🔄 Script ya existe, esperando...")
+      return
     }
-    window.googleMapsCallbacks.push(attemptMapInitialization)
 
-    // Cargar script solo si no existe
+    // Cargar script
     console.log("📝 Cargando Google Maps...")
     const script = document.createElement("script")
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=${callbackName}&loading=async`
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initGoogleMapsGlobal&loading=async`
     script.async = true
     script.defer = true
-    script.id = "google-maps-main-script"
-
-    script.onload = () => {
-      console.log("✅ Script de Google Maps cargado")
-    }
 
     script.onerror = () => {
       console.error("❌ Error cargando Google Maps")
-      if (componentMounted.current) {
-        setError("Error al cargar Google Maps")
-        setIsLoading(false)
+      window.googleMapsInitialized = false
+      if (window.googleMapsCallbacks) {
+        window.googleMapsCallbacks.forEach((callback) => {
+          // Notificar error a todos los callbacks
+        })
       }
     }
 
@@ -315,11 +312,16 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
 
   // Effect principal
   useEffect(() => {
-    componentMounted.current = true
+    isMounted.current = true
     loadGoogleMaps()
 
     return () => {
-      componentMounted.current = false
+      isMounted.current = false
+
+      // Remover callback del set global
+      if (callbackRef.current && window.googleMapsCallbacks) {
+        window.googleMapsCallbacks.delete(callbackRef.current)
+      }
 
       // Limpiar marcadores
       markers.current.forEach((marker) => {
@@ -328,6 +330,9 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
         }
       })
       markers.current = []
+
+      // Limpiar instancia del mapa
+      mapInstance.current = null
     }
   }, [])
 

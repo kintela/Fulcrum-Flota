@@ -3,7 +3,6 @@ import { createClient } from "@/lib/supabase"
 
 export async function POST(request: NextRequest, { params }: { params: { matricula: string } }) {
   try {
-    const supabase = createClient()
     const { matricula } = params
     const { latitud, longitud, direccion_actual } = await request.json()
 
@@ -12,7 +11,13 @@ export async function POST(request: NextRequest, { params }: { params: { matricu
       return NextResponse.json({ error: "Latitud y longitud son requeridas" }, { status: 400 })
     }
 
-    // Actualizar ubicación del coche
+    if (isNaN(Number(latitud)) || isNaN(Number(longitud))) {
+      return NextResponse.json({ error: "Latitud y longitud deben ser números válidos" }, { status: 400 })
+    }
+
+    const supabase = createClient()
+
+    // Actualizar ubicación del vehículo
     const { data, error } = await supabase
       .from("coches")
       .update({
@@ -26,7 +31,7 @@ export async function POST(request: NextRequest, { params }: { params: { matricu
 
     if (error) {
       console.error("Error actualizando ubicación:", error)
-      return NextResponse.json({ error: "Error al actualizar ubicación" }, { status: 500 })
+      return NextResponse.json({ error: "Error al actualizar la ubicación" }, { status: 500 })
     }
 
     if (!data || data.length === 0) {
@@ -46,10 +51,10 @@ export async function POST(request: NextRequest, { params }: { params: { matricu
 
 export async function DELETE(request: NextRequest, { params }: { params: { matricula: string } }) {
   try {
-    const supabase = createClient()
     const { matricula } = params
+    const supabase = createClient()
 
-    // Eliminar ubicación del coche
+    // Eliminar ubicación del vehículo
     const { data, error } = await supabase
       .from("coches")
       .update({
@@ -63,7 +68,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { matri
 
     if (error) {
       console.error("Error eliminando ubicación:", error)
-      return NextResponse.json({ error: "Error al eliminar ubicación" }, { status: 500 })
+      return NextResponse.json({ error: "Error al eliminar la ubicación" }, { status: 500 })
     }
 
     if (!data || data.length === 0) {
