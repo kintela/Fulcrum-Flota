@@ -39,6 +39,7 @@ function useGoogleMaps() {
       window.google.maps.LatLngBounds &&
       window.google.maps.MapTypeId &&
       window.google.maps.MapTypeId.ROADMAP &&
+      window.google.maps.MapTypeId.SATELLITE &&
       window.google.maps.SymbolPath &&
       window.google.maps.event
     )
@@ -281,8 +282,9 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
         try {
           map.fitBounds(bounds)
           const listener = window.google.maps.event.addListenerOnce(map, "bounds_changed", () => {
-            if (map.getZoom() > 15) {
-              map.setZoom(15)
+            // Zoom más alto para mejor vista de los vehículos
+            if (map.getZoom() > 12) {
+              map.setZoom(12)
             }
           })
         } catch (error) {
@@ -310,18 +312,26 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
         Map: !!window.google?.maps?.Map,
         MapTypeId: !!window.google?.maps?.MapTypeId,
         ROADMAP: !!window.google?.maps?.MapTypeId?.ROADMAP,
+        SATELLITE: !!window.google?.maps?.MapTypeId?.SATELLITE,
       })
 
       // Verificación adicional
-      if (!window.google?.maps?.MapTypeId?.ROADMAP) {
+      if (!window.google?.maps?.MapTypeId?.SATELLITE) {
         throw new Error("Google Maps MapTypeId no está disponible")
       }
 
-      // Crear el mapa
+      // Crear el mapa en modo satélite por defecto
       const map = new window.google.maps.Map(mapRef.current, {
-        zoom: 6,
-        center: { lat: 40.4168, lng: -3.7038 }, // Madrid
-        mapTypeId: window.google.maps.MapTypeId.ROADMAP,
+        zoom: 10, // Zoom más alto por defecto
+        center: { lat: 43.2627, lng: -2.9253 }, // Bilbao como centro por defecto
+        mapTypeId: window.google.maps.MapTypeId.SATELLITE, // Modo satélite por defecto
+        mapTypeControl: true,
+        mapTypeControlOptions: {
+          style: window.google.maps.MapTypeControlStyle.HORIZONTAL_BAR,
+          position: window.google.maps.ControlPosition.TOP_CENTER,
+        },
+        streetViewControl: true,
+        fullscreenControl: true,
         styles: [
           {
             featureType: "poi",
@@ -332,7 +342,7 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
       })
 
       mapInstance.current = map
-      console.log("✅ Mapa creado exitosamente")
+      console.log("✅ Mapa creado exitosamente en modo satélite")
 
       // Esperar a que el mapa esté listo y agregar marcadores
       window.google.maps.event.addListenerOnce(map, "idle", () => {
@@ -397,6 +407,12 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
             bounds.extend({ lat: Number(coche.latitud), lng: Number(coche.longitud) })
           })
           mapInstance.current.fitBounds(bounds)
+          // Ajustar zoom después de centrar
+          setTimeout(() => {
+            if (mapInstance.current.getZoom() > 12) {
+              mapInstance.current.setZoom(12)
+            }
+          }, 100)
         } catch (error) {
           console.error("Error centrando mapa:", error)
         }
