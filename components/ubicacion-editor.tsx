@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { MapPin, Navigation, Save, Trash2, RefreshCw, AlertCircle } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
+import { googleMapsLoader } from "@/lib/google-maps-loader"
 
 interface UbicacionEditorProps {
   matricula: string
@@ -14,15 +15,6 @@ interface UbicacionEditorProps {
   longitud?: number | null
   direccion_actual?: string | null
   onUbicacionGuardada?: () => void
-}
-
-declare global {
-  interface Window {
-    google: any
-    googleMapsInitialized?: boolean
-    googleMapsCallbacks?: Set<() => void>
-    initGoogleMapsGlobal?: () => void
-  }
 }
 
 export function UbicacionEditor({
@@ -36,9 +28,8 @@ export function UbicacionEditor({
   const mapInstance = useRef<any>(null)
   const marker = useRef<any>(null)
   const geocoder = useRef<any>(null)
-  const initAttempts = useRef(0)
   const isMounted = useRef(true)
-  const callbackRef = useRef<() => void>()
+  const initCallback = useRef<(() => void) | null>(null)
 
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -108,36 +99,13 @@ export function UbicacionEditor({
     mapInstance.current.setZoom(15)
   }
 
-  // Función para intentar inicializar el editor
-  const attemptEditorInitialization = () => {
-    if (!isMounted.current) return
-
-    initAttempts.current += 1
-    console.log(`🗺️ Editor - Intento de inicialización #${initAttempts.current}`)
-
-    if (!mapRef.current) {
-      if (initAttempts.current < 10) {
-        const delay = initAttempts.current * 200
-        setTimeout(attemptEditorInitialization, delay)
-        return
-      } else {
-        if (isMounted.current) {
-          setError("Contenedor del editor no disponible después de múltiples intentos")
-          setIsLoading(false)
-        }
-        return
-      }
-    }
-
-    if (!window.google?.maps) {
-      if (isMounted.current) {
-        setError("Google Maps no está disponible")
-        setIsLoading(false)
-      }
-      return
-    }
+  // Función para inicializar el editor
+  const initializeEditor = async () => {
+    if (!isMounted.current || !mapRef.current) return
 
     try {
+      console.log("🗺️ Editor - Inicializando...")
+
       const hasInitialLocation = initialLatitud && initialLongitud
       const center = hasInitialLocation
         ? { lat: Number(initialLatitud), lng: Number(initialLongitud) }
@@ -193,94 +161,35 @@ export function UbicacionEditor({
     }
   }
 
-  // Función para cargar Google Maps
-  const loadGoogleMaps = () => {
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-
-    if (!apiKey) {
-      setError("API key de Google Maps no configurada")
-      setIsLoading(false)
-      return
-    }
-
-    // Si Google Maps ya está disponible
-    if (window.google?.maps) {
-      console.log("♻️ Editor - Google Maps ya disponible")
-      setTimeout(attemptEditorInitialization, 100)
-      return
-    }
-
-    // Crear callback para este componente
-    callbackRef.current = attemptEditorInitialization
-
-    // Inicializar el sistema de callbacks si no existe
-    if (!window.googleMapsCallbacks) {
-      window.googleMapsCallbacks = new Set()
-    }
-
-    // Agregar nuestro callback
-    window.googleMapsCallbacks.add(callbackRef.current)
-
-    // Si ya se está inicializando, solo esperar
-    if (window.googleMapsInitialized) {
-      console.log("🔄 Editor - Google Maps ya se está inicializando...")
-      return
-    }
-
-    // Marcar como inicializando
-    window.googleMapsInitialized = true
-
-    // Crear callback global único
-    if (!window.initGoogleMapsGlobal) {
-      window.initGoogleMapsGlobal = () => {
-        console.log("📞 Google Maps callback global ejecutado desde editor")
-
-        // Ejecutar todos los callbacks registrados
-        if (window.googleMapsCallbacks) {
-          window.googleMapsCallbacks.forEach((callback) => {
-            try {
-              callback()
-            } catch (error) {
-              console.error("Error ejecutando callback:", error)
-            }
-          })
-        }
-      }
-    }
-
-    // Verificar si ya existe el script
-    const existingScript = document.querySelector('script[src*="maps.googleapis.com"]')
-    if (existingScript) {
-      console.log("🔄 Editor - Script ya existe, esperando...")
-      return
-    }
-
-    // Cargar script
-    console.log("📝 Editor - Cargando Google Maps...")
-    const script = document.createElement("script")
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initGoogleMapsGlobal&loading=async`
-    script.async = true
-    script.defer = true
-
-    script.onerror = () => {
-      console.error("❌ Editor - Error cargando Google Maps")
-      window.googleMapsInitialized = false
-    }
-
-    document.head.appendChild(script)
-  }
-
   // Effect principal
   useEffect(() => {
     isMounted.current = true
-    loadGoogleMaps()
+
+    // Crear callback para este componente
+    initCallback.current = initializeEditor
+
+    // Cargar Google Maps
+    googleMapsLoader
+      .load()
+      .then(() => {
+        if (isMounted.current) {
+          initializeEditor()
+        }
+      })
+      .catch((error) => {
+        console.error("Error cargando Google Maps:", error)
+        if (isMounted.current) {
+          setError(error.message)
+          setIsLoading(false)
+        }
+      })
 
     return () => {
       isMounted.current = false
 
-      // Remover callback del set global
-      if (callbackRef.current && window.googleMapsCallbacks) {
-        window.googleMapsCallbacks.delete(callbackRef.current)
+      // Remover callback si existe
+      if (initCallback.current) {
+        googleMapsLoader.removeCallback(initCallback.current)
       }
 
       // Limpiar marcador
@@ -540,7 +449,6 @@ export function UbicacionEditor({
                 <div className="text-center">
                   <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-gray-400" />
                   <p className="text-gray-500 text-sm">Cargando editor...</p>
-                  <p className="text-xs text-gray-400 mt-1">Intentos: {initAttempts.current}</p>
                 </div>
               </div>
             )}

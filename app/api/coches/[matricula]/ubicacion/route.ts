@@ -17,7 +17,7 @@ export async function POST(request: NextRequest, { params }: { params: { matricu
 
     const supabase = createClient()
 
-    // Actualizar ubicación del vehículo
+    // Actualizar ubicación del coche
     const { data, error } = await supabase
       .from("coches")
       .update({
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest, { params }: { params: { matricu
       data: data[0],
     })
   } catch (error) {
-    console.error("Error en POST /api/coches/[matricula]/ubicacion:", error)
+    console.error("Error en API de ubicación:", error)
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
@@ -54,7 +54,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { matri
     const { matricula } = params
     const supabase = createClient()
 
-    // Eliminar ubicación del vehículo
+    // Eliminar ubicación del coche
     const { data, error } = await supabase
       .from("coches")
       .update({
@@ -81,7 +81,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { matri
       data: data[0],
     })
   } catch (error) {
-    console.error("Error en DELETE /api/coches/[matricula]/ubicacion:", error)
+    console.error("Error en API de ubicación:", error)
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
