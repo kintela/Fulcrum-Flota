@@ -14,7 +14,7 @@ import { UbicacionEditor } from "@/components/ubicacion-editor"
 import { SeguroManager } from "@/components/seguro-manager"
 import { SolredManager } from "@/components/solred-manager"
 import { ViatManager } from "@/components/viat-manager"
-import { ItvManager } from "@/components/itv-manager"
+import { ITVManager } from "@/components/itv-manager"
 import { FotosManager } from "@/components/fotos-manager"
 
 async function getCoche(matricula: string) {
@@ -181,16 +181,16 @@ export default async function EditarCochePage({ params }: { params: { id: string
         {/* Managers adicionales */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
           {/* Gestión de Seguros */}
-          <SeguroManager matricula={coche.matricula} />
+          <SeguroManager matricula={coche.matricula} isEditing={true} />
 
           {/* Gestión de ITVs */}
-          <ItvManager matricula={coche.matricula} />
+          <ITVManager matricula={coche.matricula} isEditing={true} />
 
           {/* Gestión de SOLRED */}
-          <SolredManager matricula={coche.matricula} />
+          <SolredManager matricula={coche.matricula} isEditing={true} />
 
           {/* Gestión de VIAT */}
-          <ViatManager matricula={coche.matricula} />
+          <ViatManager matricula={coche.matricula} isEditing={true} />
         </div>
       </div>
     </div>
