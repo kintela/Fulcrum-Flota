@@ -21,6 +21,7 @@ async function getDashboardData() {
       console.error("Error fetching empleados:", empleadosError)
     }
 
+
     // Obtener TODOS los registros de ITVs con información del vehículo
     const { data: allItvs, error: itvsError } = await supabase
       .from("itvs")
