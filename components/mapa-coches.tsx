@@ -277,14 +277,16 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
         }
       })
 
-      // Ajustar vista del mapa
+      // Ajustar vista del mapa con zoom más alto
       if (cochesConUbicacion.length > 0) {
         try {
           map.fitBounds(bounds)
           const listener = window.google.maps.event.addListenerOnce(map, "bounds_changed", () => {
-            // Zoom más alto para mejor vista de los vehículos
-            if (map.getZoom() > 12) {
-              map.setZoom(12)
+            // Zoom más alto para ver más de cerca las ubicaciones
+            if (map.getZoom() > 16) {
+              map.setZoom(16)
+            } else if (map.getZoom() < 14) {
+              map.setZoom(14)
             }
           })
         } catch (error) {
@@ -320,9 +322,9 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
         throw new Error("Google Maps MapTypeId no está disponible")
       }
 
-      // Crear el mapa en modo satélite por defecto
+      // Crear el mapa en modo satélite por defecto con zoom más alto
       const map = new window.google.maps.Map(mapRef.current, {
-        zoom: 10, // Zoom más alto por defecto
+        zoom: 15, // Zoom más alto para ver más de cerca
         center: { lat: 43.2627, lng: -2.9253 }, // Bilbao como centro por defecto
         mapTypeId: window.google.maps.MapTypeId.SATELLITE, // Modo satélite por defecto
         mapTypeControl: true,
@@ -342,7 +344,7 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
       })
 
       mapInstance.current = map
-      console.log("✅ Mapa creado exitosamente en modo satélite")
+      console.log("✅ Mapa creado exitosamente en modo satélite con zoom alto")
 
       // Esperar a que el mapa esté listo y agregar marcadores
       window.google.maps.event.addListenerOnce(map, "idle", () => {
@@ -407,10 +409,12 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
             bounds.extend({ lat: Number(coche.latitud), lng: Number(coche.longitud) })
           })
           mapInstance.current.fitBounds(bounds)
-          // Ajustar zoom después de centrar
+          // Ajustar zoom después de centrar con zoom más alto
           setTimeout(() => {
-            if (mapInstance.current.getZoom() > 12) {
-              mapInstance.current.setZoom(12)
+            if (mapInstance.current.getZoom() > 16) {
+              mapInstance.current.setZoom(16)
+            } else if (mapInstance.current.getZoom() < 14) {
+              mapInstance.current.setZoom(14)
             }
           }, 100)
         } catch (error) {
