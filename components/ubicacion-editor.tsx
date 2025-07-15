@@ -1,11 +1,13 @@
 "use client"
 
+import type React from "react"
+
 import { useEffect, useRef, useState, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { MapPin, Navigation, Save, Trash2, RefreshCw, AlertCircle } from "lucide-react"
+import { MapPin, Navigation, Save, Trash2, RefreshCw, AlertCircle, Search } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 
 interface UbicacionEditorProps {
@@ -158,11 +160,15 @@ export function UbicacionEditor({
   const [mapError, setMapError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isSearching, setIsSearching] = useState(false)
 
   // Estados del formulario
   const [latitud, setLatitud] = useState<string>(initialLatitud?.toString() || "")
   const [longitud, setLongitud] = useState<string>(initialLongitud?.toString() || "")
   const [direccion, setDireccion] = useState<string>(initialDireccion || "")
+
+  // Estado para el campo de búsqueda
+  const [searchQuery, setSearchQuery] = useState<string>("")
 
   // Coordenadas exactas de Fulcrum, S.A. en Leioa (Calle Aldapa 13) - obtenidas del enlace de Google Maps
   const FULCRUM_SEDE = {
@@ -170,6 +176,87 @@ export function UbicacionEditor({
     lng: -2.98469,
     address: "Calle Aldapa, 13, 48940 Leioa, Bizkaia, España",
   }
+
+  // Función para buscar ubicación por dirección o coordenadas
+  const handleSearch = useCallback(async () => {
+    if (!searchQuery.trim() || !geocoder.current || !isGoogleMapsReady()) {
+      toast({
+        title: "Error",
+        description: "Introduce una dirección o coordenadas para buscar",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsSearching(true)
+
+    try {
+      // Verificar si es un formato de coordenadas (lat, lng)
+      const coordsMatch = searchQuery.match(/^(-?\d+\.?\d*),\s*(-?\d+\.?\d*)$/)
+
+      if (coordsMatch) {
+        // Es un formato de coordenadas
+        const lat = Number.parseFloat(coordsMatch[1])
+        const lng = Number.parseFloat(coordsMatch[2])
+
+        if (isNaN(lat) || isNaN(lng)) {
+          throw new Error("Coordenadas inválidas")
+        }
+
+        // Centrar el mapa en las coordenadas
+        if (mapInstance.current) {
+          const position = { lat, lng }
+          mapInstance.current.setCenter(position)
+          mapInstance.current.setZoom(16)
+
+          // Obtener la dirección de las coordenadas
+          const address = await geocodeLatLng(lat, lng)
+
+          toast({
+            title: "Ubicación encontrada",
+            description: `Coordenadas: ${lat}, ${lng}`,
+          })
+        }
+      } else {
+        // Es una dirección, usar geocoding
+        const response = await new Promise((resolve, reject) => {
+          geocoder.current.geocode({ address: searchQuery }, (results: any[], status: string) => {
+            if (status === "OK" && results[0]) {
+              resolve(results[0])
+            } else {
+              reject(new Error(`No se encontró la ubicación: ${status}`))
+            }
+          })
+        })
+
+        const result = response as any
+        const location = result.geometry.location
+        const lat = location.lat()
+        const lng = location.lng()
+
+        // Centrar el mapa en la ubicación encontrada
+        if (mapInstance.current) {
+          const position = { lat, lng }
+          mapInstance.current.setCenter(position)
+          mapInstance.current.setZoom(16)
+
+          toast({
+            title: "Ubicación encontrada",
+            description: result.formatted_address,
+          })
+        }
+      }
+    } catch (error) {
+      console.error("Error en búsqueda:", error)
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "No se pudo encontrar la ubicación",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSearching(false)
+    }
+  }, [searchQuery, isGoogleMapsReady])
 
   // Función para obtener dirección desde coordenadas
   const geocodeLatLng = useCallback(
@@ -549,6 +636,17 @@ export function UbicacionEditor({
     [updateMarker, geocodeLatLng, isGoogleMapsReady],
   )
 
+  // Manejar Enter en el campo de búsqueda
+  const handleSearchKeyPress = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter") {
+        e.preventDefault()
+        handleSearch()
+      }
+    },
+    [handleSearch],
+  )
+
   const isLoading = !isLoaded || isInitializing
   const displayError = error || mapError
 
@@ -630,6 +728,27 @@ export function UbicacionEditor({
           )}
         </div>
 
+        {/* Campo de búsqueda */}
+        <div className="space-y-2">
+          <Label htmlFor="search">Buscar ubicación</Label>
+          <div className="flex gap-2">
+            <Input
+              id="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyPress={handleSearchKeyPress}
+              placeholder="Introduce una dirección o coordenadas (ej: 43.329690, -2.984690)"
+              className="flex-1"
+            />
+            <Button onClick={handleSearch} disabled={isLoading || isSearching || !searchQuery.trim()} variant="outline">
+              {isSearching ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+            </Button>
+          </div>
+          <p className="text-xs text-gray-500">
+            Puedes buscar por dirección (ej: "Calle Mayor 1, Madrid") o coordenadas (ej: "43.329690, -2.984690")
+          </p>
+        </div>
+
         {/* Mapa */}
         <div className="w-full bg-white rounded-lg border shadow-sm overflow-hidden">
           <div
@@ -671,6 +790,7 @@ export function UbicacionEditor({
         <div className="text-sm text-gray-600 bg-blue-50 p-4 rounded-lg">
           <h4 className="font-semibold mb-2">Instrucciones:</h4>
           <ul className="space-y-1">
+            <li>• Usa el campo de búsqueda para encontrar ubicaciones por dirección o coordenadas</li>
             <li>• Haz clic en el mapa para establecer la ubicación</li>
             <li>• Arrastra el marcador para ajustar la posición</li>
             <li>• Usa "Mi Ubicación" para obtener tu posición actual</li>
