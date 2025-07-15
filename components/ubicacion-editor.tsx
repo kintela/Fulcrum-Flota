@@ -163,6 +163,13 @@ export function UbicacionEditor({
   const [longitud, setLongitud] = useState<string>(initialLongitud?.toString() || "")
   const [direccion, setDireccion] = useState<string>(initialDireccion || "")
 
+  // Coordenadas de la sede de Fulcrum en Leioa (Calle Aldapa 13)
+  const FULCRUM_SEDE = {
+    lat: 43.3297,
+    lng: -2.9847,
+    address: "Calle Aldapa, 13, 48940 Leioa, Bizkaia, España",
+  }
+
   // Función para obtener dirección desde coordenadas
   const geocodeLatLng = useCallback(
     async (lat: number, lng: number) => {
@@ -255,12 +262,12 @@ export function UbicacionEditor({
       }
 
       const hasInitialLocation = initialLatitud && initialLongitud
-      const center = hasInitialLocation
-        ? { lat: Number(initialLatitud), lng: Number(initialLongitud) }
-        : { lat: 40.4168, lng: -3.7038 }
+
+      // Si hay ubicación inicial, usar esa; si no, usar la sede de Fulcrum
+      const center = hasInitialLocation ? { lat: Number(initialLatitud), lng: Number(initialLongitud) } : FULCRUM_SEDE
 
       const map = new window.google.maps.Map(mapRef.current, {
-        zoom: hasInitialLocation ? 15 : 6,
+        zoom: hasInitialLocation ? 15 : 16, // Zoom un poco más alto para la sede
         center,
         mapTypeId: window.google.maps.MapTypeId.ROADMAP,
       })
@@ -371,6 +378,19 @@ export function UbicacionEditor({
       },
     )
   }, [updateMarker, geocodeLatLng])
+
+  // Función para centrar en la sede de Fulcrum
+  const handleCenterOnSede = useCallback(() => {
+    if (mapInstance.current && isGoogleMapsReady()) {
+      mapInstance.current.setCenter(FULCRUM_SEDE)
+      mapInstance.current.setZoom(16)
+
+      toast({
+        title: "Mapa centrado",
+        description: "Vista centrada en la sede de Fulcrum",
+      })
+    }
+  }, [isGoogleMapsReady])
 
   // Función para guardar ubicación
   const handleSave = useCallback(async () => {
@@ -512,7 +532,7 @@ export function UbicacionEditor({
                   handleCoordinateChange(e.target.value, longitud)
                 }
               }}
-              placeholder="Ej: 40.416775"
+              placeholder="Ej: 43.329700"
             />
           </div>
           <div>
@@ -528,7 +548,7 @@ export function UbicacionEditor({
                   handleCoordinateChange(latitud, e.target.value)
                 }
               }}
-              placeholder="Ej: -3.703790"
+              placeholder="Ej: -2.984700"
             />
           </div>
         </div>
@@ -549,6 +569,10 @@ export function UbicacionEditor({
           <Button onClick={handleGetCurrentLocation} variant="outline" disabled={isLoading}>
             <Navigation className="h-4 w-4 mr-2" />
             Mi Ubicación
+          </Button>
+          <Button onClick={handleCenterOnSede} variant="outline" disabled={isLoading}>
+            <MapPin className="h-4 w-4 mr-2" />
+            Sede Fulcrum
           </Button>
           <Button onClick={handleSave} disabled={!latitud || !longitud || isSaving}>
             {isSaving ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
@@ -606,6 +630,7 @@ export function UbicacionEditor({
             <li>• Haz clic en el mapa para establecer la ubicación</li>
             <li>• Arrastra el marcador para ajustar la posición</li>
             <li>• Usa "Mi Ubicación" para obtener tu posición actual</li>
+            <li>• Usa "Sede Fulcrum" para centrar en Calle Aldapa 13, Leioa</li>
             <li>• La dirección se completará automáticamente</li>
             <li>• Haz clic en "Guardar Ubicación" para confirmar los cambios</li>
           </ul>
