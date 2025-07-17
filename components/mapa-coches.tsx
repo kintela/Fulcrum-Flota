@@ -485,13 +485,22 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
   const handleVehicleSelect = useCallback(
     (matricula: string) => {
       console.log("Seleccionando matrícula:", matricula)
+
+      // Forzar la actualización del estado
       setSelectedMatricula(matricula)
       setVehicleMessage("")
 
       if (!matricula || matricula === "all") {
         // Reset to show all vehicles
         if (mapInstance.current && isLoaded && isGoogleMapsReady()) {
-          addMarkers(mapInstance.current)
+          const cochesConUbicacion = coches.filter((c) => c.latitud && c.longitud && !c.donante)
+          if (cochesConUbicacion.length > 0) {
+            const bounds = new window.google.maps.LatLngBounds()
+            cochesConUbicacion.forEach((coche) => {
+              bounds.extend({ lat: Number(coche.latitud), lng: Number(coche.longitud) })
+            })
+            mapInstance.current.fitBounds(bounds)
+          }
         }
         return
       }
@@ -524,23 +533,21 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
         try {
           const position = { lat: Number(coche.latitud), lng: Number(coche.longitud) }
 
-          // Primero centrar y hacer zoom
+          // Centrar y hacer zoom máximo
           mapInstance.current.setCenter(position)
-          mapInstance.current.setZoom(20) // Zoom muy alto para vehículo individual
+          mapInstance.current.setZoom(20)
 
-          // Esperar un poco más para que el mapa se centre completamente
+          // Buscar y activar el marcador después de un delay
           setTimeout(() => {
             const targetMarker = markers.current.find((marker) => {
               const title = marker.getTitle()
               return title && title.includes(matricula)
             })
             if (targetMarker) {
-              console.log("Abriendo info window para:", matricula)
+              console.log("Activando marcador para:", matricula)
               window.google.maps.event.trigger(targetMarker, "click")
-            } else {
-              console.log("No se encontró marcador para:", matricula)
             }
-          }, 1000) // Aumentar el tiempo de espera
+          }, 800)
 
           const empleadoInfo = getEmpleadoInfo(coche)
           const status = empleadoInfo
@@ -556,7 +563,7 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
         }
       }
     },
-    [coches, getEmpleadoInfo, isGoogleMapsReady, addMarkers, isLoaded],
+    [coches, getEmpleadoInfo, isGoogleMapsReady, isLoaded],
   )
 
   // Obtener todas las matrículas ordenadas alfabéticamente
@@ -597,19 +604,16 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
               <div className="flex-1 max-w-xs">
                 <Select value={selectedMatricula} onValueChange={handleVehicleSelect}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar matrícula...">
-                      {selectedMatricula === "all" ? "Mostrar todos" : selectedMatricula}
-                    </SelectValue>
+                    <SelectValue placeholder="Seleccionar matrícula..." />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Mostrar todos</SelectItem>
                     {matriculasOrdenadas.map((matricula) => {
                       const coche = coches.find((c) => c.matricula === matricula)
                       const hasLocation = coche?.latitud && coche?.longitud && !coche?.donante
-                      const displayText = hasLocation ? `${matricula} 📍` : `${matricula} ❌`
                       return (
                         <SelectItem key={matricula} value={matricula}>
-                          {displayText}
+                          {matricula} {hasLocation ? "📍" : "❌"}
                         </SelectItem>
                       )
                     })}
