@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { MapPin, RefreshCw, Navigation, AlertCircle } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { MapPin, RefreshCw, Navigation, AlertCircle, Car } from "lucide-react"
 
 interface Coche {
   matricula: string
@@ -156,6 +157,8 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
 
   const [isInitializing, setIsInitializing] = useState(false)
   const [mapError, setMapError] = useState<string | null>(null)
+  const [selectedMatricula, setSelectedMatricula] = useState<string>("all")
+  const [vehicleMessage, setVehicleMessage] = useState<string>("")
 
   // Crear mapa de empleados
   const empleadosMap = new Map()
@@ -478,6 +481,74 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
     [cochesConUbicacion, cochesAsignados, cochesDisponibles, isGoogleMapsReady],
   )
 
+  // Función para buscar vehículo específico
+  const handleVehicleSelect = useCallback(
+    (matricula: string) => {
+      setSelectedMatricula(matricula)
+      setVehicleMessage("")
+
+      if (!matricula || matricula === "all") return
+
+      const coche = coches.find((c) => c.matricula === matricula)
+      if (!coche) {
+        setVehicleMessage("Vehículo no encontrado")
+        return
+      }
+
+      // Verificar si tiene ubicación
+      if (!coche.latitud || !coche.longitud || coche.donante) {
+        const empleadoInfo = getEmpleadoInfo(coche)
+        const status = empleadoInfo
+          ? `asignado a ${empleadoInfo.nombre} ${empleadoInfo.apellidos || ""}`
+          : coche.asignadoa
+            ? `asignado a ${coche.asignadoa}`
+            : "disponible"
+
+        setVehicleMessage(
+          `${coche.matricula} (${coche.marca} ${coche.modelo}) está ${status} pero no tiene ubicación registrada${
+            coche.donante ? " (vehículo donante)" : ""
+          }`,
+        )
+        return
+      }
+
+      // Tiene ubicación, centrar en el mapa
+      if (mapInstance.current && isGoogleMapsReady()) {
+        try {
+          const position = { lat: Number(coche.latitud), lng: Number(coche.longitud) }
+          mapInstance.current.setCenter(position)
+          mapInstance.current.setZoom(18)
+
+          // Buscar el marcador correspondiente y abrir su info window
+          const targetMarker = markers.current.find((marker) => marker.getTitle().includes(matricula))
+          if (targetMarker) {
+            // Simular click en el marcador para abrir la info window
+            window.google.maps.event.trigger(targetMarker, "click")
+          }
+
+          const empleadoInfo = getEmpleadoInfo(coche)
+          const status = empleadoInfo
+            ? `asignado a ${empleadoInfo.nombre} ${empleadoInfo.apellidos || ""}`
+            : coche.asignadoa
+              ? `asignado a ${coche.asignadoa}`
+              : "disponible"
+
+          setVehicleMessage(`${coche.matricula} (${coche.marca} ${coche.modelo}) está ${status} y ubicado en el mapa`)
+        } catch (error) {
+          console.error("Error centrando en vehículo:", error)
+          setVehicleMessage("Error al mostrar la ubicación del vehículo")
+        }
+      }
+    },
+    [coches, getEmpleadoInfo, isGoogleMapsReady],
+  )
+
+  // Obtener todas las matrículas ordenadas alfabéticamente
+  const matriculasOrdenadas = coches
+    .map((c) => c.matricula)
+    .sort((a, b) => a.localeCompare(b))
+    .filter((matricula, index, array) => array.indexOf(matricula) === index) // Eliminar duplicados
+
   return (
     <Card className="w-full">
       <CardHeader>
@@ -500,6 +571,47 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
+          {/* Selector de vehículo */}
+          <div className="bg-white p-4 rounded-lg border">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Car className="h-4 w-4 text-gray-500" />
+                <span className="text-sm font-medium text-gray-700">Buscar vehículo:</span>
+              </div>
+              <div className="flex-1 max-w-xs">
+                <Select value={selectedMatricula} onValueChange={handleVehicleSelect}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar matrícula..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Mostrar todos</SelectItem>
+                    {matriculasOrdenadas.map((matricula) => {
+                      const coche = coches.find((c) => c.matricula === matricula)
+                      const hasLocation = coche?.latitud && coche?.longitud && !coche?.donante
+                      return (
+                        <SelectItem key={matricula} value={matricula}>
+                          <div className="flex items-center gap-2">
+                            <span>{matricula}</span>
+                            {hasLocation ? (
+                              <span className="text-xs text-green-600">📍</span>
+                            ) : (
+                              <span className="text-xs text-gray-400">❌</span>
+                            )}
+                          </div>
+                        </SelectItem>
+                      )
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {vehicleMessage && (
+              <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-sm text-blue-800">{vehicleMessage}</p>
+              </div>
+            )}
+          </div>
+
           {/* Estadísticas */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
             <button
