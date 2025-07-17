@@ -2,6 +2,8 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
+import { getAuthSession } from "@/lib/get-session"
+import AuthProvider from "@/components/auth-provider"
 import Header from "@/components/header"
 
 const inter = Inter({ subsets: ["latin"] })
@@ -12,16 +14,20 @@ export const metadata: Metadata = {
   generator: "v0.dev",
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const session = await getAuthSession()
+
   return (
     <html lang="es" suppressHydrationWarning>
       <body className={inter.className}>
-        <Header />
-        <main className="pt-16">{children}</main>
+        <AuthProvider session={session}>
+          <Header />
+          <main className="pt-16">{children}</main>
+        </AuthProvider>
       </body>
     </html>
   )

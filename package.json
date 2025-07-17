@@ -4,11 +4,12 @@
   "private": true,
   "scripts": {
     "build": "next build",
-    "dev": "next dev",
+    "dev": "next dev -p 3000",
     "lint": "next lint",
     "start": "next start"
   },
   "dependencies": {
+    "@auth/core": "^0.34.2",
     "@hookform/resolvers": "^3.9.1",
     "@jest/globals": "latest",
     "@radix-ui/react-accordion": "latest",
@@ -52,6 +53,7 @@
     "jest": "latest",
     "lucide-react": "^0.454.0",
     "next": "14.2.16",
+    "next-auth": "^4.24.11",
     "next-themes": "latest",
     "node-notifier": "latest",
     "react": "^18",
