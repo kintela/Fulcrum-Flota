@@ -484,6 +484,7 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
   // Función para buscar vehículo específico
   const handleVehicleSelect = useCallback(
     (matricula: string) => {
+      console.log("Seleccionando matrícula:", matricula)
       setSelectedMatricula(matricula)
       setVehicleMessage("")
 
@@ -522,18 +523,24 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
       if (mapInstance.current && isGoogleMapsReady()) {
         try {
           const position = { lat: Number(coche.latitud), lng: Number(coche.longitud) }
-          mapInstance.current.setCenter(position)
-          mapInstance.current.setZoom(19) // Higher zoom for individual vehicle
 
-          // Wait a bit for the map to center, then trigger marker click
+          // Primero centrar y hacer zoom
+          mapInstance.current.setCenter(position)
+          mapInstance.current.setZoom(20) // Zoom muy alto para vehículo individual
+
+          // Esperar un poco más para que el mapa se centre completamente
           setTimeout(() => {
-            const targetMarker = markers.current.find(
-              (marker) => marker.getTitle() && marker.getTitle().includes(matricula),
-            )
+            const targetMarker = markers.current.find((marker) => {
+              const title = marker.getTitle()
+              return title && title.includes(matricula)
+            })
             if (targetMarker) {
+              console.log("Abriendo info window para:", matricula)
               window.google.maps.event.trigger(targetMarker, "click")
+            } else {
+              console.log("No se encontró marcador para:", matricula)
             }
-          }, 500)
+          }, 1000) // Aumentar el tiempo de espera
 
           const empleadoInfo = getEmpleadoInfo(coche)
           const status = empleadoInfo
@@ -590,16 +597,19 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
               <div className="flex-1 max-w-xs">
                 <Select value={selectedMatricula} onValueChange={handleVehicleSelect}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar matrícula..." />
+                    <SelectValue placeholder="Seleccionar matrícula...">
+                      {selectedMatricula === "all" ? "Mostrar todos" : selectedMatricula}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Mostrar todos</SelectItem>
                     {matriculasOrdenadas.map((matricula) => {
                       const coche = coches.find((c) => c.matricula === matricula)
                       const hasLocation = coche?.latitud && coche?.longitud && !coche?.donante
+                      const displayText = hasLocation ? `${matricula} 📍` : `${matricula} ❌`
                       return (
                         <SelectItem key={matricula} value={matricula}>
-                          {matricula} {hasLocation ? "📍" : "❌"}
+                          {displayText}
                         </SelectItem>
                       )
                     })}
