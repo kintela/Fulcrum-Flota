@@ -487,7 +487,13 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
       setSelectedMatricula(matricula)
       setVehicleMessage("")
 
-      if (!matricula || matricula === "all") return
+      if (!matricula || matricula === "all") {
+        // Reset to show all vehicles
+        if (mapInstance.current && isLoaded && isGoogleMapsReady()) {
+          addMarkers(mapInstance.current)
+        }
+        return
+      }
 
       const coche = coches.find((c) => c.matricula === matricula)
       if (!coche) {
@@ -517,14 +523,17 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
         try {
           const position = { lat: Number(coche.latitud), lng: Number(coche.longitud) }
           mapInstance.current.setCenter(position)
-          mapInstance.current.setZoom(18)
+          mapInstance.current.setZoom(19) // Higher zoom for individual vehicle
 
-          // Buscar el marcador correspondiente y abrir su info window
-          const targetMarker = markers.current.find((marker) => marker.getTitle().includes(matricula))
-          if (targetMarker) {
-            // Simular click en el marcador para abrir la info window
-            window.google.maps.event.trigger(targetMarker, "click")
-          }
+          // Wait a bit for the map to center, then trigger marker click
+          setTimeout(() => {
+            const targetMarker = markers.current.find(
+              (marker) => marker.getTitle() && marker.getTitle().includes(matricula),
+            )
+            if (targetMarker) {
+              window.google.maps.event.trigger(targetMarker, "click")
+            }
+          }, 500)
 
           const empleadoInfo = getEmpleadoInfo(coche)
           const status = empleadoInfo
@@ -540,7 +549,7 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
         }
       }
     },
-    [coches, getEmpleadoInfo, isGoogleMapsReady],
+    [coches, getEmpleadoInfo, isGoogleMapsReady, addMarkers, isLoaded],
   )
 
   // Obtener todas las matrículas ordenadas alfabéticamente
