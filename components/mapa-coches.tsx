@@ -424,9 +424,10 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
     }
   }, [coches, isGoogleMapsReady])
 
+  // FIXED: Calculate statistics correctly - only from vehicles with location
   const cochesConUbicacion = coches.filter((c) => c.latitud && c.longitud && !c.donante)
-  const cochesAsignados = coches.filter((c) => getEmpleadoInfo(c) || c.asignadoa)
-  const cochesDisponibles = coches.filter((c) => !getEmpleadoInfo(c) && !c.asignadoa)
+  const cochesAsignados = cochesConUbicacion.filter((c) => getEmpleadoInfo(c) || c.asignadoa)
+  const cochesDisponibles = cochesConUbicacion.filter((c) => !getEmpleadoInfo(c) && !c.asignadoa)
 
   const isLoading = !isLoaded || isInitializing
   const displayError = error || mapError
