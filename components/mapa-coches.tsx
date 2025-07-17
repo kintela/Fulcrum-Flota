@@ -1,9 +1,10 @@
 "use client"
 
+import type React from "react"
+
 import { useEffect, useRef, useState, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { MapPin, RefreshCw, Navigation, AlertCircle, Car } from "lucide-react"
 
 interface Coche {
@@ -311,25 +312,12 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
 
     try {
       console.log("🗺️ Inicializando mapa...")
-      console.log("Verificando Google Maps:", {
-        google: !!window.google,
-        maps: !!window.google?.maps,
-        Map: !!window.google?.maps?.Map,
-        MapTypeId: !!window.google?.maps?.MapTypeId,
-        ROADMAP: !!window.google?.maps?.MapTypeId?.ROADMAP,
-        SATELLITE: !!window.google?.maps?.MapTypeId?.SATELLITE,
-      })
-
-      // Verificación adicional
-      if (!window.google?.maps?.MapTypeId?.SATELLITE) {
-        throw new Error("Google Maps MapTypeId no está disponible")
-      }
 
       // Crear el mapa en modo satélite por defecto con zoom más alto
       const map = new window.google.maps.Map(mapRef.current, {
-        zoom: 15, // Zoom más alto para ver más de cerca
+        zoom: 15,
         center: { lat: 43.2627, lng: -2.9253 }, // Bilbao como centro por defecto
-        mapTypeId: window.google.maps.MapTypeId.SATELLITE, // Modo satélite por defecto
+        mapTypeId: window.google.maps.MapTypeId.SATELLITE,
         mapTypeControl: true,
         mapTypeControlOptions: {
           style: window.google.maps.MapTypeControlStyle.HORIZONTAL_BAR,
@@ -347,7 +335,7 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
       })
 
       mapInstance.current = map
-      console.log("✅ Mapa creado exitosamente en modo satélite con zoom alto")
+      console.log("✅ Mapa creado exitosamente")
 
       // Esperar a que el mapa esté listo y agregar marcadores
       window.google.maps.event.addListenerOnce(map, "idle", () => {
@@ -374,7 +362,6 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
   // Effect para inicializar el mapa cuando esté listo
   useEffect(() => {
     if (isLoaded && isGoogleMapsReady() && !mapInstance.current) {
-      // Pequeño delay para asegurar que todo esté listo
       setTimeout(() => {
         initializeMap()
       }, 100)
@@ -412,7 +399,6 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
             bounds.extend({ lat: Number(coche.latitud), lng: Number(coche.longitud) })
           })
           mapInstance.current.fitBounds(bounds)
-          // Ajustar zoom después de centrar con zoom más alto
           setTimeout(() => {
             if (mapInstance.current.getZoom() > 16) {
               mapInstance.current.setZoom(16)
@@ -427,7 +413,7 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
     }
   }, [coches, isGoogleMapsReady])
 
-  // FIXED: Calculate statistics correctly - only from vehicles with location
+  // Calcular estadísticas
   const cochesConUbicacion = coches.filter((c) => c.latitud && c.longitud && !c.donante)
   const cochesAsignados = cochesConUbicacion.filter((c) => getEmpleadoInfo(c) || c.asignadoa)
   const cochesDisponibles = cochesConUbicacion.filter((c) => !getEmpleadoInfo(c) && !c.asignadoa)
@@ -463,10 +449,8 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
 
         mapInstance.current.fitBounds(bounds)
 
-        // Adjust zoom after centering
         setTimeout(() => {
           if (targetCoches.length === 1) {
-            // For single vehicle, zoom closer
             mapInstance.current.setZoom(18)
           } else if (mapInstance.current.getZoom() > 16) {
             mapInstance.current.setZoom(16)
@@ -481,17 +465,17 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
     [cochesConUbicacion, cochesAsignados, cochesDisponibles, isGoogleMapsReady],
   )
 
-  // Función para buscar vehículo específico
-  const handleVehicleSelect = useCallback(
-    (matricula: string) => {
-      console.log("Seleccionando matrícula:", matricula)
+  // Función para manejar la selección de vehículo con select nativo
+  const handleVehicleSelectChange = useCallback(
+    (event: React.ChangeEvent<HTMLSelectElement>) => {
+      const matricula = event.target.value
+      console.log("🚗 Seleccionando vehículo:", matricula)
 
-      // Forzar la actualización del estado
       setSelectedMatricula(matricula)
       setVehicleMessage("")
 
       if (!matricula || matricula === "all") {
-        // Reset to show all vehicles
+        // Mostrar todos los vehículos
         if (mapInstance.current && isLoaded && isGoogleMapsReady()) {
           const cochesConUbicacion = coches.filter((c) => c.latitud && c.longitud && !c.donante)
           if (cochesConUbicacion.length > 0) {
@@ -500,6 +484,11 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
               bounds.extend({ lat: Number(coche.latitud), lng: Number(coche.longitud) })
             })
             mapInstance.current.fitBounds(bounds)
+            setTimeout(() => {
+              if (mapInstance.current.getZoom() > 16) {
+                mapInstance.current.setZoom(16)
+              }
+            }, 200)
           }
         }
         return
@@ -507,7 +496,7 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
 
       const coche = coches.find((c) => c.matricula === matricula)
       if (!coche) {
-        setVehicleMessage("Vehículo no encontrado")
+        setVehicleMessage("❌ Vehículo no encontrado")
         return
       }
 
@@ -521,7 +510,7 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
             : "disponible"
 
         setVehicleMessage(
-          `${coche.matricula} (${coche.marca} ${coche.modelo}) está ${status} pero no tiene ubicación registrada${
+          `⚠️ ${coche.matricula} (${coche.marca} ${coche.modelo}) está ${status} pero no tiene ubicación registrada${
             coche.donante ? " (vehículo donante)" : ""
           }`,
         )
@@ -537,17 +526,19 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
           mapInstance.current.setCenter(position)
           mapInstance.current.setZoom(20)
 
-          // Buscar y activar el marcador después de un delay
+          // Buscar y activar el marcador
           setTimeout(() => {
             const targetMarker = markers.current.find((marker) => {
               const title = marker.getTitle()
               return title && title.includes(matricula)
             })
             if (targetMarker) {
-              console.log("Activando marcador para:", matricula)
+              console.log("🎯 Activando marcador para:", matricula)
               window.google.maps.event.trigger(targetMarker, "click")
+            } else {
+              console.log("⚠️ No se encontró marcador para:", matricula)
             }
-          }, 800)
+          }, 500)
 
           const empleadoInfo = getEmpleadoInfo(coche)
           const status = empleadoInfo
@@ -556,10 +547,12 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
               ? `asignado a ${coche.asignadoa}`
               : "disponible"
 
-          setVehicleMessage(`${coche.matricula} (${coche.marca} ${coche.modelo}) está ${status} y ubicado en el mapa`)
+          setVehicleMessage(
+            `✅ ${coche.matricula} (${coche.marca} ${coche.modelo}) está ${status} y ubicado en el mapa`,
+          )
         } catch (error) {
           console.error("Error centrando en vehículo:", error)
-          setVehicleMessage("Error al mostrar la ubicación del vehículo")
+          setVehicleMessage("❌ Error al mostrar la ubicación del vehículo")
         }
       }
     },
@@ -570,7 +563,7 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
   const matriculasOrdenadas = coches
     .map((c) => c.matricula)
     .sort((a, b) => a.localeCompare(b))
-    .filter((matricula, index, array) => array.indexOf(matricula) === index) // Eliminar duplicados
+    .filter((matricula, index, array) => array.indexOf(matricula) === index)
 
   return (
     <Card className="w-full">
@@ -594,7 +587,7 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {/* Selector de vehículo */}
+          {/* Selector de vehículo - USANDO SELECT NATIVO */}
           <div className="bg-white p-4 rounded-lg border">
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
@@ -602,23 +595,22 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
                 <span className="text-sm font-medium text-gray-700">Buscar vehículo:</span>
               </div>
               <div className="flex-1 max-w-xs">
-                <Select value={selectedMatricula} onValueChange={handleVehicleSelect}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar matrícula..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Mostrar todos</SelectItem>
-                    {matriculasOrdenadas.map((matricula) => {
-                      const coche = coches.find((c) => c.matricula === matricula)
-                      const hasLocation = coche?.latitud && coche?.longitud && !coche?.donante
-                      return (
-                        <SelectItem key={matricula} value={matricula}>
-                          {matricula} {hasLocation ? "📍" : "❌"}
-                        </SelectItem>
-                      )
-                    })}
-                  </SelectContent>
-                </Select>
+                <select
+                  value={selectedMatricula}
+                  onChange={handleVehicleSelectChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-sm"
+                >
+                  <option value="all">Mostrar todos</option>
+                  {matriculasOrdenadas.map((matricula) => {
+                    const coche = coches.find((c) => c.matricula === matricula)
+                    const hasLocation = coche?.latitud && coche?.longitud && !coche?.donante
+                    return (
+                      <option key={matricula} value={matricula}>
+                        {matricula} {hasLocation ? "📍" : "❌"}
+                      </option>
+                    )
+                  })}
+                </select>
               </div>
             </div>
             {vehicleMessage && (
