@@ -590,14 +590,7 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
                       const hasLocation = coche?.latitud && coche?.longitud && !coche?.donante
                       return (
                         <SelectItem key={matricula} value={matricula}>
-                          <div className="flex items-center gap-2">
-                            <span>{matricula}</span>
-                            {hasLocation ? (
-                              <span className="text-xs text-green-600">📍</span>
-                            ) : (
-                              <span className="text-xs text-gray-400">❌</span>
-                            )}
-                          </div>
+                          {matricula} {hasLocation ? "📍" : "❌"}
                         </SelectItem>
                       )
                     })}
