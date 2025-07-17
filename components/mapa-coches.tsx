@@ -425,11 +425,57 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
   }, [coches, isGoogleMapsReady])
 
   const cochesConUbicacion = coches.filter((c) => c.latitud && c.longitud && !c.donante)
-  const cochesAsignados = cochesConUbicacion.filter((c) => getEmpleadoInfo(c) || c.asignadoa)
-  const cochesDisponibles = cochesConUbicacion.filter((c) => !getEmpleadoInfo(c) && !c.asignadoa)
+  const cochesAsignados = coches.filter((c) => getEmpleadoInfo(c) || c.asignadoa)
+  const cochesDisponibles = coches.filter((c) => !getEmpleadoInfo(c) && !c.asignadoa)
 
   const isLoading = !isLoaded || isInitializing
   const displayError = error || mapError
+
+  const zoomToVehicles = useCallback(
+    (filterType: "all" | "assigned" | "available") => {
+      if (!mapInstance.current || !isGoogleMapsReady()) return
+
+      let targetCoches: Coche[] = []
+
+      switch (filterType) {
+        case "all":
+          targetCoches = cochesConUbicacion
+          break
+        case "assigned":
+          targetCoches = cochesAsignados
+          break
+        case "available":
+          targetCoches = cochesDisponibles
+          break
+      }
+
+      if (targetCoches.length === 0) return
+
+      try {
+        const bounds = new window.google.maps.LatLngBounds()
+        targetCoches.forEach((coche) => {
+          bounds.extend({ lat: Number(coche.latitud), lng: Number(coche.longitud) })
+        })
+
+        mapInstance.current.fitBounds(bounds)
+
+        // Adjust zoom after centering
+        setTimeout(() => {
+          if (targetCoches.length === 1) {
+            // For single vehicle, zoom closer
+            mapInstance.current.setZoom(18)
+          } else if (mapInstance.current.getZoom() > 16) {
+            mapInstance.current.setZoom(16)
+          } else if (mapInstance.current.getZoom() < 12) {
+            mapInstance.current.setZoom(12)
+          }
+        }, 100)
+      } catch (error) {
+        console.error("Error zooming to vehicles:", error)
+      }
+    },
+    [cochesConUbicacion, cochesAsignados, cochesDisponibles, isGoogleMapsReady],
+  )
 
   return (
     <Card className="w-full">
@@ -455,18 +501,45 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
         <div className="space-y-4">
           {/* Estadísticas */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">{cochesConUbicacion.length}</div>
-              <div className="text-sm text-gray-600">Total con ubicación</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">{cochesAsignados.length}</div>
-              <div className="text-sm text-gray-600">Asignados</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-blue-500">{cochesDisponibles.length}</div>
-              <div className="text-sm text-gray-600">Disponibles</div>
-            </div>
+            <button
+              onClick={() => zoomToVehicles("all")}
+              className="text-center hover:bg-blue-50 p-2 rounded-lg transition-colors cursor-pointer group"
+              disabled={cochesConUbicacion.length === 0}
+            >
+              <div className="text-2xl font-bold text-blue-600 group-hover:text-blue-700">
+                {cochesConUbicacion.length}
+              </div>
+              <div className="text-sm text-gray-600 group-hover:text-gray-700">Total con ubicación</div>
+              <div className="text-xs text-gray-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                Click para ver en mapa
+              </div>
+            </button>
+            <button
+              onClick={() => zoomToVehicles("assigned")}
+              className="text-center hover:bg-green-50 p-2 rounded-lg transition-colors cursor-pointer group"
+              disabled={cochesAsignados.length === 0}
+            >
+              <div className="text-2xl font-bold text-green-600 group-hover:text-green-700">
+                {cochesAsignados.length}
+              </div>
+              <div className="text-sm text-gray-600 group-hover:text-gray-700">Asignados</div>
+              <div className="text-xs text-gray-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                Click para ver en mapa
+              </div>
+            </button>
+            <button
+              onClick={() => zoomToVehicles("available")}
+              className="text-center hover:bg-blue-50 p-2 rounded-lg transition-colors cursor-pointer group"
+              disabled={cochesDisponibles.length === 0}
+            >
+              <div className="text-2xl font-bold text-blue-500 group-hover:text-blue-600">
+                {cochesDisponibles.length}
+              </div>
+              <div className="text-sm text-gray-600 group-hover:text-gray-700">Disponibles</div>
+              <div className="text-xs text-gray-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                Click para ver en mapa
+              </div>
+            </button>
           </div>
 
           {/* Leyenda */}
