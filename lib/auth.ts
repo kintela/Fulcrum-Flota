@@ -30,16 +30,42 @@ export const authOptions: AuthOptions = {
             const idTokenPayload = JSON.parse(Buffer.from(account.id_token.split('.')[1], 'base64').toString())
             console.log("ID Token Payload:", idTokenPayload)
             
-            token.name = idTokenPayload.name
-            token.email = idTokenPayload.email
+            // Intentar obtener el nombre completo de diferentes campos
+            token.name = idTokenPayload.name || 
+                        idTokenPayload.displayName || 
+                        `${idTokenPayload.given_name || ''} ${idTokenPayload.family_name || ''}`.trim() ||
+                        idTokenPayload.preferred_username ||
+                        idTokenPayload.upn
+            
+            token.email = idTokenPayload.email || 
+                         idTokenPayload.preferred_username || 
+                         idTokenPayload.upn
+            
+            // Guardar campos adicionales para debugging
+            token.given_name = idTokenPayload.given_name
+            token.family_name = idTokenPayload.family_name
+            token.displayName = idTokenPayload.displayName
           } catch (error) {
             console.error("Error decoding id_token:", error)
           }
         }
       }
       if (profile) {
-        token.name = profile.name || profile.displayName
-        token.email = profile.email || profile.mail || profile.userPrincipalName
+        // Intentar obtener el nombre completo de diferentes campos del perfil
+        token.name = profile.name || 
+                    profile.displayName || 
+                    `${profile.given_name || profile.givenName || ''} ${profile.family_name || profile.surname || ''}`.trim() ||
+                    profile.userPrincipalName ||
+                    profile.mail
+        
+        token.email = profile.email || 
+                     profile.mail || 
+                     profile.userPrincipalName ||
+                     profile.preferred_username
+        
+        // Guardar campos adicionales
+        token.given_name = profile.given_name || profile.givenName
+        token.family_name = profile.family_name || profile.surname
       }
       
       console.log("JWT Callback - Token after:", token)
@@ -57,6 +83,16 @@ export const authOptions: AuthOptions = {
       }
       if (token.email) {
         session.user.email = token.email
+      }
+      
+      // Asegurar que tenemos el nombre completo
+      if (!session.user.name && (token.given_name || token.family_name)) {
+        session.user.name = `${token.given_name || ''} ${token.family_name || ''}`.trim()
+      }
+      
+      // Si aún no tenemos nombre, usar el email como fallback
+      if (!session.user.name && session.user.email) {
+        session.user.name = session.user.email.split('@')[0]
       }
       
       console.log("Session Callback - Session after:", session)
