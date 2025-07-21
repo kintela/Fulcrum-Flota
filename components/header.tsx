@@ -2,10 +2,13 @@
 
 import Link from "next/link"
 import { useState } from "react"
-import { Car, Calendar, Users, FileText, Settings, Menu, X } from "lucide-react"
+import { useSession, signOut } from "next-auth/react"
+import { Car, Calendar, Users, FileText, Settings, Menu, X, LogOut, User } from "lucide-react"
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
+  const { data: session, status } = useSession()
 
   const menuItems = [
     { name: "Dashboard", href: "/", icon: <FileText className="w-5 h-5" /> },
@@ -14,6 +17,38 @@ export default function Header() {
     { name: "Empleados", href: "/empleados", icon: <Users className="w-5 h-5" /> },
     { name: "Configuración", href: "/configuracion", icon: <Settings className="w-5 h-5" /> },
   ]
+
+  const handleSignOut = async () => {
+    await signOut({ 
+      callbackUrl: "/auth/signin",
+      redirect: true 
+    })
+  }
+
+  // Si no hay sesión, no mostrar el header (se mostrará la página de login)
+  if (status === "loading") {
+    return (
+      <header className="bg-white shadow-md fixed top-0 left-0 right-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16">
+            <div className="flex items-center">
+              <div className="flex-shrink-0 flex items-center">
+                <Car className="h-8 w-8 text-blue-600" />
+                <span className="ml-2 text-xl font-bold text-gray-900">Flota Fulcrum</span>
+              </div>
+            </div>
+            <div className="flex items-center">
+              <div className="animate-pulse h-8 w-24 bg-gray-200 rounded"></div>
+            </div>
+          </div>
+        </div>
+      </header>
+    )
+  }
+
+  if (status === "unauthenticated") {
+    return null
+  }
 
   return (
     <header className="bg-white shadow-md fixed top-0 left-0 right-0 z-50">
@@ -38,6 +73,33 @@ export default function Header() {
                 <span className="ml-2">{item.name}</span>
               </Link>
             ))}
+            
+            {/* User menu desktop */}
+            <div className="relative">
+              <button
+                onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                className="flex items-center text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
+              >
+                <User className="w-5 h-5" />
+                <span className="ml-2 max-w-32 truncate">{session?.user?.name || session?.user?.email}</span>
+              </button>
+              
+              {isUserMenuOpen && (
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 ring-1 ring-black ring-opacity-5">
+                  <div className="px-4 py-2 text-sm text-gray-700 border-b">
+                    <div className="font-medium">{session?.user?.name}</div>
+                    <div className="text-gray-500 truncate">{session?.user?.email}</div>
+                  </div>
+                  <button
+                    onClick={handleSignOut}
+                    className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Cerrar sesión
+                  </button>
+                </div>
+              )}
+            </div>
           </nav>
 
           {/* Mobile menu button */}
@@ -68,6 +130,21 @@ export default function Header() {
                 <span className="ml-2">{item.name}</span>
               </Link>
             ))}
+            
+            {/* User info mobile */}
+            <div className="border-t pt-4 mt-4">
+              <div className="px-3 py-2">
+                <div className="text-sm font-medium text-gray-900">{session?.user?.name}</div>
+                <div className="text-sm text-gray-500">{session?.user?.email}</div>
+              </div>
+              <button
+                onClick={handleSignOut}
+                className="flex items-center w-full text-left px-3 py-2 text-base font-medium text-gray-700 hover:text-blue-600"
+              >
+                <LogOut className="w-5 h-5 mr-2" />
+                Cerrar sesión
+              </button>
+            </div>
           </div>
         </div>
       )}
