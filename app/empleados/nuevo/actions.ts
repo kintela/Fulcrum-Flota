@@ -12,6 +12,7 @@ export async function crearEmpleado(formData: FormData) {
       email: formData.get("email") as string,
       movil: (formData.get("movil") as string) || null,
       contraseña: formData.get("contraseña") as string,
+      role: (formData.get("role") as string) || "usuario", // Añadir campo role con valor por defecto
     }
 
     // Validaciones básicas
