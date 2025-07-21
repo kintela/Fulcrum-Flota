@@ -1,6 +1,7 @@
 import NextAuth from "next-auth"
 import type { AuthOptions } from "next-auth"
 import AzureADProvider from "next-auth/providers/azure-ad"
+import { obtenerEmpleadoPorEmail } from "./roles"
 
 export const authOptions: AuthOptions = {
   providers: [
@@ -93,6 +94,22 @@ export const authOptions: AuthOptions = {
       // Si aún no tenemos nombre, usar el email como fallback
       if (!session.user.name && session.user.email) {
         session.user.name = session.user.email.split('@')[0]
+      }
+
+      // Obtener rol del usuario desde la base de datos
+      if (session.user.email) {
+        try {
+          const empleado = await obtenerEmpleadoPorEmail(session.user.email)
+          if (empleado) {
+            session.user.role = empleado.role
+            session.user.empleadoId = empleado.id
+          } else {
+            session.user.role = null // Usuario no encontrado en la tabla empleados
+          }
+        } catch (error) {
+          console.error("Error al obtener rol del usuario:", error)
+          session.user.role = null
+        }
       }
       
       console.log("Session Callback - Session after:", session)

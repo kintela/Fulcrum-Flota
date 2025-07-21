@@ -4,26 +4,56 @@ import { supabase } from "@/lib/supabase"
 import Link from "next/link"
 import { Suspense } from "react"
 import { MapaCoches } from "@/components/mapa-coches"
+import { getServerSession } from "next-auth/next"
+import { authOptions } from "@/lib/auth"
 
-async function getDashboardData() {
+async function getDashboardData(userRole: string, userEmail?: string) {
   try {
-    // Obtener estadísticas de coches CON ubicación
-    const { data: coches, error: cochesError } = await supabase.from("coches").select("*")
-
-    if (cochesError) {
-      console.error("Error fetching coches:", cochesError)
+    // Primero obtener el empleado por email para obtener su ID real
+    let empleadoActual = null
+    if (userRole === 'usuario' && userEmail) {
+      const { data: empleadoData, error: empleadoError } = await supabase
+        .from("empleados")
+        .select("*")
+        .eq('email', userEmail)
+        .single()
+      
+      if (empleadoError) {
+        console.error("Error fetching empleado by email:", empleadoError)
+      } else {
+        empleadoActual = empleadoData
+      }
     }
 
-    // Obtener empleados
-    const { data: empleados, error: empleadosError } = await supabase.from("empleados").select("*")
+    // Obtener coches - si es usuario, solo los asignados a él PARA LAS ESTADÍSTICAS
+    let cochesQuery = supabase.from("coches").select("*")
+    let cochesFiltrados = []
+    
+    if (userRole === 'usuario' && empleadoActual) {
+      // Para usuarios regulares, solo mostrar coches asignados a ellos para estadísticas
+      const { data: cochesUsuario, error: cochesUsuarioError } = await cochesQuery.eq('asignadoa', empleadoActual.id)
+      if (cochesUsuarioError) {
+        console.error("Error fetching coches usuario:", cochesUsuarioError)
+      }
+      cochesFiltrados = cochesUsuario || []
+    }
+    
+    // SIEMPRE obtener TODOS los coches para el mapa
+    const { data: todosLosCoches, error: cochesError } = await supabase.from("coches").select("*")
 
+    if (cochesError) {
+      console.error("Error fetching todos los coches:", cochesError)
+    }
+
+    // Obtener empleados - SIEMPRE obtener para el mapa y alertas
+    const { data: empleados, error: empleadosError } = await supabase.from("empleados").select("*")
     if (empleadosError) {
       console.error("Error fetching empleados:", empleadosError)
     }
 
 
     // Obtener TODOS los registros de ITVs con información del vehículo
-    const { data: allItvs, error: itvsError } = await supabase
+    let itvsQuery = supabase
       .from("itvs")
       .select(`
     *,
@@ -36,6 +66,13 @@ async function getDashboardData() {
     )
   `)
       .order("id", { ascending: false }) // Ordenar por ID descendente para obtener el más reciente
+
+    // Si es usuario regular, filtrar solo sus coches
+    if (userRole === 'usuario' && empleadoActual) {
+      itvsQuery = itvsQuery.eq('coches.asignadoa', empleadoActual.id)
+    }
+
+    const { data: allItvs, error: itvsError } = await itvsQuery
 
     if (itvsError) {
       console.error("Error fetching ITVs:", itvsError)
@@ -104,7 +141,7 @@ async function getDashboardData() {
     })
 
     // Also modify the SOLRED alerts calculation to exclude donor vehicles
-    const { data: tarjetasSolred, error: tarjetasError } = await supabase
+    let solredQuery = supabase
       .from("solred_coches")
       .select(`
     *,
@@ -121,6 +158,13 @@ async function getDashboardData() {
     )
   `)
       .eq("activa", true)
+
+    // Si es usuario regular, filtrar solo sus coches
+    if (userRole === 'usuario' && empleadoActual) {
+      solredQuery = solredQuery.eq('coches.asignadoa', empleadoActual.id)
+    }
+
+    const { data: tarjetasSolred, error: tarjetasError } = await solredQuery
 
     if (tarjetasError) {
       console.error("Error fetching tarjetas SOLRED:", tarjetasError)
@@ -147,7 +191,7 @@ async function getDashboardData() {
     })
 
     // Obtener alquileres próximos a vencer (2 meses o menos)
-    const { data: alquileres, error: alquileresError } = await supabase
+    let alquileresQuery = supabase
       .from("alquileres")
       .select(`
         *,
@@ -160,6 +204,13 @@ async function getDashboardData() {
         )
       `)
       .order("fecha_fin", { ascending: true })
+
+    // Si es usuario regular, filtrar solo sus coches
+    if (userRole === 'usuario' && empleadoActual) {
+      alquileresQuery = alquileresQuery.eq('coches.asignadoa', empleadoActual.id)
+    }
+
+    const { data: alquileres, error: alquileresError } = await alquileresQuery
 
     if (alquileresError) {
       console.error("Error fetching alquileres:", alquileresError)
@@ -189,7 +240,8 @@ async function getDashboardData() {
     })
 
     return {
-      coches: coches || [],
+      coches: userRole === 'usuario' ? cochesFiltrados : (todosLosCoches || []),
+      todosLosCoches: todosLosCoches || [], // Para el mapa
       empleados: empleados || [],
       itvAlerts: {
         total: itvAlerts.length,
@@ -214,6 +266,7 @@ async function getDashboardData() {
     console.error("Error in getDashboardData:", error)
     return {
       coches: [],
+      todosLosCoches: [],
       empleados: [],
       itvAlerts: {
         total: 0,
@@ -243,13 +296,55 @@ function DashboardStats({
   itvAlerts,
   solredAlerts,
   alquilerAlerts,
+  userRole,
 }: {
   coches: any[]
   empleados: any[]
   itvAlerts: any
   solredAlerts: any
   alquilerAlerts: any
+  userRole: string
 }) {
+  // Solo mostrar estadísticas detalladas a administradores
+  if (userRole !== 'administrador') {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        {/* Mis Coches Asignados */}
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center">
+              <div className="p-3 rounded-lg bg-blue-50">
+                <Car className="h-6 w-6 text-blue-600" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600">Mis Coches</p>
+                <p className="text-2xl font-bold text-gray-900">{coches.length}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Mis Alertas */}
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center">
+              <div className={`p-3 rounded-lg ${(itvAlerts.total + solredAlerts.total + alquilerAlerts.total) > 0 ? "bg-red-50" : "bg-gray-50"}`}>
+                <AlertTriangle className={`h-6 w-6 ${(itvAlerts.total + solredAlerts.total + alquilerAlerts.total) > 0 ? "text-red-600" : "text-gray-400"}`} />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600">Mis Alertas</p>
+                <p className={`text-2xl font-bold ${(itvAlerts.total + solredAlerts.total + alquilerAlerts.total) > 0 ? "text-red-600" : "text-gray-900"}`}>
+                  {itvAlerts.total + solredAlerts.total + alquilerAlerts.total}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Estadísticas completas para administradores
   // Contar donantes
   const donantesCount = coches.filter((c) => c.donante === true).length
 
@@ -838,14 +933,36 @@ function AlquilerAlertsSection({ alquilerAlerts, empleados }: { alquilerAlerts: 
 }
 
 export default async function HomePage() {
-  const { coches, empleados, itvAlerts, solredAlerts, alquilerAlerts } = await getDashboardData()
+  // Obtener información del usuario logueado
+  const session = await getServerSession(authOptions)
+  
+  // Si no hay sesión, redirigir o mostrar mensaje
+  if (!session?.user) {
+    return (
+      <div className="min-h-screen bg-gray-100 p-8 flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">No autorizado</h1>
+          <p className="text-gray-600">Debes iniciar sesión para ver esta página.</p>
+        </div>
+      </div>
+    )
+  }
+
+  const userRole = session.user.role || 'usuario'
+  const userEmail = session.user.email || ''
+
+  const { coches, todosLosCoches, empleados, itvAlerts, solredAlerts, alquilerAlerts } = await getDashboardData(userRole, userEmail)
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
       <div className="max-w-7xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600">Resumen general de la flota</p>
+          <h1 className="text-3xl font-bold text-gray-900">
+            {userRole === 'administrador' ? 'Dashboard' : 'Mi Dashboard'}
+          </h1>
+          <p className="text-gray-600">
+            {userRole === 'administrador' ? 'Resumen general de la flota' : 'Resumen de mis vehículos asignados'}
+          </p>
         </div>
 
         <Suspense fallback={<div>Cargando estadísticas...</div>}>
@@ -855,6 +972,7 @@ export default async function HomePage() {
             itvAlerts={itvAlerts}
             solredAlerts={solredAlerts}
             alquilerAlerts={alquilerAlerts}
+            userRole={userRole}
           />
         </Suspense>
 
@@ -870,9 +988,9 @@ export default async function HomePage() {
           <AlquilerAlertsSection alquilerAlerts={alquilerAlerts} empleados={empleados} />
         </Suspense>
 
-        {/* Mapa de vehículos */}
+        {/* Mapa de vehículos - Visible para todos los usuarios */}
         <Suspense fallback={<div>Cargando mapa...</div>}>
-          <MapaCoches coches={coches} empleados={empleados} />
+          <MapaCoches coches={todosLosCoches} empleados={empleados} />
         </Suspense>
       </div>
     </div>
