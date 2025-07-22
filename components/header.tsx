@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useState } from "react"
 import { useSession, signOut } from "next-auth/react"
-import { Car, Calendar, Users, FileText, Settings, Menu, X, LogOut, User, Shield, UserCircle } from "lucide-react"
+import { Car, Calendar, Users, FileText, Menu, X, LogOut, User, Shield, UserCircle } from "lucide-react"
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -15,7 +15,6 @@ export default function Header() {
     { name: "Coches", href: "/coches", icon: <Car className="w-5 h-5" /> },
     { name: "Reservas", href: "/reservas", icon: <Calendar className="w-5 h-5" /> },
     { name: "Empleados", href: "/empleados", icon: <Users className="w-5 h-5" /> },
-    { name: "Configuración", href: "/configuracion", icon: <Settings className="w-5 h-5" /> },
   ]
 
   // Filtrar menús según el rol del usuario
