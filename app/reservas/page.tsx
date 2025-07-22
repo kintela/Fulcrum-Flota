@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Calendar, User, Car, MapPin, Mail, Phone, UserCheck, Clock, UserX } from "lucide-react"
+import { Calendar, User, Car, MapPin, Mail, Phone, UserCheck, Clock, UserX, Search } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { obtenerFotosCoche } from "@/lib/storage"
 import { liberarCoche } from "@/app/actions/reservas"
@@ -76,6 +76,7 @@ export default function ReservasPage() {
   const [loading, setLoading] = useState(true)
   const [liberandoCoche, setLiberandoCoche] = useState<string | null>(null)
   const [mensaje, setMensaje] = useState<string>("")
+  const [searchText, setSearchText] = useState<string>("") // Texto de búsqueda global
 
   useEffect(() => {
     async function loadReservas() {
@@ -117,11 +118,66 @@ export default function ReservasPage() {
     }
   }
 
+  // Función para filtrar reservas por texto de búsqueda
+  const filtrarReservas = (reservasArray: Reserva[]) => {
+    if (!searchText.trim()) {
+      return reservasArray
+    }
+
+    const searchLower = searchText.toLowerCase().trim()
+    
+    return reservasArray.filter((reserva) => {
+      // Buscar en matrícula
+      if (reserva.matricula.toLowerCase().includes(searchLower)) {
+        return true
+      }
+      
+      // Buscar en marca y modelo
+      if (reserva.marca.toLowerCase().includes(searchLower) || 
+          reserva.modelo.toLowerCase().includes(searchLower)) {
+        return true
+      }
+      
+      // Buscar en dirección actual
+      if (reserva.direccion_actual && 
+          reserva.direccion_actual.toLowerCase().includes(searchLower)) {
+        return true
+      }
+      
+      // Buscar en información del empleado
+      if (reserva.empleado) {
+        const nombreCompleto = `${reserva.empleado.nombre || ''} ${reserva.empleado.apellidos || ''}`.toLowerCase()
+        if (nombreCompleto.includes(searchLower)) {
+          return true
+        }
+        
+        if (reserva.empleado.email && 
+            reserva.empleado.email.toLowerCase().includes(searchLower)) {
+          return true
+        }
+        
+        if (reserva.empleado.telefono && 
+            reserva.empleado.telefono.includes(searchText.trim())) {
+          return true
+        }
+      }
+      
+      // Buscar en asignación directa (cuando no hay empleado)
+      if (typeof reserva.asignadoa === 'string' && 
+          reserva.asignadoa.toLowerCase().includes(searchLower)) {
+        return true
+      }
+      
+      return false
+    })
+  }
+
   // Calcular estadísticas
-  const totalReservas = reservas.length
+  const reservasFiltradas = filtrarReservas(reservas)
+  const totalReservas = reservasFiltradas.length
 
   // Ordenar reservas por matrícula
-  const reservasOrdenadas = [...reservas].sort((a, b) => a.matricula.localeCompare(b.matricula))
+  const reservasOrdenadas = [...reservasFiltradas].sort((a, b) => a.matricula.localeCompare(b.matricula))
 
   if (loading) {
     return (
@@ -147,6 +203,42 @@ export default function ReservasPage() {
             <div className="text-3xl font-bold text-blue-600">{totalReservas}</div>
             <div className="text-sm text-gray-600">Total de reservas activas</div>
           </div>
+        </div>
+
+        {/* Caja de búsqueda global */}
+        <div className="bg-white p-4 rounded-lg border shadow-sm mb-6">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Search className="h-4 w-4 text-gray-500" />
+              <span className="text-sm font-medium text-gray-700">Búsqueda global:</span>
+            </div>
+            <div className="flex-1 max-w-md">
+              <input
+                type="text"
+                placeholder="Buscar por matrícula, empleado, dirección, marca, modelo..."
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-sm"
+              />
+            </div>
+            {searchText && (
+              <button
+                onClick={() => setSearchText("")}
+                className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1 rounded"
+                title="Limpiar búsqueda"
+              >
+                ✕ Limpiar
+              </button>
+            )}
+          </div>
+          {searchText && (
+            <div className="mt-2 text-xs text-gray-600">
+              {totalReservas === reservas.length 
+                ? `Mostrando ${totalReservas} de ${reservas.length} reservas`
+                : `Filtrando: ${totalReservas} de ${reservas.length} reservas encontradas`
+              }
+            </div>
+          )}
         </div>
 
         {reservas.length === 0 ? (

@@ -251,13 +251,13 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
           const isAssigned = !!empleadoInfo || !!coche.asignadoa
           
           // Debug: información del vehículo y usuario
-          console.log(`🚗 Procesando ${coche.matricula}:`, {
+          /*console.log(`🚗 Procesando ${coche.matricula}:`, {
             asignadoa: coche.asignadoa,
             empleadoInfo: empleadoInfo,
             userEmail: userEmail,
             userRole: userRole,
             empleadoEmail: empleadoInfo?.email
-          })
+          })*/
           
           // Determinar si es un vehículo del usuario actual
           // Para administradores: verificar si está asignado a su email
