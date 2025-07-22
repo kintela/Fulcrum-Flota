@@ -906,13 +906,21 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
 
           // Buscar y activar el marcador
           setTimeout(() => {
-            const targetMarker = markers.current.find((marker) => {
-              const title = marker.getTitle()
-              return title && title.includes(matricula)
+            // Filtrar solo marcadores válidos
+            const validMarkers = markers.current.filter(markerObj => markerObj && markerObj.marker && typeof markerObj.marker.getTitle === 'function')
+            
+            const targetMarkerObj = validMarkers.find((markerObj) => {
+              try {
+                // Buscar directamente por matrícula almacenada
+                return markerObj.matricula === matricula
+              } catch (error) {
+                console.warn("Error identificando marcador:", error)
+                return false
+              }
             })
-            if (targetMarker) {
+            if (targetMarkerObj) {
               console.log("🎯 Activando marcador para:", matricula)
-              window.google.maps.event.trigger(targetMarker, "click")
+              ;(window as any).google.maps.event.trigger(targetMarkerObj.marker, "click")
             } else {
               console.log("⚠️ No se encontró marcador para:", matricula)
             }

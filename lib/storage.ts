@@ -121,7 +121,7 @@ export async function subirFoto(
  */
 export async function obtenerFotosCoche(matricula: string): Promise<FotosResult> {
   try {
-    console.log(`Obteniendo fotos para matrícula: ${matricula}`)
+    //console.log(`Obteniendo fotos para matrícula: ${matricula}`)
 
     const { data, error } = await supabase.storage.from("coches-fotos").list(matricula, {
       limit: 100,

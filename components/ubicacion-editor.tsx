@@ -334,8 +334,8 @@ export function UbicacionEditor({
     setMapError(null)
 
     try {
-      console.log("🗺️ Editor - Inicializando...")
-      console.log("Verificando Google Maps Editor:", {
+      //console.log("🗺️ Editor - Inicializando...")
+      /*console.log("Verificando Google Maps Editor:", {
         google: !!window.google,
         maps: !!window.google?.maps,
         Map: !!window.google?.maps?.Map,
@@ -343,7 +343,7 @@ export function UbicacionEditor({
         ROADMAP: !!window.google?.maps?.MapTypeId?.ROADMAP,
         SATELLITE: !!window.google?.maps?.MapTypeId?.SATELLITE,
         Geocoder: !!window.google?.maps?.Geocoder,
-      })
+      })*/
 
       // Verificación adicional
       if (!window.google?.maps?.MapTypeId?.SATELLITE) {
