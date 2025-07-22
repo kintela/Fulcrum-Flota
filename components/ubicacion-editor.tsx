@@ -90,7 +90,7 @@ function useGoogleMaps() {
 
       // Definir callback global
       ;(window as any)[callbackName] = () => {
-        console.log("🗺️ Callback de Google Maps Editor ejecutado")
+        //console.log("🗺️ Callback de Google Maps Editor ejecutado")
 
         // Verificar que todo esté disponible
         let checkAttempts = 0
@@ -127,7 +127,7 @@ function useGoogleMaps() {
         delete (window as any)[callbackName]
       }
 
-      console.log("🔄 Cargando Google Maps Editor...")
+      //console.log("🔄 Cargando Google Maps Editor...")
       document.head.appendChild(script)
     } catch (err) {
       console.error("Error al cargar Google Maps:", err)
@@ -362,7 +362,7 @@ export function UbicacionEditor({
 
       const zoom = hasInitialLocation ? 15 : 19 // Zoom máximo para la sede
 
-      console.log("🎯 Centrando mapa en:", center)
+      //console.log("🎯 Centrando mapa en:", center)
 
       const map = new window.google.maps.Map(mapRef.current, {
         zoom,

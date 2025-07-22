@@ -144,7 +144,7 @@ export async function obtenerFotosCoche(matricula: string): Promise<FotosResult>
       }
     }
 
-    console.log(`Encontradas ${data.length} fotos para ${matricula}:`, data)
+    //console.log(`Encontradas ${data.length} fotos para ${matricula}:`, data)
 
     // Generar URLs públicas para todas las fotos
     const fotos = data
@@ -154,7 +154,7 @@ export async function obtenerFotosCoche(matricula: string): Promise<FotosResult>
         return urlData.publicUrl
       })
 
-    console.log(`URLs generadas para ${matricula}:`, fotos)
+    //console.log(`URLs generadas para ${matricula}:`, fotos)
 
     return {
       success: true,
