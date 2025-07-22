@@ -250,18 +250,33 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
           const empleadoInfo = getEmpleadoInfo(coche)
           const isAssigned = !!empleadoInfo || !!coche.asignadoa
           
+          // Debug: información del vehículo y usuario
+          console.log(`🚗 Procesando ${coche.matricula}:`, {
+            asignadoa: coche.asignadoa,
+            empleadoInfo: empleadoInfo,
+            userEmail: userEmail,
+            userRole: userRole,
+            empleadoEmail: empleadoInfo?.email
+          })
+          
           // Determinar si es un vehículo del usuario actual
-          const isUserVehicle = userRole === 'usuario' && userEmail && empleadoInfo && empleadoInfo.email === userEmail
+          // Para administradores: verificar si está asignado a su email
+          // Para usuarios: verificar solo si tienen ese rol y el vehículo está asignado a ellos
+          const isUserVehicle = userEmail && empleadoInfo && empleadoInfo.email === userEmail
+          
+          console.log(`🎯 ${coche.matricula} - isUserVehicle:`, isUserVehicle)
 
           // Determinar el color del marcador
           let fillColor = "#3b82f6" // Azul por defecto (disponible)
           if (isUserVehicle) {
-            fillColor = "#dc2626" // Rojo para vehículos del usuario
+            fillColor = "#dc2626" // Rojo para vehículos del usuario (tanto admin como usuario regular)
           } else if (isAssigned) {
             fillColor = "#10b981" // Verde para asignados a otros
           }
 
           // Determinar si el usuario puede reubicar este vehículo
+          // Administradores: pueden reubicar cualquier vehículo
+          // Usuarios: solo pueden reubicar sus vehículos asignados
           const canRelocate = userRole === 'administrador' || 
             (userRole === 'usuario' && isUserVehicle)
 
