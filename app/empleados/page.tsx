@@ -4,6 +4,7 @@ import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 
 async function getEmpleados() {
+  // Obtener empleados
   const { data: empleados, error } = await supabase
     .from("empleados")
     .select("*")
@@ -15,7 +16,35 @@ async function getEmpleados() {
     return []
   }
 
-  return empleados || []
+  // Obtener coches para mapear asignaciones
+  const { data: coches, error: cochesError } = await supabase
+    .from("coches")
+    .select("matricula, asignadoa")
+    .not("asignadoa", "is", null)
+
+  if (cochesError) {
+    console.error("Error fetching coches:", cochesError)
+  }
+
+  // Crear un mapa de empleado ID a matrículas asignadas
+  const cochesAsignados = {}
+  if (coches) {
+    coches.forEach(coche => {
+      const empleadoId = coche.asignadoa
+      if (!cochesAsignados[empleadoId]) {
+        cochesAsignados[empleadoId] = []
+      }
+      cochesAsignados[empleadoId].push(coche.matricula)
+    })
+  }
+
+  // Agregar las matrículas a cada empleado
+  const empleadosConCoches = (empleados || []).map(empleado => ({
+    ...empleado,
+    matriculasAsignadas: cochesAsignados[empleado.id] || []
+  }))
+
+  return empleadosConCoches
 }
 
 export default async function EmpleadosPage() {
@@ -76,9 +105,24 @@ export default async function EmpleadosPage() {
                         <span>{empleado.movil}</span>
                       </div>
                     )}
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">ID:</span>
-                      <span>{empleado.id}</span>
+                    <div className="text-sm">
+                      <span className="text-gray-500">Vehículos asignados:</span>
+                      <div className="mt-1">
+                        {empleado.matriculasAsignadas && empleado.matriculasAsignadas.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {empleado.matriculasAsignadas.map((matricula, index) => (
+                              <span 
+                                key={matricula}
+                                className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs"
+                              >
+                                {matricula}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 text-xs">Sin vehículos asignados</span>
+                        )}
+                      </div>
                     </div>
                   </div>
 

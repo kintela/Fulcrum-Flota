@@ -2,6 +2,7 @@ import NextAuth from "next-auth"
 import type { AuthOptions } from "next-auth"
 import AzureADProvider from "next-auth/providers/azure-ad"
 import { obtenerEmpleadoPorEmail } from "./roles"
+import { registrarUsuarioAutomatico } from "./auto-register"
 
 export const authOptions: AuthOptions = {
   providers: [
@@ -73,8 +74,8 @@ export const authOptions: AuthOptions = {
       return token
     },
     async session({ session, token }: any) {
-      console.log("Session Callback - Token:", token)
-      console.log("Session Callback - Session before:", session)
+      console.log("🔥 Session Callback INICIADO - Token:", token)
+      console.log("🔥 Session Callback INICIADO - Session before:", session)
       
       session.accessToken = token.accessToken
       session.idToken = token.idToken
@@ -98,18 +99,80 @@ export const authOptions: AuthOptions = {
 
       // Obtener rol del usuario desde la base de datos
       if (session.user.email) {
+        console.log("🔥 VERIFICANDO USUARIO EN BD:", session.user.email)
         try {
-          const empleado = await obtenerEmpleadoPorEmail(session.user.email)
+          let empleado = await obtenerEmpleadoPorEmail(session.user.email)
+          console.log("🔥 RESULTADO BUSQUEDA EMPLEADO:", empleado)
+          
+          // Si el empleado no existe, registrarlo automáticamente
+          if (!empleado) {
+            console.log(`� USUARIO NO ENCONTRADO, REGISTRANDO: ${session.user.email}`)
+            
+            // Intentar extraer nombre y apellidos del token o session
+            let nombre = session.user.name || ""
+            let apellidos = ""
+            
+            console.log("🔥 DATOS PARA REGISTRO:", {
+              tokenGivenName: token.given_name,
+              tokenFamilyName: token.family_name,
+              sessionUserName: session.user.name,
+              sessionUserEmail: session.user.email
+            })
+            
+            // Si tenemos los campos separados del token, usarlos
+            if (token.given_name || token.family_name) {
+              nombre = token.given_name || ""
+              apellidos = token.family_name || ""
+            } else if (session.user.name && session.user.name.includes(" ")) {
+              // Si el nombre completo viene junto, separarlo
+              const partes = session.user.name.trim().split(" ")
+              nombre = partes[0]
+              apellidos = partes.slice(1).join(" ")
+            }
+            
+            // Si aún no tenemos nombre, usar el email como nombre
+            if (!nombre && session.user.email) {
+              nombre = session.user.email.split('@')[0]
+            }
+            
+            console.log(`🔥 LLAMANDO A registrarUsuarioAutomatico con:`, {
+              email: session.user.email,
+              nombre,
+              apellidos
+            })
+            
+            const resultado = await registrarUsuarioAutomatico(
+              session.user.email,
+              nombre,
+              apellidos
+            )
+            
+            console.log("🔥 RESULTADO REGISTRO AUTOMATICO:", resultado)
+            
+            if (resultado.success) {
+              empleado = resultado.user
+              console.log(`🔥 USUARIO REGISTRADO EXITOSAMENTE: ${session.user.email}`)
+            } else {
+              console.error(`🔥 ERROR REGISTRANDO USUARIO: ${resultado.error}`)
+            }
+          } else {
+            console.log("🔥 USUARIO YA EXISTE EN BD")
+          }
+          
           if (empleado) {
             session.user.role = empleado.role
             session.user.empleadoId = empleado.id
+            console.log("🔥 ROL ASIGNADO:", empleado.role)
           } else {
-            session.user.role = null // Usuario no encontrado en la tabla empleados
+            session.user.role = null // Usuario no encontrado y no se pudo registrar
+            console.log("🔥 NO SE PUDO OBTENER/REGISTRAR USUARIO")
           }
         } catch (error) {
-          console.error("Error al obtener rol del usuario:", error)
+          console.error("🔥 ERROR GENERAL EN SESSION CALLBACK:", error)
           session.user.role = null
         }
+      } else {
+        console.log("🔥 NO HAY EMAIL EN SESSION")
       }
       
       console.log("Session Callback - Session after:", session)

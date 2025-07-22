@@ -264,7 +264,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
           // Para usuarios: verificar solo si tienen ese rol y el vehículo está asignado a ellos
           const isUserVehicle = userEmail && empleadoInfo && empleadoInfo.email === userEmail
           
-          console.log(`🎯 ${coche.matricula} - isUserVehicle:`, isUserVehicle)
+          //console.log(`🎯 ${coche.matricula} - isUserVehicle:`, isUserVehicle)
 
           // Determinar el color del marcador
           let fillColor = "#3b82f6" // Azul por defecto (disponible)
