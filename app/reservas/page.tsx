@@ -1,11 +1,31 @@
+"use client"
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Calendar, User, Car, MapPin, Mail, Phone, UserCheck, Clock } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Calendar, User, Car, MapPin, Mail, Phone, UserCheck, Clock, UserX } from "lucide-react"
 import { supabase } from "@/lib/supabase"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"
+import { obtenerFotosCoche } from "@/lib/storage"
+import { liberarCoche } from "@/app/actions/reservas"
+import { useSession } from "next-auth/react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 
-async function getReservasActivas() {
+interface Reserva {
+  id: number
+  matricula: string
+  marca: string
+  modelo: string
+  latitud?: number
+  longitud?: number
+  asignadoa?: string | number
+  donante?: boolean
+  direccion_actual?: string
+  ultima_ubicacion?: string
+  empleado?: any
+  foto?: string | null
+}
+
+async function getReservasActivas(): Promise<Reserva[]> {
   // Obtener todos los coches asignados (reservas activas)
   const { data: coches, error: cochesError } = await supabase
     .from("coches")
@@ -28,27 +48,92 @@ async function getReservasActivas() {
     return []
   }
 
-  // Combinar información de coches con empleados
-  const reservas = coches.map((coche) => {
-    const empleado = empleados.find((emp) => emp.id === Number(coche.asignadoa))
-    return {
-      ...coche,
-      empleado: empleado
-    }
-  })
+  // Combinar información de coches con empleados y fotos
+  const reservas = await Promise.all(
+    coches.map(async (coche) => {
+      const empleado = empleados.find((emp) => emp.id === Number(coche.asignadoa))
+      
+      // Obtener la primera foto del coche
+      const fotosResult = await obtenerFotosCoche(coche.matricula)
+      const primeraFoto = fotosResult.success && fotosResult.fotos && fotosResult.fotos.length > 0 
+        ? fotosResult.fotos[0] 
+        : null
+      
+      return {
+        ...coche,
+        empleado: empleado,
+        foto: primeraFoto
+      }
+    })
+  )
 
   return reservas
 }
 
-export default async function ReservasPage() {
-  const session = await getServerSession(authOptions)
-  const reservas = await getReservasActivas()
+export default function ReservasPage() {
+  const { data: session } = useSession()
+  const [reservas, setReservas] = useState<Reserva[]>([])
+  const [loading, setLoading] = useState(true)
+  const [liberandoCoche, setLiberandoCoche] = useState<string | null>(null)
+  const [mensaje, setMensaje] = useState<string>("")
+
+  useEffect(() => {
+    async function loadReservas() {
+      try {
+        const data = await getReservasActivas()
+        setReservas(data)
+      } catch (error) {
+        console.error("Error cargando reservas:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadReservas()
+  }, [])
+
+  // Función para manejar la liberación de un coche
+  const handleLiberar = async (matricula: string) => {
+    setLiberandoCoche(matricula)
+    setMensaje("")
+
+    try {
+      const resultado = await liberarCoche(matricula)
+      
+      if (resultado.success) {
+        setMensaje(`✅ ${resultado.message}`)
+        // Recargar las reservas para actualizar la lista
+        setTimeout(() => {
+          window.location.reload()
+        }, 2000)
+      } else {
+        setMensaje(`❌ ${resultado.error}`)
+      }
+    } catch (error) {
+      console.error("Error liberando coche:", error)
+      setMensaje("❌ Error inesperado al liberar el vehículo")
+    } finally {
+      setLiberandoCoche(null)
+    }
+  }
 
   // Calcular estadísticas
   const totalReservas = reservas.length
 
   // Ordenar reservas por matrícula
   const reservasOrdenadas = [...reservas].sort((a, b) => a.matricula.localeCompare(b.matricula))
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-100 p-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex justify-center items-center min-h-[400px]">
+            <div className="text-gray-600">Cargando reservas...</div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
@@ -80,12 +165,23 @@ export default async function ReservasPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <>
+            {mensaje && (
+              <div className={`mb-6 p-4 rounded-lg ${
+                mensaje.startsWith('✅') 
+                  ? 'bg-green-50 border border-green-200 text-green-800' 
+                  : 'bg-red-50 border border-red-200 text-red-800'
+              }`}>
+                {mensaje}
+              </div>
+            )}
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {reservasOrdenadas.map((reserva) => (
               <Card key={reserva.id} className="hover:shadow-lg transition-shadow">
                 <CardHeader className="pb-3">
-                  <div className="flex justify-between items-start">
-                    <div>
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex-1">
                       <CardTitle className="text-lg flex items-center">
                         <Car className="h-5 w-5 mr-2 text-blue-600" />
                         {reserva.matricula}
@@ -108,6 +204,26 @@ export default async function ReservasPage() {
                           Sin ubicar
                         </span>
                       )}
+                    </div>
+                  </div>
+                  
+                  {/* Imagen del coche */}
+                  <div className="w-full h-32 bg-gray-100 rounded-lg overflow-hidden">
+                    {reserva.foto ? (
+                      <img
+                        src={reserva.foto}
+                        alt={`${reserva.marca} ${reserva.modelo} - ${reserva.matricula}`}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          // Si la imagen falla al cargar, mostrar el icono de coche
+                          const target = e.target as HTMLImageElement
+                          target.style.display = 'none'
+                          target.nextElementSibling?.classList.remove('hidden')
+                        }}
+                      />
+                    ) : null}
+                    <div className={`w-full h-full flex items-center justify-center ${reserva.foto ? 'hidden' : ''}`}>
+                      <Car className="h-12 w-12 text-gray-400" />
                     </div>
                   </div>
                 </CardHeader>
@@ -184,19 +300,21 @@ export default async function ReservasPage() {
                   </div>
 
                   <div className="flex justify-end">
-                    {session?.user?.role === 'administrador' && (
-                      <Link
-                        href={`/coches/editar/${reserva.id}`}
-                        className="bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-2 rounded text-sm text-center"
-                      >
-                        Editar
-                      </Link>
-                    )}
+                    <Button
+                      onClick={() => handleLiberar(reserva.matricula)}
+                      disabled={liberandoCoche === reserva.matricula}
+                      className="bg-red-600 hover:bg-red-700 text-white"
+                      size="sm"
+                    >
+                      <UserX className="h-4 w-4 mr-2" />
+                      {liberandoCoche === reserva.matricula ? "Liberando..." : "Liberar"}
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
             ))}
           </div>
+          </>
         )}
       </div>
     </div>
