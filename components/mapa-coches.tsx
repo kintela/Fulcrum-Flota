@@ -261,11 +261,16 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
             fillColor = "#10b981" // Verde para asignados a otros
           }
 
+          // Determinar si el usuario puede reubicar este vehículo
+          const canRelocate = userRole === 'administrador' || 
+            (userRole === 'usuario' && isUserVehicle)
+
           // Crear marcador
           const marker = new window.google.maps.Marker({
             position,
             map,
             title: `${coche.matricula} - ${coche.marca} ${coche.modelo}`,
+            draggable: canRelocate, // Hacer arrastrable si el usuario tiene permisos
             icon: {
               path: window.google.maps.SymbolPath.CIRCLE,
               scale: 10,
@@ -289,6 +294,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
               </p>
               ${empleadoInfo ? `<p style="margin: 4px 0; color: #6b7280;"><strong>Asignado a:</strong> ${empleadoInfo.nombre} ${empleadoInfo.apellidos || ""}</p>` : ""}
               ${coche.direccion_actual ? `<p style="margin: 4px 0; color: #6b7280;"><strong>Ubicación:</strong> ${coche.direccion_actual}</p>` : ""}
+              ${canRelocate ? `<p style="margin: 4px 0; color: #10b981; font-size: 12px;"><strong>💡 Tip:</strong> Puedes arrastrar este marcador para reubicarlo</p>` : ""}
               <div style="margin-top: 8px;">
                 <a href="/coches/detalle/${coche.matricula}" 
                    style="background-color: #3b82f6; color: white; padding: 4px 8px; border-radius: 4px; text-decoration: none; font-size: 12px;">
@@ -302,6 +308,75 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
           marker.addListener("click", () => {
             infoWindow.open(map, marker)
           })
+
+          // Agregar listeners para reubicación si el marcador es arrastrable
+          if (canRelocate) {
+            let isDragging = false
+            let originalPosition = position
+
+            // Cuando empieza a arrastrar
+            marker.addListener("dragstart", () => {
+              isDragging = true
+              originalPosition = marker.getPosition()?.toJSON() || position
+              console.log(`🎯 Iniciando reubicación de ${coche.matricula}`)
+              setVehicleMessage(`📍 Reubicando ${coche.matricula}... Suelta para guardar la nueva ubicación`)
+            })
+
+            // Durante el arrastre
+            marker.addListener("drag", () => {
+              const currentPos = marker.getPosition()
+              if (currentPos) {
+                console.log(`🔄 Arrastrando ${coche.matricula} a:`, currentPos.toJSON())
+              }
+            })
+
+            // Cuando termina de arrastrar
+            marker.addListener("dragend", async (event: any) => {
+              isDragging = false
+              const newLat = event.latLng.lat()
+              const newLng = event.latLng.lng()
+              
+              console.log(`🎯 Finalizando reubicación de ${coche.matricula} en:`, { lat: newLat, lng: newLng })
+              
+              // Mostrar mensaje de guardando
+              setVehicleMessage(`💾 Guardando nueva ubicación de ${coche.matricula}...`)
+              
+              try {
+                const resultado = await actualizarUbicacionCoche(coche.matricula, newLat, newLng)
+                
+                if (resultado.success) {
+                  setVehicleMessage(`✅ ${resultado.message}`)
+                  
+                  // Refresh para mostrar la nueva ubicación
+                  setTimeout(() => {
+                    window.location.reload()
+                  }, 2000)
+                } else {
+                  setVehicleMessage(`❌ ${resultado.error}`)
+                  // Volver a la posición original si hay error
+                  marker.setPosition(originalPosition)
+                }
+              } catch (error) {
+                console.error("Error reubicando vehículo:", error)
+                setVehicleMessage(`❌ Error al reubicar ${coche.matricula}`)
+                // Volver a la posición original si hay error
+                marker.setPosition(originalPosition)
+              }
+            })
+
+            // Personalizar el cursor para indicar que es arrastrable
+            marker.addListener("mouseover", () => {
+              if (!isDragging) {
+                map.setOptions({ draggableCursor: 'move' })
+              }
+            })
+
+            marker.addListener("mouseout", () => {
+              if (!isDragging) {
+                map.setOptions({ draggableCursor: null })
+              }
+            })
+          }
 
           // Almacenar el marcador con información adicional para poder identificarlo
           markers.current.push({ marker, matricula: coche.matricula })
@@ -1258,6 +1333,16 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
                 <div className="w-4 h-4 bg-gray-500 rounded-full"></div>
                 <span>Sin ubicación</span>
               </div>
+              {userRole && (
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-green-600">🖱️</span>
+                  <span className="text-green-600">
+                    {userRole === 'administrador' 
+                      ? 'Puedes reubicar cualquier vehículo arrastrándolo' 
+                      : 'Puedes reubicar tus vehículos arrastrándolos'}
+                  </span>
+                </div>
+              )}
             </div>
             
             {/* Información de filtrado */}
