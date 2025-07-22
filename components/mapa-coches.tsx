@@ -5,7 +5,9 @@ import type React from "react"
 import { useEffect, useRef, useState, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { MapPin, RefreshCw, Navigation, AlertCircle, Car } from "lucide-react"
+import { MapPin, RefreshCw, Navigation, AlertCircle, Car, UserCheck, UserX } from "lucide-react"
+import { reservarCoche, liberarCoche } from "@/app/actions/reservas"
+import { actualizarUbicacionCoche } from "@/app/actions/ubicacion"
 
 interface Coche {
   matricula: string
@@ -22,6 +24,13 @@ interface Coche {
 interface MapaCochesProps {
   coches: Coche[]
   empleados?: any[]
+  userRole?: string
+  userEmail?: string
+  onFunctionsReady?: (functions: {
+    zoomToVehicle: (matricula: string) => void
+    activateLocationMode: (matricula: string) => void
+    cancelLocationMode: () => void
+  }) => void
 }
 
 // Hook personalizado para Google Maps con verificación completa
@@ -97,13 +106,13 @@ function useGoogleMaps() {
 
       // Definir callback global
       ;(window as any)[callbackName] = () => {
-        console.log("🗺️ Callback de Google Maps ejecutado")
+        //console.log("🗺️ Callback de Google Maps ejecutado")
 
         // Verificar que todo esté disponible
         let checkAttempts = 0
         const verifyComplete = () => {
           if (isGoogleMapsReady()) {
-            console.log("✅ Google Maps completamente cargado")
+            //console.log("✅ Google Maps completamente cargado")
             setIsLoaded(true)
             loadingRef.current = false
             // Limpiar callback
@@ -134,7 +143,7 @@ function useGoogleMaps() {
         delete (window as any)[callbackName]
       }
 
-      console.log("🔄 Cargando Google Maps...")
+      //console.log("🔄 Cargando Google Maps...")
       document.head.appendChild(script)
     } catch (err) {
       console.error("Error al cargar Google Maps:", err)
@@ -150,16 +159,25 @@ function useGoogleMaps() {
   return { isLoaded, error, loadGoogleMaps, isGoogleMapsReady }
 }
 
-export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
+export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunctionsReady }: MapaCochesProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstance = useRef<any>(null)
   const markers = useRef<any[]>([])
+  const isLocationModeRef = useRef(false)
+  const vehicleToLocateRef = useRef<string | null>(null)
   const { isLoaded, error, isGoogleMapsReady } = useGoogleMaps()
 
   const [isInitializing, setIsInitializing] = useState(false)
   const [mapError, setMapError] = useState<string | null>(null)
   const [selectedMatricula, setSelectedMatricula] = useState<string>("all")
   const [vehicleMessage, setVehicleMessage] = useState<string>("")
+  const [isReserving, setIsReserving] = useState(false)
+  const [reservationMessage, setReservationMessage] = useState<string>("")
+  const [isReleasing, setIsReleasing] = useState(false)
+  const [isLocationMode, setIsLocationMode] = useState(false)
+  const [vehicleToLocate, setVehicleToLocate] = useState<string | null>(null)
+  const [filterMode, setFilterMode] = useState<"all" | "available" | "assigned" | "with-location" | "no-location">("all")
+  const [selectKey, setSelectKey] = useState(0) // Clave para forzar re-renderizado del select
 
   // Crear mapa de empleados
   const empleadosMap = new Map()
@@ -184,10 +202,10 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
 
   // Función para limpiar marcadores
   const clearMarkers = useCallback(() => {
-    markers.current.forEach((marker) => {
-      if (marker && typeof marker.setMap === "function") {
+    markers.current.forEach((markerObj) => {
+      if (markerObj && markerObj.marker && typeof markerObj.marker.setMap === "function") {
         try {
-          marker.setMap(null)
+          markerObj.marker.setMap(null)
         } catch (e) {
           console.warn("Error limpiando marcador:", e)
         }
@@ -216,7 +234,7 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
           !isNaN(Number(coche.longitud)),
       )
 
-      console.log(`📍 Agregando ${cochesConUbicacion.length} marcadores`)
+      //console.log(`📍 Agregando ${cochesConUbicacion.length} marcadores`)
 
       if (cochesConUbicacion.length === 0) {
         return
@@ -231,16 +249,47 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
           const position = { lat, lng }
           const empleadoInfo = getEmpleadoInfo(coche)
           const isAssigned = !!empleadoInfo || !!coche.asignadoa
+          
+          // Debug: información del vehículo y usuario
+          console.log(`🚗 Procesando ${coche.matricula}:`, {
+            asignadoa: coche.asignadoa,
+            empleadoInfo: empleadoInfo,
+            userEmail: userEmail,
+            userRole: userRole,
+            empleadoEmail: empleadoInfo?.email
+          })
+          
+          // Determinar si es un vehículo del usuario actual
+          // Para administradores: verificar si está asignado a su email
+          // Para usuarios: verificar solo si tienen ese rol y el vehículo está asignado a ellos
+          const isUserVehicle = userEmail && empleadoInfo && empleadoInfo.email === userEmail
+          
+          console.log(`🎯 ${coche.matricula} - isUserVehicle:`, isUserVehicle)
+
+          // Determinar el color del marcador
+          let fillColor = "#3b82f6" // Azul por defecto (disponible)
+          if (isUserVehicle) {
+            fillColor = "#dc2626" // Rojo para vehículos del usuario (tanto admin como usuario regular)
+          } else if (isAssigned) {
+            fillColor = "#10b981" // Verde para asignados a otros
+          }
+
+          // Determinar si el usuario puede reubicar este vehículo
+          // Administradores: pueden reubicar cualquier vehículo
+          // Usuarios: solo pueden reubicar sus vehículos asignados
+          const canRelocate = userRole === 'administrador' || 
+            (userRole === 'usuario' && isUserVehicle)
 
           // Crear marcador
           const marker = new window.google.maps.Marker({
             position,
             map,
             title: `${coche.matricula} - ${coche.marca} ${coche.modelo}`,
+            draggable: canRelocate, // Hacer arrastrable si el usuario tiene permisos
             icon: {
               path: window.google.maps.SymbolPath.CIRCLE,
               scale: 10,
-              fillColor: isAssigned ? "#10b981" : "#3b82f6",
+              fillColor: fillColor,
               fillOpacity: 0.8,
               strokeColor: "#ffffff",
               strokeWeight: 2,
@@ -260,6 +309,7 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
               </p>
               ${empleadoInfo ? `<p style="margin: 4px 0; color: #6b7280;"><strong>Asignado a:</strong> ${empleadoInfo.nombre} ${empleadoInfo.apellidos || ""}</p>` : ""}
               ${coche.direccion_actual ? `<p style="margin: 4px 0; color: #6b7280;"><strong>Ubicación:</strong> ${coche.direccion_actual}</p>` : ""}
+              ${canRelocate ? `<p style="margin: 4px 0; color: #10b981; font-size: 12px;"><strong>💡 Tip:</strong> Puedes arrastrar este marcador para reubicarlo</p>` : ""}
               <div style="margin-top: 8px;">
                 <a href="/coches/detalle/${coche.matricula}" 
                    style="background-color: #3b82f6; color: white; padding: 4px 8px; border-radius: 4px; text-decoration: none; font-size: 12px;">
@@ -274,7 +324,77 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
             infoWindow.open(map, marker)
           })
 
-          markers.current.push(marker)
+          // Agregar listeners para reubicación si el marcador es arrastrable
+          if (canRelocate) {
+            let isDragging = false
+            let originalPosition = position
+
+            // Cuando empieza a arrastrar
+            marker.addListener("dragstart", () => {
+              isDragging = true
+              originalPosition = marker.getPosition()?.toJSON() || position
+              console.log(`🎯 Iniciando reubicación de ${coche.matricula}`)
+              setVehicleMessage(`📍 Reubicando ${coche.matricula}... Suelta para guardar la nueva ubicación`)
+            })
+
+            // Durante el arrastre
+            marker.addListener("drag", () => {
+              const currentPos = marker.getPosition()
+              if (currentPos) {
+                console.log(`🔄 Arrastrando ${coche.matricula} a:`, currentPos.toJSON())
+              }
+            })
+
+            // Cuando termina de arrastrar
+            marker.addListener("dragend", async (event: any) => {
+              isDragging = false
+              const newLat = event.latLng.lat()
+              const newLng = event.latLng.lng()
+              
+              console.log(`🎯 Finalizando reubicación de ${coche.matricula} en:`, { lat: newLat, lng: newLng })
+              
+              // Mostrar mensaje de guardando
+              setVehicleMessage(`💾 Guardando nueva ubicación de ${coche.matricula}...`)
+              
+              try {
+                const resultado = await actualizarUbicacionCoche(coche.matricula, newLat, newLng)
+                
+                if (resultado.success) {
+                  setVehicleMessage(`✅ ${resultado.message}`)
+                  
+                  // Refresh para mostrar la nueva ubicación
+                  setTimeout(() => {
+                    window.location.reload()
+                  }, 2000)
+                } else {
+                  setVehicleMessage(`❌ ${resultado.error}`)
+                  // Volver a la posición original si hay error
+                  marker.setPosition(originalPosition)
+                }
+              } catch (error) {
+                console.error("Error reubicando vehículo:", error)
+                setVehicleMessage(`❌ Error al reubicar ${coche.matricula}`)
+                // Volver a la posición original si hay error
+                marker.setPosition(originalPosition)
+              }
+            })
+
+            // Personalizar el cursor para indicar que es arrastrable
+            marker.addListener("mouseover", () => {
+              if (!isDragging) {
+                map.setOptions({ draggableCursor: 'move' })
+              }
+            })
+
+            marker.addListener("mouseout", () => {
+              if (!isDragging) {
+                map.setOptions({ draggableCursor: null })
+              }
+            })
+          }
+
+          // Almacenar el marcador con información adicional para poder identificarlo
+          markers.current.push({ marker, matricula: coche.matricula })
           bounds.extend(position)
         } catch (error) {
           console.error("Error creando marcador:", error)
@@ -301,6 +421,79 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
     [coches, getEmpleadoInfo, clearMarkers, isGoogleMapsReady],
   )
 
+  // Función para actualizar la ubicación de un vehículo
+  const updateVehicleLocation = useCallback(async (matricula: string, lat: number, lng: number) => {
+    console.log(`🎯 Actualizando ubicación de ${matricula} en:`, { lat, lng })
+    
+    // Crear marcador temporal en la posición seleccionada
+    if (mapInstance.current && isGoogleMapsReady()) {
+      try {
+        const tempMarker = new window.google.maps.Marker({
+          position: { lat, lng },
+          map: mapInstance.current,
+          title: `Nueva ubicación para ${matricula}`,
+          icon: {
+            path: window.google.maps.SymbolPath.CIRCLE,
+            scale: 12,
+            fillColor: "#dc2626", // Rojo para indicar nueva ubicación
+            fillOpacity: 0.9,
+            strokeColor: "#ffffff",
+            strokeWeight: 3,
+          },
+          animation: window.google.maps.Animation.BOUNCE
+        })
+
+        // Quitar la animación después de 2 segundos
+        setTimeout(() => {
+          if (tempMarker) {
+            tempMarker.setAnimation(null)
+          }
+        }, 2000)
+
+        setVehicleMessage(`📍 Guardando nueva ubicación para ${matricula}...`)
+        
+        // Remover el marcador temporal después de 5 segundos
+        setTimeout(() => {
+          if (tempMarker) {
+            tempMarker.setMap(null)
+          }
+        }, 5000)
+      } catch (error) {
+        console.error("Error creando marcador temporal:", error)
+      }
+    }
+
+    try {
+      const resultado = await actualizarUbicacionCoche(matricula, lat, lng)
+      
+      if (resultado.success) {
+        setVehicleMessage(`✅ ${resultado.message}`)
+        setIsLocationMode(false)
+        setVehicleToLocate(null)
+        isLocationModeRef.current = false
+        vehicleToLocateRef.current = null
+        
+        // Refresh para mostrar la nueva ubicación
+        setTimeout(() => {
+          window.location.reload()
+        }, 2000)
+      } else {
+        setVehicleMessage(`❌ ${resultado.error}`)
+        setIsLocationMode(false)
+        setVehicleToLocate(null)
+        isLocationModeRef.current = false
+        vehicleToLocateRef.current = null
+      }
+    } catch (error) {
+      console.error("Error actualizando ubicación:", error)
+      setVehicleMessage(`❌ Error al actualizar la ubicación del vehículo ${matricula}`)
+      setIsLocationMode(false)
+      setVehicleToLocate(null)
+      isLocationModeRef.current = false
+      vehicleToLocateRef.current = null
+    }
+  }, [isGoogleMapsReady])
+
   // Función para inicializar el mapa
   const initializeMap = useCallback(async () => {
     if (!mapRef.current || !isLoaded || !isGoogleMapsReady() || mapInstance.current) {
@@ -311,7 +504,7 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
     setMapError(null)
 
     try {
-      console.log("🗺️ Inicializando mapa...")
+      //console.log("🗺️ Inicializando mapa...")
 
       // Crear el mapa en modo satélite por defecto con zoom más alto
       const map = new window.google.maps.Map(mapRef.current, {
@@ -335,13 +528,28 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
       })
 
       mapInstance.current = map
-      console.log("✅ Mapa creado exitosamente")
+      //console.log("✅ Mapa creado exitosamente")
 
       // Esperar a que el mapa esté listo y agregar marcadores
       window.google.maps.event.addListenerOnce(map, "idle", () => {
-        console.log("🎯 Mapa completamente listo")
+        //console.log("🎯 Mapa completamente listo")
         addMarkers(map)
         setIsInitializing(false)
+      })
+
+      // Agregar listener para clics en el mapa (para modo de ubicación)
+      // Usar refs para acceder al estado actual
+      map.addListener("click", (event: any) => {
+        console.log("🖱️ Click en mapa detectado. isLocationMode:", isLocationModeRef.current, "vehicleToLocate:", vehicleToLocateRef.current)
+        
+        if (isLocationModeRef.current && vehicleToLocateRef.current) {
+          const lat = event.latLng.lat()
+          const lng = event.latLng.lng()
+          console.log("📍 Coordenadas obtenidas:", { lat, lng })
+          updateVehicleLocation(vehicleToLocateRef.current, lat, lng)
+        } else {
+          console.log("⚠️ No está en modo ubicación o no hay vehículo seleccionado")
+        }
       })
 
       // Fallback
@@ -357,7 +565,7 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
       setMapError(`Error al crear el mapa: ${err instanceof Error ? err.message : "Error desconocido"}`)
       setIsInitializing(false)
     }
-  }, [isLoaded, addMarkers, isInitializing, isGoogleMapsReady])
+  }, [isLoaded, addMarkers, isInitializing, isGoogleMapsReady, isLocationMode, vehicleToLocate, updateVehicleLocation])
 
   // Effect para inicializar el mapa cuando esté listo
   useEffect(() => {
@@ -413,17 +621,27 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
     }
   }, [coches, isGoogleMapsReady])
 
-  // Calcular estadísticas
-  const cochesConUbicacion = coches.filter((c) => c.latitud && c.longitud && !c.donante)
-  const cochesAsignados = cochesConUbicacion.filter((c) => getEmpleadoInfo(c) || c.asignadoa)
-  const cochesDisponibles = cochesConUbicacion.filter((c) => !getEmpleadoInfo(c) && !c.asignadoa)
-
   const isLoading = !isLoaded || isInitializing
   const displayError = error || mapError
 
+  // Calcular estadísticas
+  const cochesConUbicacion = coches.filter((c) => c.latitud && c.longitud && !c.donante)
+  const cochesSinUbicacion = coches.filter((c) => (!c.latitud || !c.longitud) && !c.donante)
+  
+  // Calcular asignados y disponibles de TODOS los coches (no solo los que tienen ubicación)
+  const todosLosCoches = coches.filter((c) => !c.donante)
+  const cochesAsignados = todosLosCoches.filter((c) => getEmpleadoInfo(c) || c.asignadoa)
+  const cochesDisponibles = todosLosCoches.filter((c) => !getEmpleadoInfo(c) && !c.asignadoa)
+
   const zoomToVehicles = useCallback(
-    (filterType: "all" | "assigned" | "available") => {
+    (filterType: "all" | "assigned" | "available" | "with-location" | "no-location") => {
       if (!mapInstance.current || !isGoogleMapsReady()) return
+
+      // Actualizar el filtro del desplegable y limpiar mensajes
+      setFilterMode(filterType)
+      setSelectedMatricula("all")
+      setVehicleMessage("")
+      setReservationMessage("")
 
       let targetCoches: Coche[] = []
 
@@ -432,11 +650,19 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
           targetCoches = cochesConUbicacion
           break
         case "assigned":
-          targetCoches = cochesAsignados
+          // Para el zoom, solo incluir asignados que tengan ubicación
+          targetCoches = cochesAsignados.filter((c) => c.latitud && c.longitud)
           break
         case "available":
-          targetCoches = cochesDisponibles
+          // Para el zoom, solo incluir disponibles que tengan ubicación
+          targetCoches = cochesDisponibles.filter((c) => c.latitud && c.longitud)
           break
+        case "with-location":
+          targetCoches = cochesConUbicacion
+          break
+        case "no-location":
+          // Para vehículos sin ubicación, no hacer zoom pero sí filtrar desplegable
+          return
       }
 
       if (targetCoches.length === 0) return
@@ -465,6 +691,142 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
     [cochesConUbicacion, cochesAsignados, cochesDisponibles, isGoogleMapsReady],
   )
 
+  // Función para hacer zoom a un vehículo específico
+  const zoomToVehicle = useCallback(
+    (matricula: string) => {
+      if (!mapInstance.current || !isGoogleMapsReady()) return
+
+      const coche = coches.find((c) => c.matricula === matricula)
+      if (!coche || !coche.latitud || !coche.longitud) return
+
+      try {
+        const position = { lat: Number(coche.latitud), lng: Number(coche.longitud) }
+        mapInstance.current.setCenter(position)
+        mapInstance.current.setZoom(18)
+
+        // Seleccionar el vehículo en el dropdown
+        setSelectedMatricula(matricula)
+
+        // Simular click en el marcador para abrir el InfoWindow
+        setTimeout(() => {
+          const targetMarker = markers.current.find((m: any) => 
+            m.matricula === matricula
+          )
+          if (targetMarker && targetMarker.marker && window.google?.maps?.event) {
+            window.google.maps.event.trigger(targetMarker.marker, "click")
+          }
+        }, 500)
+      } catch (error) {
+        console.error("Error zooming to vehicle:", error)
+      }
+    },
+    [coches, isGoogleMapsReady],
+  )
+
+  // Función para manejar la reserva de un vehículo
+  const handleReservar = useCallback(async () => {
+    if (!selectedMatricula || selectedMatricula === "all") return
+
+    setIsReserving(true)
+    setReservationMessage("")
+
+    try {
+      const resultado = await reservarCoche(selectedMatricula)
+      
+      if (resultado.success) {
+        setReservationMessage(`✅ ${resultado.message}`)
+        // Refresh para actualizar la información
+        setTimeout(() => {
+          window.location.reload()
+        }, 2000)
+      } else {
+        setReservationMessage(`❌ ${resultado.error}`)
+      }
+    } catch (error) {
+      console.error("Error reservando coche:", error)
+      setReservationMessage("❌ Error inesperado al reservar el vehículo")
+    } finally {
+      setIsReserving(false)
+    }
+  }, [selectedMatricula])
+
+  // Función para manejar la liberación de un vehículo
+  const handleLiberar = useCallback(async () => {
+    if (!selectedMatricula || selectedMatricula === "all") return
+
+    setIsReleasing(true)
+    setReservationMessage("")
+
+    try {
+      const resultado = await liberarCoche(selectedMatricula)
+      
+      if (resultado.success) {
+        setReservationMessage(`✅ ${resultado.message}`)
+        // Refresh para actualizar la información
+        setTimeout(() => {
+          window.location.reload()
+        }, 2000)
+      } else {
+        setReservationMessage(`❌ ${resultado.error}`)
+      }
+    } catch (error) {
+      console.error("Error liberando coche:", error)
+      setReservationMessage("❌ Error inesperado al liberar el vehículo")
+    } finally {
+      setIsReleasing(false)
+    }
+  }, [selectedMatricula])
+
+  // Función para verificar si se puede mostrar el botón de liberar
+  const shouldShowReleaseButton = useCallback(() => {
+    if (!selectedMatricula || selectedMatricula === "all") return false
+    if (!userEmail) return false
+    
+    const coche = coches.find((c) => c.matricula === selectedMatricula)
+    if (!coche) return false
+    
+    // Solo mostrar si el coche está asignado y no es donante
+    if (!coche.asignadoa || coche.donante) return false
+    
+    // Si es administrador, puede liberar cualquier vehículo
+    if (userRole === 'administrador') return true
+    
+    // Si es usuario regular, solo puede liberar sus propios vehículos
+    const empleadoInfo = getEmpleadoInfo(coche)
+    return empleadoInfo && empleadoInfo.email === userEmail
+  }, [selectedMatricula, userEmail, userRole, coches, getEmpleadoInfo])
+
+  // Función para activar el modo de ubicación
+  const activateLocationMode = useCallback((matricula: string) => {
+    console.log("🎯 Activando modo ubicación para:", matricula)
+    setIsLocationMode(true)
+    setVehicleToLocate(matricula)
+    isLocationModeRef.current = true
+    vehicleToLocateRef.current = matricula
+    setVehicleMessage(`📍 Haz clic en el mapa para ubicar el vehículo ${matricula}. El sistema guardará las coordenadas y la dirección automáticamente.`)
+  }, [])
+
+  // Función para cancelar el modo de ubicación
+  const cancelLocationMode = useCallback(() => {
+    setIsLocationMode(false)
+    setVehicleToLocate(null)
+    isLocationModeRef.current = false
+    vehicleToLocateRef.current = null
+    setVehicleMessage("")
+  }, [])
+
+  // Función para verificar si se puede mostrar el botón de reserva
+  const shouldShowReserveButton = useCallback(() => {
+    if (!selectedMatricula || selectedMatricula === "all") return false
+    if (!userEmail) return false
+    
+    const coche = coches.find((c) => c.matricula === selectedMatricula)
+    if (!coche) return false
+    
+    // Solo mostrar si el coche no está asignado y no es donante
+    return !coche.asignadoa && !coche.donante
+  }, [selectedMatricula, userEmail, coches])
+
   // Función para manejar la selección de vehículo con select nativo
   const handleVehicleSelectChange = useCallback(
     (event: React.ChangeEvent<HTMLSelectElement>) => {
@@ -475,12 +837,28 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
       setVehicleMessage("")
 
       if (!matricula || matricula === "all") {
-        // Mostrar todos los vehículos
+        // Mostrar todos los vehículos según el filtro actual
         if (mapInstance.current && isLoaded && isGoogleMapsReady()) {
-          const cochesConUbicacion = coches.filter((c) => c.latitud && c.longitud && !c.donante)
-          if (cochesConUbicacion.length > 0) {
+          if (filterMode === "no-location") {
+            // Para vehículos sin ubicación, no hacer zoom
+            setVehicleMessage(`ℹ️ Filtro activo: resaltando ${cochesSinUbicacion.length} vehículos sin ubicación en el desplegable`)
+            return
+          }
+          
+          if (filterMode !== "all") {
+            let count = 0
+            switch (filterMode) {
+              case "available": count = cochesDisponibles.length; break
+              case "assigned": count = cochesAsignados.length; break
+              case "with-location": count = cochesConUbicacion.length; break
+            }
+            setVehicleMessage(`ℹ️ Filtro activo: resaltando ${count} vehículos en el desplegable`)
+          }
+          
+          const cochesConUbicacionLocal = coches.filter((c) => c.latitud && c.longitud && !c.donante)
+          if (cochesConUbicacionLocal.length > 0) {
             const bounds = new window.google.maps.LatLngBounds()
-            cochesConUbicacion.forEach((coche) => {
+            cochesConUbicacionLocal.forEach((coche) => {
               bounds.extend({ lat: Number(coche.latitud), lng: Number(coche.longitud) })
             })
             mapInstance.current.fitBounds(bounds)
@@ -556,14 +934,100 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
         }
       }
     },
-    [coches, getEmpleadoInfo, isGoogleMapsReady, isLoaded],
+    [coches, getEmpleadoInfo, isGoogleMapsReady, isLoaded, filterMode],
   )
+
+  // Effect para pasar las funciones al componente padre
+  useEffect(() => {
+    if (onFunctionsReady && isLoaded) {
+      onFunctionsReady({
+        zoomToVehicle,
+        activateLocationMode,
+        cancelLocationMode,
+      })
+    }
+  }, [onFunctionsReady, isLoaded, zoomToVehicle, activateLocationMode, cancelLocationMode])
 
   // Obtener todas las matrículas ordenadas alfabéticamente
   const matriculasOrdenadas = coches
     .map((c) => c.matricula)
     .sort((a, b) => a.localeCompare(b))
     .filter((matricula, index, array) => array.indexOf(matricula) === index)
+
+  // Función para obtener las matrículas filtradas según el modo actual
+  const getFilteredMatriculas = useCallback(() => {
+    // Siempre mostrar todas las matrículas en el desplegable
+    return matriculasOrdenadas
+  }, [matriculasOrdenadas])
+
+  // Función para obtener el color de una matrícula según su estado y el filtro activo
+  const getMatriculaColor = useCallback((matricula: string) => {
+    const coche = coches.find((c) => c.matricula === matricula)
+    if (!coche) return "#000000" // Negro por defecto
+
+    // Si NO hay filtro activo (filterMode === "all"), todas las matrículas en negro
+    if (filterMode === "all") {
+      return "#000000" // Negro para todas las matrículas sin filtro
+    }
+
+    const hasLocation = coche.latitud && coche.longitud && !coche.donante
+    const isAssigned = getEmpleadoInfo(coche) || coche.asignadoa
+
+    // Si hay un filtro activo, colorear solo los que coinciden con el filtro
+    let matchesFilter = false
+    
+    switch (filterMode) {
+      case "available":
+        matchesFilter = !isAssigned
+        break
+      case "assigned":
+        matchesFilter = !!isAssigned
+        break
+      case "with-location":
+        matchesFilter = !!hasLocation
+        break
+      case "no-location":
+        matchesFilter = !hasLocation
+        break
+    }
+    
+    // Si coincide con el filtro, usar el color correspondiente al filtro
+    if (matchesFilter) {
+      switch (filterMode) {
+        case "available":
+          return "#3b82f6" // Azul para disponibles
+        case "assigned":
+          return "#10b981" // Verde para asignados
+        case "with-location":
+          return "#9333ea" // Púrpura para con ubicación
+        case "no-location":
+          return "#6b7280" // Gris para sin ubicación
+      }
+    } else {
+      // Si no coincide con el filtro, usar gris claro
+      return "#d1d5db"
+    }
+
+    // Fallback (no debería llegar aquí)
+    return "#000000"
+  }, [coches, getEmpleadoInfo, filterMode])
+
+  // Función para obtener el texto descriptivo de filtro actual
+  const getFilterDescription = useCallback(() => {
+    switch (filterMode) {
+      case "available":
+        return `Resaltando ${cochesDisponibles.length} vehículos disponibles`
+      case "assigned":
+        return `Resaltando ${cochesAsignados.length} vehículos asignados`
+      case "with-location":
+        return `Resaltando ${cochesConUbicacion.length} vehículos con ubicación`
+      case "no-location":
+        return `Resaltando ${cochesSinUbicacion.length} vehículos sin ubicación`
+      case "all":
+      default:
+        return "Mostrando todos los vehículos"
+    }
+  }, [filterMode, cochesDisponibles.length, cochesAsignados.length, cochesConUbicacion.length, cochesSinUbicacion.length])
 
   return (
     <Card className="w-full">
@@ -596,82 +1060,321 @@ export function MapaCoches({ coches, empleados = [] }: MapaCochesProps) {
               </div>
               <div className="flex-1 max-w-xs">
                 <select
+                  key={selectKey} // Clave para forzar re-renderizado completo
                   value={selectedMatricula}
                   onChange={handleVehicleSelectChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-sm"
+                  style={{ color: selectedMatricula !== "all" ? getMatriculaColor(selectedMatricula) : "#000000" }}
                 >
-                  <option value="all">Mostrar todos</option>
-                  {matriculasOrdenadas.map((matricula) => {
+                  <option value="all" style={{ color: "#000000" }}>
+                    Mostrar todos
+                  </option>
+                  {getFilteredMatriculas().map((matricula) => {
                     const coche = coches.find((c) => c.matricula === matricula)
                     const hasLocation = coche?.latitud && coche?.longitud && !coche?.donante
+                    const color = getMatriculaColor(matricula)
                     return (
-                      <option key={matricula} value={matricula}>
+                      <option 
+                        key={matricula} 
+                        value={matricula}
+                        style={{ color: color }}
+                      >
                         {matricula} {hasLocation ? "📍" : "❌"}
                       </option>
                     )
                   })}
                 </select>
               </div>
+              
+              {/* Indicador de filtro activo */}
+              {filterMode !== "all" && (
+                <div className="flex items-center gap-2">
+                  <div className={`w-3 h-3 rounded-full ${
+                    filterMode === "available" ? "bg-blue-500" :
+                    filterMode === "assigned" ? "bg-green-500" :
+                    filterMode === "with-location" ? "bg-purple-500" :
+                    filterMode === "no-location" ? "bg-gray-500" : "bg-gray-400"
+                  }`}></div>
+                  <span className="text-xs text-gray-600">
+                    {getFilterDescription()}
+                  </span>
+                  <button
+                    onClick={() => {
+                      setFilterMode("all")
+                      setSelectedMatricula("all")
+                      setVehicleMessage("")
+                      setReservationMessage("")
+                      setSelectKey(prev => prev + 1) // Incrementar clave para forzar re-renderizado
+                      
+                      // Restablecer vista del mapa a todos los vehículos con ubicación
+                      if (mapInstance.current && isLoaded && isGoogleMapsReady()) {
+                        const cochesConUbicacion = coches.filter((c) => c.latitud && c.longitud && !c.donante)
+                        if (cochesConUbicacion.length > 0) {
+                          const bounds = new window.google.maps.LatLngBounds()
+                          cochesConUbicacion.forEach((coche) => {
+                            bounds.extend({ lat: Number(coche.latitud), lng: Number(coche.longitud) })
+                          })
+                          mapInstance.current.fitBounds(bounds)
+                          setTimeout(() => {
+                            if (mapInstance.current.getZoom() > 16) {
+                              mapInstance.current.setZoom(16)
+                            } else if (mapInstance.current.getZoom() < 14) {
+                              mapInstance.current.setZoom(14)
+                            }
+                          }, 200)
+                        }
+                      }
+                    }}
+                    className="text-xs text-gray-400 hover:text-gray-600 ml-1"
+                    title="Limpiar filtro"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+              
+              {/* Botón de Reservar */}
+              {shouldShowReserveButton() && (
+                <Button
+                  onClick={handleReservar}
+                  disabled={isReserving || isReleasing}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                  size="sm"
+                >
+                  <UserCheck className="h-4 w-4 mr-2" />
+                  {isReserving ? "Reservando..." : "Reservar"}
+                </Button>
+              )}
+              
+              {/* Botón de Liberar */}
+              {shouldShowReleaseButton() && (
+                <Button
+                  onClick={handleLiberar}
+                  disabled={isReserving || isReleasing}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                  size="sm"
+                >
+                  <UserX className="h-4 w-4 mr-2" />
+                  {isReleasing ? "Liberando..." : "Liberar"}
+                </Button>
+              )}
             </div>
+            
             {vehicleMessage && (
-              <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
-                <p className="text-sm text-blue-800">{vehicleMessage}</p>
+              <div 
+                className={`mt-3 p-3 rounded-md ${
+                  isLocationMode 
+                    ? 'bg-orange-50 border border-orange-200' 
+                    : 'bg-blue-50 border border-blue-200'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <p className={`text-sm ${
+                    isLocationMode ? 'text-orange-800' : 'text-blue-800'
+                  }`}>
+                    {vehicleMessage}
+                  </p>
+                  {isLocationMode && (
+                    <Button
+                      onClick={cancelLocationMode}
+                      variant="outline"
+                      size="sm"
+                      className="ml-2"
+                    >
+                      Cancelar
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+            
+            {reservationMessage && (
+              <div className={`mt-3 p-3 rounded-md ${
+                reservationMessage.startsWith('✅') 
+                  ? 'bg-green-50 border border-green-200' 
+                  : 'bg-red-50 border border-red-200'
+              }`}>
+                <p className={`text-sm ${
+                  reservationMessage.startsWith('✅') 
+                    ? 'text-green-800' 
+                    : 'text-red-800'
+                }`}>
+                  {reservationMessage}
+                </p>
               </div>
             )}
           </div>
 
           {/* Estadísticas */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg">
+            {/* Total sin ubicación */}
             <button
-              onClick={() => zoomToVehicles("all")}
-              className="text-center hover:bg-blue-50 p-2 rounded-lg transition-colors cursor-pointer group"
+              onClick={() => {
+                setFilterMode("no-location")
+                setSelectedMatricula("all")
+                setVehicleMessage("")
+                setReservationMessage("")
+              }}
+              className={`text-center p-2 rounded-lg transition-colors cursor-pointer group ${
+                filterMode === "no-location" 
+                  ? "bg-gray-200 shadow-inner" 
+                  : "hover:bg-gray-100"
+              }`}
+              disabled={cochesSinUbicacion.length === 0}
+            >
+              <div className={`text-2xl font-bold ${
+                filterMode === "no-location" 
+                  ? "text-gray-800" 
+                  : "text-gray-600 group-hover:text-gray-700"
+              }`}>
+                {cochesSinUbicacion.length}
+              </div>
+              <div className={`text-sm ${
+                filterMode === "no-location" 
+                  ? "text-gray-700" 
+                  : "text-gray-600 group-hover:text-gray-700"
+              }`}>
+                Total sin ubicación
+              </div>
+              <div className="text-xs text-gray-400 mt-1">
+                {filterMode === "no-location" ? "Filtro activo" : "Click para filtrar"}
+              </div>
+            </button>
+            
+            {/* Total con ubicación */}
+            <button
+              onClick={() => zoomToVehicles("with-location")}
+              className={`text-center p-2 rounded-lg transition-colors cursor-pointer group ${
+                filterMode === "with-location" 
+                  ? "bg-purple-100 shadow-inner" 
+                  : "hover:bg-purple-50"
+              }`}
               disabled={cochesConUbicacion.length === 0}
             >
-              <div className="text-2xl font-bold text-blue-600 group-hover:text-blue-700">
+              <div className={`text-2xl font-bold ${
+                filterMode === "with-location" 
+                  ? "text-purple-800" 
+                  : "text-purple-600 group-hover:text-purple-700"
+              }`}>
                 {cochesConUbicacion.length}
               </div>
-              <div className="text-sm text-gray-600 group-hover:text-gray-700">Total con ubicación</div>
-              <div className="text-xs text-gray-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                Click para ver en mapa
+              <div className={`text-sm ${
+                filterMode === "with-location" 
+                  ? "text-purple-700" 
+                  : "text-gray-600 group-hover:text-gray-700"
+              }`}>
+                Total con ubicación
+              </div>
+              <div className="text-xs text-gray-400 mt-1">
+                {filterMode === "with-location" ? "Filtro activo" : "Click para ver en mapa"}
               </div>
             </button>
+            
+            {/* Asignados */}
             <button
               onClick={() => zoomToVehicles("assigned")}
-              className="text-center hover:bg-green-50 p-2 rounded-lg transition-colors cursor-pointer group"
+              className={`text-center p-2 rounded-lg transition-colors cursor-pointer group ${
+                filterMode === "assigned" 
+                  ? "bg-green-100 shadow-inner" 
+                  : "hover:bg-green-50"
+              }`}
               disabled={cochesAsignados.length === 0}
             >
-              <div className="text-2xl font-bold text-green-600 group-hover:text-green-700">
+              <div className={`text-2xl font-bold ${
+                filterMode === "assigned" 
+                  ? "text-green-800" 
+                  : "text-green-600 group-hover:text-green-700"
+              }`}>
                 {cochesAsignados.length}
               </div>
-              <div className="text-sm text-gray-600 group-hover:text-gray-700">Asignados</div>
-              <div className="text-xs text-gray-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                Click para ver en mapa
+              <div className={`text-sm ${
+                filterMode === "assigned" 
+                  ? "text-green-700" 
+                  : "text-gray-600 group-hover:text-gray-700"
+              }`}>
+                Asignados
+              </div>
+              <div className="text-xs text-gray-400 mt-1">
+                {filterMode === "assigned" ? "Filtro activo" : "Click para ver en mapa"}
               </div>
             </button>
+            
+            {/* Disponibles */}
             <button
               onClick={() => zoomToVehicles("available")}
-              className="text-center hover:bg-blue-50 p-2 rounded-lg transition-colors cursor-pointer group"
+              className={`text-center p-2 rounded-lg transition-colors cursor-pointer group ${
+                filterMode === "available" 
+                  ? "bg-blue-100 shadow-inner" 
+                  : "hover:bg-blue-50"
+              }`}
               disabled={cochesDisponibles.length === 0}
             >
-              <div className="text-2xl font-bold text-blue-500 group-hover:text-blue-600">
+              <div className={`text-2xl font-bold ${
+                filterMode === "available" 
+                  ? "text-blue-800" 
+                  : "text-blue-500 group-hover:text-blue-600"
+              }`}>
                 {cochesDisponibles.length}
               </div>
-              <div className="text-sm text-gray-600 group-hover:text-gray-700">Disponibles</div>
-              <div className="text-xs text-gray-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                Click para ver en mapa
+              <div className={`text-sm ${
+                filterMode === "available" 
+                  ? "text-blue-700" 
+                  : "text-gray-600 group-hover:text-gray-700"
+              }`}>
+                Disponibles
+              </div>
+              <div className="text-xs text-gray-400 mt-1">
+                {filterMode === "available" ? "Filtro activo" : "Click para ver en mapa"}
               </div>
             </button>
           </div>
 
           {/* Leyenda */}
-          <div className="flex items-center justify-center gap-6 text-sm text-gray-600 bg-white p-3 rounded-lg border">
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
-              <span>Disponible</span>
+          <div className="flex items-center justify-between bg-white p-3 rounded-lg border">
+            <div className="flex items-center gap-6 text-sm text-gray-600">
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
+                <span>Disponible</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 bg-green-500 rounded-full"></div>
+                <span>Asignado</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 bg-purple-500 rounded-full"></div>
+                <span>Con ubicación</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 bg-gray-500 rounded-full"></div>
+                <span>Sin ubicación</span>
+              </div>
+              {userRole && (
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-green-600">🖱️</span>
+                  <span className="text-green-600">
+                    {userRole === 'administrador' 
+                      ? 'Puedes reubicar cualquier vehículo arrastrándolo' 
+                      : 'Puedes reubicar tus vehículos arrastrándolos'}
+                  </span>
+                </div>
+              )}
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-green-500 rounded-full"></div>
-              <span>Asignado</span>
+            
+            {/* Información de filtrado */}
+            <div className="text-xs text-gray-400">
+              {filterMode !== "all" 
+                ? (() => {
+                    let count = 0
+                    switch (filterMode) {
+                      case "available": count = cochesDisponibles.length; break
+                      case "assigned": count = cochesAsignados.length; break
+                      case "with-location": count = cochesConUbicacion.length; break
+                      case "no-location": count = cochesSinUbicacion.length; break
+                    }
+                    return `${count} vehículos resaltados de ${matriculasOrdenadas.length} totales`
+                  })()
+                : `${matriculasOrdenadas.length} vehículos totales`
+              }
             </div>
           </div>
 

@@ -34,7 +34,7 @@ export default function NuevoCochePage() {
     marca: "",
     modelo: "",
     color: "",
-    año: "",
+    fecha_matriculacion: "",
     kilometros: "",
     combustible: "Gasolina",
     empleado_id: "",
@@ -42,6 +42,7 @@ export default function NuevoCochePage() {
     precio_compra: "",
     observaciones: "",
     extras: "",
+    donante: false,
     alquiler: false,
     fecha_inicio_alquiler: "",
     fecha_fin_alquiler: "",
@@ -94,17 +95,36 @@ export default function NuevoCochePage() {
     setError(null)
 
     try {
-      const cocheData = {
-        ...formData,
-        año: formData.año ? Number.parseInt(formData.año) : null,
-        kilometros: formData.kilometros ? Number.parseInt(formData.kilometros) : null,
-        empleado_id: formData.empleado_id ? Number.parseInt(formData.empleado_id) : null,
-        precio_compra: formData.precio_compra ? Number.parseFloat(formData.precio_compra) : null,
-        viat_id: viatSeleccionada,
-        observaciones_viat: observacionesViat,
+      // Crear FormData para enviar a la acción del servidor
+      const formDataToSend = new FormData()
+      
+      // Añadir todos los campos del formulario
+      formDataToSend.append("matricula", formData.matricula)
+      formDataToSend.append("marca", formData.marca)
+      formDataToSend.append("modelo", formData.modelo)
+      formDataToSend.append("color", formData.color)
+      // Usar fecha de matriculación si está disponible
+      formDataToSend.append("fechamatriculacion", formData.fecha_matriculacion)
+      formDataToSend.append("kms", formData.kilometros)
+      formDataToSend.append("combustible", formData.combustible)
+      formDataToSend.append("extras", formData.extras)
+      formDataToSend.append("donante", formData.donante ? "on" : "")
+      formDataToSend.append("alquiler", formData.alquiler ? "on" : "")
+      formDataToSend.append("preciocompra", formData.precio_compra)
+      formDataToSend.append("empleado_id", formData.empleado_id)
+      formDataToSend.append("fecha_asignacion", formData.fecha_compra)
+      formDataToSend.append("observaciones_asignacion", formData.observaciones)
+      
+      // Datos de alquiler si aplica
+      if (formData.alquiler) {
+        formDataToSend.append("fecha_inicio", formData.fecha_inicio_alquiler)
+        formDataToSend.append("fecha_fin", formData.fecha_fin_alquiler)
+        formDataToSend.append("importe_anual", formData.importe_anual)
+        formDataToSend.append("compania", formData.compania)
+        formDataToSend.append("kms_anuales", formData.kms_anuales)
       }
 
-      const resultado = await crearCoche(cocheData)
+      const resultado = await crearCoche(formDataToSend)
 
       if (resultado.success) {
         router.push("/coches")
@@ -197,16 +217,13 @@ export default function NuevoCochePage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="año">Año</Label>
+                  <Label htmlFor="fecha_matriculacion">Fecha de Matriculación</Label>
                   <Input
-                    id="año"
-                    name="año"
-                    type="number"
-                    value={formData.año}
+                    id="fecha_matriculacion"
+                    name="fecha_matriculacion"
+                    type="date"
+                    value={formData.fecha_matriculacion}
                     onChange={handleInputChange}
-                    placeholder="2020"
-                    min="1900"
-                    max={new Date().getFullYear() + 1}
                   />
                 </div>
                 <div>
@@ -325,6 +342,18 @@ export default function NuevoCochePage() {
           <div className="flex items-center space-x-2">
             <input
               type="checkbox"
+              id="donante"
+              name="donante"
+              checked={formData.donante}
+              onChange={handleInputChange}
+              className="rounded border-gray-300"
+            />
+            <Label htmlFor="donante">Vehículo donante</Label>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
               id="alquiler"
               name="alquiler"
               checked={formData.alquiler}
@@ -409,15 +438,11 @@ export default function NuevoCochePage() {
           )}
         </div>
 
-        {/* Gestión de tarjetas y seguros */}
+        {/* Gestión de tarjetas y seguros - Solo disponible después de crear el vehículo */}
+        {/*
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* SOLRED */}
           <SolredManager empleadoId={empleadoSeleccionado} isEditing={true} />
-
-          {/* Seguros */}
           <SeguroManager empleadoId={empleadoSeleccionado} isEditing={true} />
-
-          {/* ViaT */}
           <ViatManager
             empleadoId={empleadoSeleccionado}
             isEditing={true}
@@ -425,6 +450,7 @@ export default function NuevoCochePage() {
             showEmployeeAssignment={false}
           />
         </div>
+        */}
 
         {/* Botones de acción */}
         <div className="flex gap-4 pt-6 border-t">
