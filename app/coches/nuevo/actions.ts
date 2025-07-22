@@ -36,9 +36,6 @@ export async function crearCoche(formData: FormData) {
     const color = formData.get("color") as string
     const fechamatriculacion = formData.get("fechamatriculacion") as string
     const kms = Number.parseInt(formData.get("kms") as string) || 0
-    const kw = formData.get("kw") as string
-    const cv = formData.get("cv") as string
-    const cc = formData.get("cc") as string
     const combustible = formData.get("combustible") as string
     const extras = formData.get("extras") as string
     const donante = formData.get("donante") === "on"
@@ -62,25 +59,35 @@ export async function crearCoche(formData: FormData) {
       }
     }
 
-    const cocheData: CocheData = {
+    // Preparar los datos del coche para insertar
+    const cocheData: any = {
       matricula: matricula.toUpperCase(),
       marca,
       modelo,
-      color: color || null,
-      fechamatriculacion: fechamatriculacion || null,
-      kms,
-      kw: kw && kw.trim() !== "" ? Number.parseInt(kw) : null,
-      cv: cv && cv.trim() !== "" ? Number.parseInt(cv) : null,
-      cc: cc && cc.trim() !== "" ? Number.parseInt(cc) : null,
       combustible,
-      extras: extras || null,
       donante,
       alquiler,
-      preciocompra: preciocompra && preciocompra.trim() !== "" ? Number.parseFloat(preciocompra) : null,
-      empleado_id: empleadoId && empleadoId !== "0" ? Number.parseInt(empleadoId) : null,
-      fecha_asignacion: fechaAsignacion || null,
-      observaciones_asignacion: observacionesAsignacion || null,
+      kms,
     }
+
+    // Añadir campos opcionales solo si tienen valor
+    if (color && color.trim() !== "") cocheData.color = color
+    if (fechamatriculacion && fechamatriculacion.trim() !== "") cocheData.fechamatriculacion = fechamatriculacion
+    if (extras && extras.trim() !== "") cocheData.extras = extras
+    if (preciocompra && preciocompra.trim() !== "") cocheData.preciocompra = Number.parseFloat(preciocompra)
+    
+    // Asignación de empleado
+    if (empleadoId && empleadoId !== "0" && empleadoId.trim() !== "") {
+      cocheData.asignadoa = Number.parseInt(empleadoId)
+      if (fechaAsignacion && fechaAsignacion.trim() !== "") {
+        cocheData.fecha_asignacion = fechaAsignacion
+      }
+      if (observacionesAsignacion && observacionesAsignacion.trim() !== "") {
+        cocheData.observaciones_asignacion = observacionesAsignacion
+      }
+    }
+
+    console.log("Datos del coche a insertar:", cocheData)
 
     // Crear el coche
     const { error: cocheError } = await supabase.from("coches").insert([cocheData])
