@@ -46,8 +46,9 @@ export default async function ReservasPage() {
 
   // Calcular estadísticas
   const totalReservas = reservas.length
-  const reservasConUbicacion = reservas.filter(r => r.latitud && r.longitud).length
-  const reservasSinUbicacion = totalReservas - reservasConUbicacion
+
+  // Ordenar reservas por matrícula
+  const reservasOrdenadas = [...reservas].sort((a, b) => a.matricula.localeCompare(b.matricula))
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
@@ -57,19 +58,9 @@ export default async function ReservasPage() {
             <h1 className="text-3xl font-bold text-gray-900">Reservas Activas</h1>
             <p className="text-gray-600">Vehículos actualmente asignados a empleados</p>
           </div>
-          <div className="flex items-center space-x-4">
-            <div className="bg-white px-4 py-2 rounded-lg shadow">
-              <div className="text-2xl font-bold text-blue-600">{totalReservas}</div>
-              <div className="text-sm text-gray-600">Total reservas</div>
-            </div>
-            <div className="bg-white px-4 py-2 rounded-lg shadow">
-              <div className="text-2xl font-bold text-green-600">{reservasConUbicacion}</div>
-              <div className="text-sm text-gray-600">Con ubicación</div>
-            </div>
-            <div className="bg-white px-4 py-2 rounded-lg shadow">
-              <div className="text-2xl font-bold text-orange-600">{reservasSinUbicacion}</div>
-              <div className="text-sm text-gray-600">Sin ubicación</div>
-            </div>
+          <div className="bg-white px-6 py-4 rounded-lg shadow">
+            <div className="text-3xl font-bold text-blue-600">{totalReservas}</div>
+            <div className="text-sm text-gray-600">Total de reservas activas</div>
           </div>
         </div>
 
@@ -90,7 +81,7 @@ export default async function ReservasPage() {
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {reservas.map((reserva) => (
+            {reservasOrdenadas.map((reserva) => (
               <Card key={reserva.id} className="hover:shadow-lg transition-shadow">
                 <CardHeader className="pb-3">
                   <div className="flex justify-between items-start">
@@ -151,6 +142,14 @@ export default async function ReservasPage() {
                       </div>
                     )}
 
+                    {/* Fecha de asignación */}
+                    <div className="flex items-center text-sm">
+                      <Calendar className="h-4 w-4 mr-2 text-gray-500" />
+                      <span className="text-gray-600 text-xs">
+                        Asignado: {new Date().toLocaleDateString('es-ES')}
+                      </span>
+                    </div>
+
                     {/* Ubicación */}
                     {reserva.direccion_actual ? (
                       <div className="flex items-start text-sm">
@@ -184,17 +183,11 @@ export default async function ReservasPage() {
                     )}
                   </div>
 
-                  <div className="flex justify-between space-x-2">
-                    <Link
-                      href={`/coches/detalle/${reserva.matricula}`}
-                      className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-2 rounded text-sm text-center"
-                    >
-                      Ver Detalles
-                    </Link>
+                  <div className="flex justify-end">
                     {session?.user?.role === 'administrador' && (
                       <Link
                         href={`/coches/editar/${reserva.id}`}
-                        className="flex-1 bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-2 rounded text-sm text-center"
+                        className="bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-2 rounded text-sm text-center"
                       >
                         Editar
                       </Link>
