@@ -12,6 +12,11 @@ export const metadata: Metadata = {
   title: "Gestión de Flota Fulcrum",
   description: "Sistema de gestión de flota de vehículos para Fulcrum",
   generator: "v0.dev",
+  icons: {
+    icon: "/favicon.png",
+    shortcut: "/favicon.png",
+    apple: "/favicon.png"
+  },
 }
 
 export default async function RootLayout({
