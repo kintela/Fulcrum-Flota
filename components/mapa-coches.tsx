@@ -5,9 +5,10 @@ import type React from "react"
 import { useEffect, useRef, useState, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { MapPin, RefreshCw, Navigation, AlertCircle, Car, UserCheck, UserX } from "lucide-react"
+import { MapPin, RefreshCw, Navigation, AlertCircle, Car, UserCheck, UserX, Calendar } from "lucide-react"
 import { reservarCoche, liberarCoche } from "@/app/actions/reservas"
 import { actualizarUbicacionCoche } from "@/app/actions/ubicacion"
+import { ReservaModal } from "@/components/reserva-modal"
 
 interface Coche {
   matricula: string
@@ -178,6 +179,11 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
   const [vehicleToLocate, setVehicleToLocate] = useState<string | null>(null)
   const [filterMode, setFilterMode] = useState<"all" | "available" | "assigned" | "with-location" | "no-location">("all")
   const [selectKey, setSelectKey] = useState(0) // Clave para forzar re-renderizado del select
+  const [showReservaModal, setShowReservaModal] = useState(false)
+  const [selectedVehicleForReservation, setSelectedVehicleForReservation] = useState<{
+    matricula: string
+    marcaModelo: string
+  } | null>(null)
 
   // Crear mapa de empleados
   const empleadosMap = new Map()
@@ -750,6 +756,35 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
     }
   }, [selectedMatricula])
 
+  // Función para abrir el modal de reserva temporal
+  const handleAbrirReservaTemporal = useCallback(() => {
+    if (!selectedMatricula || selectedMatricula === "all") return
+    
+    const coche = coches.find(c => c.matricula === selectedMatricula)
+    if (!coche) return
+
+    setSelectedVehicleForReservation({
+      matricula: coche.matricula,
+      marcaModelo: `${coche.marca} ${coche.modelo}`
+    })
+    setShowReservaModal(true)
+  }, [selectedMatricula, coches])
+
+  // Función para cerrar el modal y limpiar estados
+  const handleCerrarReservaTemporal = useCallback(() => {
+    setShowReservaModal(false)
+    setSelectedVehicleForReservation(null)
+  }, [])
+
+  // Función para manejar cuando se crea una reserva exitosamente
+  const handleReservaCreada = useCallback((mensaje: string) => {
+    setReservationMessage(`✅ ${mensaje}`)
+    // Refresh para actualizar la información después de un breve delay
+    setTimeout(() => {
+      window.location.reload()
+    }, 2000)
+  }, [])
+
   // Función para manejar la liberación de un vehículo
   const handleLiberar = useCallback(async () => {
     if (!selectedMatricula || selectedMatricula === "all") return
@@ -1141,7 +1176,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
                 </div>
               )}
               
-              {/* Botón de Reservar */}
+              {/* Botón de Reservar (asignación permanente) */}
               {shouldShowReserveButton() && (
                 <Button
                   onClick={handleReservar}
@@ -1151,6 +1186,19 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
                 >
                   <UserCheck className="h-4 w-4 mr-2" />
                   {isReserving ? "Reservando..." : "Reservar"}
+                </Button>
+              )}
+
+              {/* Botón de Reserva Temporal */}
+              {selectedMatricula && selectedMatricula !== "all" && !coches.find(c => c.matricula === selectedMatricula)?.donante && (
+                <Button
+                  onClick={handleAbrirReservaTemporal}
+                  disabled={isReserving || isReleasing}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  size="sm"
+                >
+                  <Calendar className="h-4 w-4 mr-2" />
+                  Reserva Temporal
                 </Button>
               )}
               
@@ -1453,6 +1501,17 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
           )}
         </div>
       </CardContent>
+
+      {/* Modal de Reserva Temporal */}
+      {selectedVehicleForReservation && (
+        <ReservaModal
+          isOpen={showReservaModal}
+          onClose={handleCerrarReservaTemporal}
+          matricula={selectedVehicleForReservation.matricula}
+          marcaModelo={selectedVehicleForReservation.marcaModelo}
+          onReservaCreada={handleReservaCreada}
+        />
+      )}
     </Card>
   )
 }

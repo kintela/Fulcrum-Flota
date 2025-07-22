@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Car, Users, AlertTriangle, CreditCard, Calendar, Navigation, MapPin } from "lucide-react"
 import Link from "next/link"
 import { MapaCoches } from "@/components/mapa-coches"
+import { MisReservas } from "@/components/mis-reservas"
 
 function DashboardStats({
   coches,
@@ -757,6 +758,13 @@ export default function DashboardClient({
             onFunctionsReady={setMapFunctions}
           />
         </Suspense>
+
+        {/* Mis Reservas - Solo para usuarios regulares */}
+        {userRole !== 'administrador' && (
+          <Suspense fallback={<div>Cargando reservas...</div>}>
+            <MisReservas />
+          </Suspense>
+        )}
       </div>
     </div>
   )
