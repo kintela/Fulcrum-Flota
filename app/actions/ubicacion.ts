@@ -41,14 +41,40 @@ export async function actualizarUbicacionCoche(matricula: string, latitud: numbe
       }
     }
 
+    // Intentar obtener la dirección usando Geocoding API de Google
+    let direccionActual = null
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+    
+    if (apiKey) {
+      try {
+        const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitud},${longitud}&key=${apiKey}&language=es`
+        const geocodeResponse = await fetch(geocodeUrl)
+        const geocodeData = await geocodeResponse.json()
+        
+        if (geocodeData.status === 'OK' && geocodeData.results.length > 0) {
+          direccionActual = geocodeData.results[0].formatted_address
+        }
+      } catch (geocodeError) {
+        console.warn("Error obtaining address:", geocodeError)
+        // Continuar sin dirección si falla el geocoding
+      }
+    }
+
     // Actualizar la ubicación del vehículo
+    const updateData: any = { 
+      latitud: latitud, 
+      longitud: longitud,
+      ultima_ubicacion: new Date().toISOString()
+    }
+
+    // Solo actualizar dirección si se obtuvo
+    if (direccionActual) {
+      updateData.direccion_actual = direccionActual
+    }
+
     const { error: updateError } = await supabase
       .from("coches")
-      .update({ 
-        latitud: latitud, 
-        longitud: longitud,
-        ultima_ubicacion: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('matricula', matricula)
 
     if (updateError) {
@@ -58,7 +84,7 @@ export async function actualizarUbicacionCoche(matricula: string, latitud: numbe
 
     return { 
       success: true, 
-      message: `Ubicación del vehículo ${matricula} actualizada correctamente` 
+      message: `Ubicación del vehículo ${matricula} actualizada correctamente${direccionActual ? ` en ${direccionActual}` : ''}` 
     }
 
   } catch (error) {
