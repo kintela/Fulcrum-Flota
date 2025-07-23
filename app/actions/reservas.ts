@@ -124,7 +124,6 @@ export async function liberarCoche(matricula: string) {
       .single()
     
     if (cocheError || !coche) {
-      console.error("Error obteniendo coche:", cocheError)
       return {
         success: false,
         error: "Vehículo no encontrado"
@@ -149,32 +148,30 @@ export async function liberarCoche(matricula: string) {
 
     // Los administradores pueden liberar cualquier coche, 
     // los empleados solo pueden liberar sus propios coches
-    if (empleado.role !== 'admin' && Number(coche.asignadoa) !== empleado.id) {
+    const isAdmin = empleado.role && empleado.role.toLowerCase() === 'admin'
+    
+    if (!isAdmin && Number(coche.asignadoa) !== empleado.id) {
       return {
         success: false,
         error: "No tienes permisos para liberar este vehículo"
       }
     }
 
-    console.log(`Liberando coche ${matricula}, asignado actualmente a empleado ID: ${coche.asignadoa}`)
-
     // Liberar el coche (quitar la asignación)
-    const { error: updateError } = await supabase
+    const { error: updateError, data: updateData } = await supabase
       .from("coches")
       .update({
         asignadoa: null
       })
       .eq('matricula', matricula)
+      .select()
     
     if (updateError) {
-      console.error("Error liberando coche:", updateError)
       return {
         success: false,
         error: "Error al liberar el vehículo"
       }
     }
-
-    console.log(`Coche ${matricula} liberado exitosamente`)
 
     return {
       success: true,
