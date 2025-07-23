@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { MapPin, RefreshCw, Navigation, AlertCircle, Car, UserCheck, UserX, Calendar, Ban } from "lucide-react"
-import { reservarCoche, liberarCoche } from "@/app/actions/reservas"
+import { liberarCoche } from "@/app/actions/reservas"
 import { actualizarUbicacionCoche } from "@/app/actions/ubicacion"
 import { verificarDisponibilidad } from "@/app/actions/reservas-temporales"
 import { ReservaModal } from "@/components/reserva-modal"
@@ -807,33 +807,6 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
     [coches, isGoogleMapsReady],
   )
 
-  // Función para manejar la reserva de un vehículo
-  const handleReservar = useCallback(async () => {
-    if (!selectedMatricula || selectedMatricula === "all") return
-
-    setIsReserving(true)
-    setReservationMessage("")
-
-    try {
-      const resultado = await reservarCoche(selectedMatricula)
-      
-      if (resultado.success) {
-        setReservationMessage(`✅ ${resultado.message}`)
-        // Refresh para actualizar la información
-        setTimeout(() => {
-          window.location.reload()
-        }, 2000)
-      } else {
-        setReservationMessage(`❌ ${resultado.error}`)
-      }
-    } catch (error) {
-      console.error("Error reservando coche:", error)
-      setReservationMessage("❌ Error inesperado al reservar el vehículo")
-    } finally {
-      setIsReserving(false)
-    }
-  }, [selectedMatricula])
-
   // Función para abrir el modal de reserva temporal
   const handleAbrirReservaTemporal = useCallback(() => {
     if (!selectedMatricula || selectedMatricula === "all") return
@@ -927,18 +900,6 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
     vehicleToLocateRef.current = null
     setVehicleMessage("")
   }, [])
-
-  // Función para verificar si se puede mostrar el botón de reserva
-  const shouldShowReserveButton = useCallback(() => {
-    if (!selectedMatricula || selectedMatricula === "all") return false
-    if (!userEmail) return false
-    
-    const coche = coches.find((c) => c.matricula === selectedMatricula)
-    if (!coche) return false
-    
-    // Solo mostrar si el coche no está asignado y no es donante
-    return !coche.asignadoa && !coche.donante
-  }, [selectedMatricula, userEmail, coches])
 
   // Función para manejar la selección de vehículo con select nativo
   const handleVehicleSelectChange = useCallback(
@@ -1278,19 +1239,6 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
                     ✕
                   </button>
                 </div>
-              )}
-              
-              {/* Botón de Reservar (asignación permanente) */}
-              {shouldShowReserveButton() && (
-                <Button
-                  onClick={handleReservar}
-                  disabled={isReserving || isReleasing}
-                  className="bg-green-600 hover:bg-green-700 text-white"
-                  size="sm"
-                >
-                  <UserCheck className="h-4 w-4 mr-2" />
-                  {isReserving ? "Reservando..." : "Reservar"}
-                </Button>
               )}
 
               {/* Botón de Reserva Temporal */}
