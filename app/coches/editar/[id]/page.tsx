@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { ArrowLeft, Save } from "lucide-react"
 import Link from "next/link"
 import { editarCoche } from "./actions"
-import { UbicacionEditor } from "@/components/ubicacion-editor"
+import { UbicacionEditorWrapper } from "@/components/ubicacion-editor-wrapper"
 import { SeguroManager } from "@/components/seguro-manager"
 import { SolredManager } from "@/components/solred-manager"
 import { ViatManager } from "@/components/viat-manager"
@@ -176,15 +176,11 @@ export default async function EditarCochePage({ params }: { params: { id: string
           </div>
 
           {/* Editor de ubicación - Al final */}
-          <UbicacionEditor
+          <UbicacionEditorWrapper
             matricula={coche.matricula}
             latitud={coche.latitud}
             longitud={coche.longitud}
             direccion_actual={coche.direccion_actual}
-            onUbicacionGuardada={() => {
-              // Opcional: recargar la página o actualizar datos
-              window.location.reload()
-            }}
           />
         </div>
       </div>

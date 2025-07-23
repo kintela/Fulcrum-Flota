@@ -102,10 +102,10 @@ export async function liberarCoche(matricula: string) {
       }
     }
 
-    // Buscar el empleado por email
+    // Buscar el empleado por email para verificar rol
     const { data: empleado, error: empleadoError } = await supabase
       .from("empleados")
-      .select("id, nombre, apellidos")
+      .select("id, nombre, apellidos, role")
       .eq('email', session.user.email)
       .single()
     
@@ -116,7 +116,7 @@ export async function liberarCoche(matricula: string) {
       }
     }
 
-    // Verificar que el coche existe y está asignado al usuario
+    // Verificar que el coche existe
     const { data: coche, error: cocheError } = await supabase
       .from("coches")
       .select("matricula, marca, modelo, asignadoa, donante")
@@ -138,24 +138,35 @@ export async function liberarCoche(matricula: string) {
       }
     }
 
-    // Verificar que esté asignado al usuario actual
-    if (!coche.asignadoa || Number(coche.asignadoa) !== empleado.id) {
+    // Verificar que el coche esté asignado
+    if (!coche.asignadoa) {
       return {
         success: false,
-        error: "Este vehículo no está asignado a ti o no está asignado"
+        error: "Este vehículo no está asignado a ningún empleado"
+      }
+    }
+
+    // Los administradores pueden liberar cualquier coche, 
+    // los empleados solo pueden liberar sus propios coches
+    const isAdmin = empleado.role && empleado.role.toLowerCase() === 'admin'
+    
+    if (!isAdmin && Number(coche.asignadoa) !== empleado.id) {
+      return {
+        success: false,
+        error: "No tienes permisos para liberar este vehículo"
       }
     }
 
     // Liberar el coche (quitar la asignación)
-    const { error: updateError } = await supabase
+    const { error: updateError, data: updateData } = await supabase
       .from("coches")
       .update({
         asignadoa: null
       })
       .eq('matricula', matricula)
+      .select()
     
     if (updateError) {
-      console.error("Error liberando coche:", updateError)
       return {
         success: false,
         error: "Error al liberar el vehículo"

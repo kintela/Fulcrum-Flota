@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Car, Users, AlertTriangle, CreditCard, Calendar, Navigation, MapPin } from "lucide-react"
 import Link from "next/link"
 import { MapaCoches } from "@/components/mapa-coches"
+import { MisReservas } from "@/components/mis-reservas"
 
 function DashboardStats({
   coches,
@@ -745,6 +746,11 @@ export default function DashboardClient({
 
         <Suspense fallback={<div>Cargando alertas de alquileres...</div>}>
           <AlquilerAlertsSection alquilerAlerts={alquilerAlerts} empleados={empleados} />
+        </Suspense>
+
+        {/* Mis Reservas - Visible para todos los usuarios */}
+        <Suspense fallback={<div>Cargando reservas...</div>}>
+          <MisReservas />
         </Suspense>
 
         {/* Mapa de vehículos - Visible para todos los usuarios */}

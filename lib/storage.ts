@@ -121,7 +121,7 @@ export async function subirFoto(
  */
 export async function obtenerFotosCoche(matricula: string): Promise<FotosResult> {
   try {
-    console.log(`Obteniendo fotos para matrícula: ${matricula}`)
+    //console.log(`Obteniendo fotos para matrícula: ${matricula}`)
 
     const { data, error } = await supabase.storage.from("coches-fotos").list(matricula, {
       limit: 100,
@@ -129,7 +129,10 @@ export async function obtenerFotosCoche(matricula: string): Promise<FotosResult>
     })
 
     if (error) {
-      console.error("Error al obtener fotos:", error)
+      // Solo loggear errores que no sean "folder not found" para evitar spam
+      if (!error.message?.includes('not found') && !error.message?.includes('does not exist')) {
+        console.error("Error al obtener fotos:", error)
+      }
       return {
         success: false,
         error: `Error al obtener las fotos: ${error.message}`,
@@ -137,14 +140,15 @@ export async function obtenerFotosCoche(matricula: string): Promise<FotosResult>
     }
 
     if (!data || data.length === 0) {
-      console.log(`No se encontraron fotos para la matrícula: ${matricula}`)
+      // Silenciar el log para evitar spam en consola
+      // console.log(`No se encontraron fotos para la matrícula: ${matricula}`)
       return {
         success: true,
         fotos: [],
       }
     }
 
-    console.log(`Encontradas ${data.length} fotos para ${matricula}:`, data)
+    //console.log(`Encontradas ${data.length} fotos para ${matricula}:`, data)
 
     // Generar URLs públicas para todas las fotos
     const fotos = data
@@ -154,7 +158,7 @@ export async function obtenerFotosCoche(matricula: string): Promise<FotosResult>
         return urlData.publicUrl
       })
 
-    console.log(`URLs generadas para ${matricula}:`, fotos)
+    //console.log(`URLs generadas para ${matricula}:`, fotos)
 
     return {
       success: true,
