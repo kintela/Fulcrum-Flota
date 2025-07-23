@@ -1264,7 +1264,12 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
               )}
 
               {/* Botón de Reserva Temporal */}
-              {selectedMatricula && selectedMatricula !== "all" && !coches.find(c => c.matricula === selectedMatricula)?.donante && (
+              {selectedMatricula && 
+               selectedMatricula !== "all" && 
+               (() => {
+                 const cocheSeleccionado = coches.find(c => c.matricula === selectedMatricula)
+                 return cocheSeleccionado && !cocheSeleccionado.donante && isCocheDisponible(cocheSeleccionado)
+               })() && (
                 <Button
                   onClick={handleAbrirReservaTemporal}
                   disabled={isReserving || isReleasing}
@@ -1274,6 +1279,24 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
                   <Calendar className="h-4 w-4 mr-2" />
                   Reserva Temporal
                 </Button>
+              )}
+
+              {/* Mensaje cuando el coche no está disponible */}
+              {selectedMatricula && 
+               selectedMatricula !== "all" && 
+               (() => {
+                 const cocheSeleccionado = coches.find(c => c.matricula === selectedMatricula)
+                 return cocheSeleccionado && !cocheSeleccionado.donante && !isCocheDisponible(cocheSeleccionado)
+               })() && (
+                <div className="bg-gray-50 border border-gray-200 rounded-md p-3">
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <Ban className="h-4 w-4" />
+                    <span className="text-sm">Este vehículo no está disponible para reservas</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    El vehículo está asignado permanentemente o tiene una reserva temporal activa.
+                  </p>
+                </div>
               )}
               
               {/* Botón de Liberar */}
