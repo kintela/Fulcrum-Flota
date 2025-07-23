@@ -5,9 +5,10 @@ import type React from "react"
 import { useEffect, useRef, useState, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { MapPin, RefreshCw, Navigation, AlertCircle, Car, UserCheck, UserX, Calendar } from "lucide-react"
+import { MapPin, RefreshCw, Navigation, AlertCircle, Car, UserCheck, UserX, Calendar, Ban } from "lucide-react"
 import { reservarCoche, liberarCoche } from "@/app/actions/reservas"
 import { actualizarUbicacionCoche } from "@/app/actions/ubicacion"
+import { verificarDisponibilidad } from "@/app/actions/reservas-temporales"
 import { ReservaModal } from "@/components/reserva-modal"
 
 interface Coche {
@@ -184,6 +185,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
     matricula: string
     marcaModelo: string
   } | null>(null)
+  const [reservasActivas, setReservasActivas] = useState<Map<string, boolean>>(new Map())
 
   // Crear mapa de empleados
   const empleadosMap = new Map()
@@ -205,6 +207,49 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
     },
     [empleadosMap],
   )
+
+  // Función para verificar si un coche tiene reservas activas
+  const verificarReservasActivas = useCallback(async (matriculas: string[]) => {
+    const nuevasReservas = new Map<string, boolean>()
+    
+    // Verificar cada matrícula en paralelo
+    const promesas = matriculas.map(async (matricula) => {
+      try {
+        const ahora = new Date()
+        const resultado = await verificarDisponibilidad(
+          matricula, 
+          ahora.toISOString(), 
+          ahora.toISOString()
+        )
+        
+        if (resultado.success) {
+          // Si no está disponible, significa que tiene reservas activas
+          nuevasReservas.set(matricula, !resultado.disponible)
+        } else {
+          nuevasReservas.set(matricula, false)
+        }
+      } catch (error) {
+        console.warn(`Error verificando reservas para ${matricula}:`, error)
+        nuevasReservas.set(matricula, false)
+      }
+    })
+    
+    await Promise.all(promesas)
+    setReservasActivas(nuevasReservas)
+  }, [])
+
+  // Función para determinar si un coche está disponible
+  const isCocheDisponible = useCallback((coche: Coche) => {
+    // Un coche está disponible si:
+    // 1. No está asignado permanentemente a nadie
+    // 2. No tiene reservas temporales activas
+    // 3. No es un vehículo donante
+    const noEstaAsignado = !coche.asignadoa
+    const noTieneReservasActivas = !reservasActivas.get(coche.matricula)
+    const noEsDonante = !coche.donante
+    
+    return noEstaAsignado && noTieneReservasActivas && noEsDonante
+  }, [reservasActivas])
 
   // Función para limpiar marcadores
   const clearMarkers = useCallback(() => {
@@ -599,6 +644,19 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
     }
   }, [clearMarkers])
 
+  // Effect para cargar reservas activas cuando cambien los coches
+  useEffect(() => {
+    if (coches.length > 0) {
+      const matriculas = coches
+        .filter(coche => !coche.donante)
+        .map(coche => coche.matricula)
+      
+      if (matriculas.length > 0) {
+        verificarReservasActivas(matriculas)
+      }
+    }
+  }, [coches, verificarReservasActivas])
+
   const handleRefresh = useCallback(() => {
     window.location.reload()
   }, [])
@@ -637,7 +695,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
   // Calcular asignados y disponibles de TODOS los coches (no solo los que tienen ubicación)
   const todosLosCoches = coches.filter((c) => !c.donante)
   const cochesAsignados = todosLosCoches.filter((c) => getEmpleadoInfo(c) || c.asignadoa)
-  const cochesDisponibles = todosLosCoches.filter((c) => !getEmpleadoInfo(c) && !c.asignadoa)
+  const cochesDisponibles = todosLosCoches.filter((c) => isCocheDisponible(c))
 
   const zoomToVehicles = useCallback(
     (filterType: "all" | "assigned" | "available" | "with-location" | "no-location") => {
@@ -1008,9 +1066,13 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
     const coche = coches.find((c) => c.matricula === matricula)
     if (!coche) return "#000000" // Negro por defecto
 
-    // Si NO hay filtro activo (filterMode === "all"), todas las matrículas en negro
+    const isDisponible = isCocheDisponible(coche)
+    
+    // Si NO hay filtro activo (filterMode === "all"), aplicar nueva lógica:
+    // - Gris claro para no disponibles
+    // - Negro para disponibles
     if (filterMode === "all") {
-      return "#000000" // Negro para todas las matrículas sin filtro
+      return isDisponible ? "#000000" : "#d1d5db" // Negro para disponibles, gris claro para no disponibles
     }
 
     const hasLocation = coche.latitud && coche.longitud && !coche.donante
@@ -1021,7 +1083,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
     
     switch (filterMode) {
       case "available":
-        matchesFilter = !isAssigned
+        matchesFilter = isDisponible // Usar la nueva lógica de disponibilidad
         break
       case "assigned":
         matchesFilter = !!isAssigned
@@ -1053,7 +1115,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
 
     // Fallback (no debería llegar aquí)
     return "#000000"
-  }, [coches, getEmpleadoInfo, filterMode])
+  }, [coches, getEmpleadoInfo, filterMode, isCocheDisponible])
 
   // Función para obtener el texto descriptivo de filtro actual
   const getFilterDescription = useCallback(() => {
@@ -1115,14 +1177,26 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
                   {getFilteredMatriculas().map((matricula) => {
                     const coche = coches.find((c) => c.matricula === matricula)
                     const hasLocation = coche?.latitud && coche?.longitud && !coche?.donante
+                    const isDisponible = coche ? isCocheDisponible(coche) : false
                     const color = getMatriculaColor(matricula)
+                    
+                    // Lógica para el icono:
+                    let icono = ""
+                    if (!isDisponible) {
+                      icono = "🚫" // No disponible (asignado o con reservas)
+                    } else if (hasLocation) {
+                      icono = "📍" // Disponible con ubicación
+                    } else {
+                      icono = "❌" // Disponible sin ubicación
+                    }
+                    
                     return (
                       <option 
                         key={matricula} 
                         value={matricula}
                         style={{ color: color }}
                       >
-                        {matricula} {hasLocation ? "📍" : "❌"}
+                        {matricula} {icono}
                       </option>
                     )
                   })}
