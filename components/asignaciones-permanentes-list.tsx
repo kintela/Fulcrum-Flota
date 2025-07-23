@@ -2,7 +2,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { User, Car, MapPin, Mail, Phone, UserX, AlertTriangle } from "lucide-react"
-import Image from "next/image"
 import { useState, useEffect } from "react"
 import { obtenerFotosCoche } from "@/lib/storage"
 import {
@@ -127,18 +126,23 @@ export default function AsignacionesPermanentesList({
       <CardContent>
         <div className="grid gap-4">
           {asignacionesOrdenadas.map((asignacion) => (
-            <Card key={asignacion.id} className="p-4">
+            <Card key={asignacion.matricula} className="p-4">
               <div className="flex items-start gap-4">
                 {/* Foto del vehículo */}
                 <div className="flex-shrink-0">
                   {fotosCache[asignacion.matricula] ? (
-                    <Image
-                      src={fotosCache[asignacion.matricula]!}
-                      alt={`${asignacion.marca} ${asignacion.modelo}`}
-                      width={80}
-                      height={80}
-                      className="rounded-lg object-cover"
-                    />
+                    <div className="w-20 h-20 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center">
+                      <img
+                        src={fotosCache[asignacion.matricula]!}
+                        alt={`${asignacion.marca} ${asignacion.modelo}`}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          // Si hay error cargando, mostrar placeholder
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                        }}
+                      />
+                    </div>
                   ) : (
                     <div className="w-20 h-20 bg-gray-200 rounded-lg flex items-center justify-center">
                       <Car className="h-8 w-8 text-gray-400" />
