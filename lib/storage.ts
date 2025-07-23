@@ -129,7 +129,10 @@ export async function obtenerFotosCoche(matricula: string): Promise<FotosResult>
     })
 
     if (error) {
-      console.error("Error al obtener fotos:", error)
+      // Solo loggear errores que no sean "folder not found" para evitar spam
+      if (!error.message?.includes('not found') && !error.message?.includes('does not exist')) {
+        console.error("Error al obtener fotos:", error)
+      }
       return {
         success: false,
         error: `Error al obtener las fotos: ${error.message}`,
@@ -137,7 +140,8 @@ export async function obtenerFotosCoche(matricula: string): Promise<FotosResult>
     }
 
     if (!data || data.length === 0) {
-      console.log(`No se encontraron fotos para la matrícula: ${matricula}`)
+      // Silenciar el log para evitar spam en consola
+      // console.log(`No se encontraron fotos para la matrícula: ${matricula}`)
       return {
         success: true,
         fotos: [],

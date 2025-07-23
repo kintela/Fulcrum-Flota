@@ -4,7 +4,17 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, Clock, Car, X, RefreshCw } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Calendar, Clock, Car, X, RefreshCw, AlertTriangle } from "lucide-react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { obtenerReservasUsuario, cancelarReserva } from "@/app/actions/reservas-temporales"
@@ -29,6 +39,8 @@ export function MisReservas() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
   const [cancellingId, setCancellingId] = useState<number | null>(null)
+  const [showCancelDialog, setShowCancelDialog] = useState(false)
+  const [reservaToCancel, setReservaToCancel] = useState<Reserva | null>(null)
 
   const cargarReservas = async () => {
     setIsLoading(true)
@@ -63,6 +75,8 @@ export function MisReservas() {
       if (resultado.success) {
         // Actualizar la lista de reservas
         await cargarReservas()
+        setShowCancelDialog(false)
+        setReservaToCancel(null)
       } else {
         setError(resultado.error || "Error al cancelar la reserva")
       }
@@ -74,21 +88,59 @@ export function MisReservas() {
     }
   }
 
-  const getEstadoBadge = (estado: string) => {
-    switch (estado) {
-      case 'activa':
-        return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Activa</Badge>
+  const handleConfirmarCancelacion = (reserva: Reserva) => {
+    setReservaToCancel(reserva)
+    setShowCancelDialog(true)
+  }
+
+  const handleCerrarDialog = () => {
+    setShowCancelDialog(false)
+    setReservaToCancel(null)
+  }
+
+  const getEstadoBadge = (reserva: Reserva) => {
+    const estadoReserva = getEstadoReserva(reserva)
+    
+    switch (estadoReserva) {
+      case 'pendiente':
+        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">Pendiente</Badge>
+      case 'en_curso':
+        return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">En Curso</Badge>
+      case 'vencida':
+        return <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100">Vencida</Badge>
       case 'completada':
-        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">Completada</Badge>
+        return <Badge className="bg-gray-100 text-gray-800 hover:bg-gray-100">Completada</Badge>
       case 'cancelada':
         return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Cancelada</Badge>
       default:
-        return <Badge variant="secondary">{estado}</Badge>
+        return <Badge variant="secondary">{estadoReserva}</Badge>
     }
   }
 
   const isReservaActiva = (reserva: Reserva) => {
-    return reserva.estado === 'activa' && new Date(reserva.fecha_inicio) > new Date()
+    // Una reserva se puede cancelar si:
+    // 1. Está en estado 'activa' 
+    // 2. No ha terminado aún (fecha_fin > ahora)
+    // Esto permite cancelar tanto reservas pendientes como reservas en curso
+    return reserva.estado === 'activa' && new Date(reserva.fecha_fin) > new Date()
+  }
+
+  const getEstadoReserva = (reserva: Reserva) => {
+    const ahora = new Date()
+    const inicio = new Date(reserva.fecha_inicio)
+    const fin = new Date(reserva.fecha_fin)
+
+    if (reserva.estado !== 'activa') {
+      return reserva.estado // cancelada, completada, etc.
+    }
+
+    if (ahora < inicio) {
+      return 'pendiente' // Aún no ha comenzado
+    } else if (ahora >= inicio && ahora <= fin) {
+      return 'en_curso' // Está en curso ahora
+    } else {
+      return 'vencida' // Ya terminó pero sigue marcada como activa
+    }
   }
 
   const reservasActivas = reservas.filter(r => r.estado === 'activa')
@@ -159,15 +211,16 @@ export function MisReservas() {
                         </div>
                         
                         <div className="flex items-center gap-2">
-                          {getEstadoBadge(reserva.estado)}
+                          {getEstadoBadge(reserva)}
                           
                           {isReservaActiva(reserva) && (
                             <Button
-                              onClick={() => handleCancelarReserva(reserva.id)}
+                              onClick={() => handleConfirmarCancelacion(reserva)}
                               disabled={cancellingId === reserva.id}
                               variant="outline"
                               size="sm"
                               className="text-red-600 border-red-200 hover:bg-red-50"
+                              title="Cancelar reserva"
                             >
                               {cancellingId === reserva.id ? (
                                 <RefreshCw className="h-4 w-4 animate-spin" />
@@ -234,7 +287,7 @@ export function MisReservas() {
                             {reserva.coches.marca} {reserva.coches.modelo}
                           </span>
                         </div>
-                        {getEstadoBadge(reserva.estado)}
+                        {getEstadoBadge(reserva)}
                       </div>
                       
                       <div className="text-xs text-gray-500">
@@ -259,6 +312,61 @@ export function MisReservas() {
             )}
           </div>
         )}
+
+        {/* Diálogo de confirmación para cancelar reserva */}
+        <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+                Confirmar cancelación
+              </AlertDialogTitle>
+              <AlertDialogDescription className="space-y-2">
+                <p>¿Estás seguro de que quieres cancelar esta reserva?</p>
+                {reservaToCancel && (
+                  <div className="mt-3 p-3 bg-gray-50 rounded-md border">
+                    <p className="font-semibold text-gray-900">
+                      {reservaToCancel.coches.matricula} - {reservaToCancel.coches.marca} {reservaToCancel.coches.modelo}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      <strong>Desde:</strong> {format(new Date(reservaToCancel.fecha_inicio), "PPP 'a las' HH:mm", { locale: es })}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      <strong>Hasta:</strong> {format(new Date(reservaToCancel.fecha_fin), "PPP 'a las' HH:mm", { locale: es })}
+                    </p>
+                    {reservaToCancel.observaciones && (
+                      <p className="text-sm text-gray-600 mt-2">
+                        <strong>Observaciones:</strong> {reservaToCancel.observaciones}
+                      </p>
+                    )}
+                  </div>
+                )}
+                <p className="text-sm text-red-600 font-medium">
+                  Esta acción no se puede deshacer.
+                </p>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={handleCerrarDialog}>
+                No, mantener reserva
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => reservaToCancel && handleCancelarReserva(reservaToCancel.id)}
+                className="bg-red-600 hover:bg-red-700"
+                disabled={cancellingId !== null}
+              >
+                {cancellingId === reservaToCancel?.id ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Cancelando...
+                  </>
+                ) : (
+                  'Sí, cancelar reserva'
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardContent>
     </Card>
   )

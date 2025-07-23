@@ -748,6 +748,11 @@ export default function DashboardClient({
           <AlquilerAlertsSection alquilerAlerts={alquilerAlerts} empleados={empleados} />
         </Suspense>
 
+        {/* Mis Reservas - Visible para todos los usuarios */}
+        <Suspense fallback={<div>Cargando reservas...</div>}>
+          <MisReservas />
+        </Suspense>
+
         {/* Mapa de vehículos - Visible para todos los usuarios */}
         <Suspense fallback={<div>Cargando mapa...</div>}>
           <MapaCoches 
@@ -758,13 +763,6 @@ export default function DashboardClient({
             onFunctionsReady={setMapFunctions}
           />
         </Suspense>
-
-        {/* Mis Reservas - Solo para usuarios regulares */}
-        {userRole !== 'administrador' && (
-          <Suspense fallback={<div>Cargando reservas...</div>}>
-            <MisReservas />
-          </Suspense>
-        )}
       </div>
     </div>
   )
