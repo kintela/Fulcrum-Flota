@@ -86,12 +86,31 @@ export default function ReservasTemporalesList({
     return false
   })
 
-  // Ordenar por matrícula
-  const reservasOrdenadas = [...reservasFiltradas].sort((a, b) => 
-    a.matricula.localeCompare(b.matricula)
-  )
+  // Agrupar reservas por matrícula
+  const reservasAgrupadas = reservasFiltradas.reduce((acc, reserva) => {
+    const matricula = reserva.matricula
+    if (!acc[matricula]) {
+      acc[matricula] = {
+        coche: reserva.coches,
+        reservas: []
+      }
+    }
+    acc[matricula].reservas.push(reserva)
+    return acc
+  }, {} as Record<string, { coche: any, reservas: ReservaTemporal[] }>)
 
-  if (reservasOrdenadas.length === 0) {
+  // Ordenar por matrícula y ordenar reservas dentro de cada grupo por fecha
+  const cochesOrdenados = Object.entries(reservasAgrupadas)
+    .sort(([matriculaA], [matriculaB]) => matriculaA.localeCompare(matriculaB))
+    .map(([matricula, data]) => ({
+      matricula,
+      coche: data.coche,
+      reservas: data.reservas.sort((a, b) => 
+        new Date(a.fecha_inicio).getTime() - new Date(b.fecha_inicio).getTime()
+      )
+    }))
+
+  if (cochesOrdenados.length === 0) {
     return (
       <Card>
         <CardHeader>
@@ -114,125 +133,144 @@ export default function ReservasTemporalesList({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Calendar className="h-5 w-5" />
-          Reservas Temporales ({reservasOrdenadas.length})
+          Reservas Temporales ({cochesOrdenados.length} vehículos, {reservasFiltradas.length} reservas)
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid gap-4">
-          {reservasOrdenadas.map((reserva) => {
-            const estadoInfo = getEstadoReserva(reserva)
-            const puedeCancelarse = puedeSerCancelada(reserva)
-            
-            return (
-              <Card key={reserva.id} className="p-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 space-y-3">
-                    {/* Información del vehículo */}
-                    <div className="flex items-center gap-3">
-                      <Car className="h-4 w-4 text-blue-600" />
-                      <div>
-                        <span className="font-semibold text-lg">{reserva.matricula}</span>
-                        <span className="text-muted-foreground ml-2">
-                          {reserva.coches.marca} {reserva.coches.modelo}
-                        </span>
-                      </div>
-                      <Badge variant={estadoInfo.color as any}>
-                        {estadoInfo.estado}
-                      </Badge>
-                    </div>
-
-                    {/* Información del empleado */}
-                    <div className="flex items-center gap-3">
-                      <User className="h-4 w-4 text-green-600" />
-                      <div>
-                        <span className="font-medium">
-                          {reserva.empleados.nombre} {reserva.empleados.apellidos}
-                        </span>
-                        <span className="text-muted-foreground ml-2">
-                          ({reserva.empleados.email})
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Fechas de la reserva */}
-                    <div className="flex items-center gap-3">
-                      <Clock className="h-4 w-4 text-purple-600" />
-                      <div className="text-sm">
-                        <div>
-                          <span className="font-medium">Desde:</span>{' '}
-                          {format(parseISO(reserva.fecha_inicio), 'dd/MM/yyyy HH:mm', { locale: es })}
-                        </div>
-                        <div>
-                          <span className="font-medium">Hasta:</span>{' '}
-                          {format(parseISO(reserva.fecha_fin), 'dd/MM/yyyy HH:mm', { locale: es })}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Observaciones */}
-                    {reserva.observaciones && (
-                      <div className="bg-gray-50 p-3 rounded-md">
-                        <p className="text-sm font-medium text-gray-700">Observaciones:</p>
-                        <p className="text-sm text-gray-600 mt-1">{reserva.observaciones}</p>
-                      </div>
-                    )}
+        <div className="grid gap-6">
+          {cochesOrdenados.map(({ matricula, coche, reservas: reservasCoche }) => (
+            <Card key={matricula} className="p-4 border-2">
+              {/* Encabezado del vehículo */}
+              <div className="flex items-center gap-3 mb-4 pb-3 border-b">
+                <Car className="h-5 w-5 text-blue-600" />
+                <div className="flex-1">
+                  <h3 className="font-semibold text-xl">{matricula}</h3>
+                  <p className="text-muted-foreground">
+                    {coche.marca} {coche.modelo}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm font-medium text-blue-600">
+                    {reservasCoche.length} reserva{reservasCoche.length !== 1 ? 's' : ''}
                   </div>
+                </div>
+              </div>
 
-                  {/* Botón de cancelar */}
-                  {puedeCancelarse && (
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          disabled={cancelandoReserva === reserva.id}
-                        >
-                          {cancelandoReserva === reserva.id ? (
-                            <div className="flex items-center gap-2">
-                              <div className="animate-spin h-4 w-4 border-2 border-red-600 border-t-transparent rounded-full" />
-                              Cancelando...
+              {/* Lista de reservas para este vehículo */}
+              <div className="space-y-4">
+                {reservasCoche.map((reserva, index) => {
+                  const estadoInfo = getEstadoReserva(reserva)
+                  const puedeCancelarse = puedeSerCancelada(reserva)
+                  
+                  return (
+                    <div key={reserva.id} className="bg-gray-50 p-4 rounded-lg">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 space-y-3">
+                          {/* Número de reserva y estado */}
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-medium text-gray-600">
+                              Reserva #{index + 1}
+                            </span>
+                            <Badge variant={estadoInfo.color as any}>
+                              {estadoInfo.estado}
+                            </Badge>
+                          </div>
+
+                          {/* Información del empleado */}
+                          <div className="flex items-center gap-3">
+                            <User className="h-4 w-4 text-green-600" />
+                            <div>
+                              <span className="font-medium">
+                                {reserva.empleados.nombre} {reserva.empleados.apellidos}
+                              </span>
+                              <span className="text-muted-foreground ml-2 text-sm">
+                                ({reserva.empleados.email})
+                              </span>
                             </div>
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              <X className="h-4 w-4" />
-                              Cancelar
+                          </div>
+
+                          {/* Fechas de la reserva */}
+                          <div className="flex items-center gap-3">
+                            <Clock className="h-4 w-4 text-purple-600" />
+                            <div className="text-sm">
+                              <div>
+                                <span className="font-medium">Desde:</span>{' '}
+                                {format(parseISO(reserva.fecha_inicio), 'dd/MM/yyyy HH:mm', { locale: es })}
+                              </div>
+                              <div>
+                                <span className="font-medium">Hasta:</span>{' '}
+                                {format(parseISO(reserva.fecha_fin), 'dd/MM/yyyy HH:mm', { locale: es })}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Observaciones */}
+                          {reserva.observaciones && (
+                            <div className="bg-white p-3 rounded-md border">
+                              <p className="text-sm font-medium text-gray-700">Observaciones:</p>
+                              <p className="text-sm text-gray-600 mt-1">{reserva.observaciones}</p>
                             </div>
                           )}
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle className="flex items-center gap-2">
-                            <AlertTriangle className="h-5 w-5 text-amber-500" />
-                            Confirmar cancelación
-                          </AlertDialogTitle>
-                          <AlertDialogDescription>
-                            ¿Estás seguro de que deseas cancelar la reserva temporal del vehículo{' '}
-                            <strong>{reserva.matricula}</strong> ({reserva.coches.marca} {reserva.coches.modelo})?
-                            <br />
-                            <br />
-                            Esta acción no se puede deshacer y el empleado{' '}
-                            <strong>{reserva.empleados.nombre} {reserva.empleados.apellidos}</strong>{' '}
-                            será notificado de la cancelación.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>No, mantener reserva</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => onCancelarReserva(reserva.id)}
-                            className="bg-red-600 hover:bg-red-700"
-                          >
-                            Sí, cancelar reserva
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  )}
-                </div>
-              </Card>
-            )
-          })}
+                        </div>
+
+                        {/* Botón de cancelar */}
+                        {puedeCancelarse && (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50 ml-4"
+                                disabled={cancelandoReserva === reserva.id}
+                              >
+                                {cancelandoReserva === reserva.id ? (
+                                  <div className="flex items-center gap-2">
+                                    <div className="animate-spin h-4 w-4 border-2 border-red-600 border-t-transparent rounded-full" />
+                                    Cancelando...
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    <X className="h-4 w-4" />
+                                    Cancelar
+                                  </div>
+                                )}
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle className="flex items-center gap-2">
+                                  <AlertTriangle className="h-5 w-5 text-amber-500" />
+                                  Confirmar cancelación
+                                </AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  ¿Estás seguro de que deseas cancelar la reserva #{index + 1} del vehículo{' '}
+                                  <strong>{matricula}</strong> ({coche.marca} {coche.modelo})?
+                                  <br />
+                                  <br />
+                                  Esta acción no se puede deshacer y el empleado{' '}
+                                  <strong>{reserva.empleados.nombre} {reserva.empleados.apellidos}</strong>{' '}
+                                  será notificado de la cancelación.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>No, mantener reserva</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => onCancelarReserva(reserva.id)}
+                                  className="bg-red-600 hover:bg-red-700"
+                                >
+                                  Sí, cancelar reserva
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </Card>
+          ))}
         </div>
       </CardContent>
     </Card>
