@@ -5,10 +5,12 @@ import type React from "react"
 import { useEffect, useRef, useState, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { MapPin, RefreshCw, Navigation, AlertCircle, Car, UserCheck, UserX, Calendar } from "lucide-react"
-import { reservarCoche, liberarCoche } from "@/app/actions/reservas"
+import { MapPin, RefreshCw, Navigation, AlertCircle, Car, UserCheck, UserX, Calendar, Ban } from "lucide-react"
+import { liberarCoche } from "@/app/actions/reservas"
 import { actualizarUbicacionCoche } from "@/app/actions/ubicacion"
+import { verificarDisponibilidad } from "@/app/actions/reservas-temporales"
 import { ReservaModal } from "@/components/reserva-modal"
+import { supabase } from "@/lib/supabase"
 
 interface Coche {
   matricula: string
@@ -177,13 +179,14 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
   const [isReleasing, setIsReleasing] = useState(false)
   const [isLocationMode, setIsLocationMode] = useState(false)
   const [vehicleToLocate, setVehicleToLocate] = useState<string | null>(null)
-  const [filterMode, setFilterMode] = useState<"all" | "available" | "assigned" | "with-location" | "no-location">("all")
+  const [filterMode, setFilterMode] = useState<"all" | "available" | "assigned" | "reserved" | "with-location" | "no-location">("all")
   const [selectKey, setSelectKey] = useState(0) // Clave para forzar re-renderizado del select
   const [showReservaModal, setShowReservaModal] = useState(false)
   const [selectedVehicleForReservation, setSelectedVehicleForReservation] = useState<{
     matricula: string
     marcaModelo: string
   } | null>(null)
+  const [reservasActivas, setReservasActivas] = useState<Map<string, boolean>>(new Map())
 
   // Crear mapa de empleados
   const empleadosMap = new Map()
@@ -205,6 +208,60 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
     },
     [empleadosMap],
   )
+
+  // Función para verificar si un coche tiene reservas activas
+  const verificarReservasActivas = useCallback(async (matriculas: string[]) => {
+    const nuevasReservas = new Map<string, boolean>()
+    
+    // Verificar cada matrícula en paralelo
+    const promesas = matriculas.map(async (matricula) => {
+      try {
+        // Verificar si hay reservas activas en este momento
+        const { data: reservas, error } = await supabase
+          .from("reservas")
+          .select("id, fecha_inicio, fecha_fin")
+          .eq('matricula', matricula)
+          .eq('estado', 'activa')
+        
+        if (error) {
+          console.warn(`Error verificando reservas para ${matricula}:`, error)
+          nuevasReservas.set(matricula, false)
+          return
+        }
+        
+        // Verificar si alguna reserva está activa en este momento
+        const ahora = new Date()
+        const tieneReservaActiva = reservas?.some(reserva => {
+          const fechaInicio = new Date(reserva.fecha_inicio)
+          const fechaFin = new Date(reserva.fecha_fin)
+          const estaActiva = ahora >= fechaInicio && ahora <= fechaFin
+          
+          return estaActiva
+        }) || false
+        
+        nuevasReservas.set(matricula, tieneReservaActiva)
+      } catch (error) {
+        console.warn(`Error verificando reservas para ${matricula}:`, error)
+        nuevasReservas.set(matricula, false)
+      }
+    })
+    
+    await Promise.all(promesas)
+    setReservasActivas(nuevasReservas)
+  }, [])
+
+  // Función para determinar si un coche está disponible
+  const isCocheDisponible = useCallback((coche: Coche) => {
+    // Un coche está disponible si:
+    // 1. No está asignado permanentemente a nadie
+    // 2. No tiene reservas temporales activas
+    // 3. No es un vehículo donante
+    const noEstaAsignado = !coche.asignadoa
+    const noTieneReservasActivas = !reservasActivas.get(coche.matricula)
+    const noEsDonante = !coche.donante
+    
+    return noEstaAsignado && noTieneReservasActivas && noEsDonante
+  }, [reservasActivas])
 
   // Función para limpiar marcadores
   const clearMarkers = useCallback(() => {
@@ -599,6 +656,19 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
     }
   }, [clearMarkers])
 
+  // Effect para cargar reservas activas cuando cambien los coches
+  useEffect(() => {
+    if (coches.length > 0) {
+      const matriculas = coches
+        .filter(coche => !coche.donante)
+        .map(coche => coche.matricula)
+      
+      if (matriculas.length > 0) {
+        verificarReservasActivas(matriculas)
+      }
+    }
+  }, [coches, verificarReservasActivas])
+
   const handleRefresh = useCallback(() => {
     window.location.reload()
   }, [])
@@ -637,10 +707,14 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
   // Calcular asignados y disponibles de TODOS los coches (no solo los que tienen ubicación)
   const todosLosCoches = coches.filter((c) => !c.donante)
   const cochesAsignados = todosLosCoches.filter((c) => getEmpleadoInfo(c) || c.asignadoa)
-  const cochesDisponibles = todosLosCoches.filter((c) => !getEmpleadoInfo(c) && !c.asignadoa)
+  const cochesReservados = todosLosCoches.filter((c) => {
+    const tieneReserva = reservasActivas.get(c.matricula)
+    return !c.asignadoa && tieneReserva
+  })
+  const cochesDisponibles = todosLosCoches.filter((c) => isCocheDisponible(c))
 
   const zoomToVehicles = useCallback(
-    (filterType: "all" | "assigned" | "available" | "with-location" | "no-location") => {
+    (filterType: "all" | "assigned" | "reserved" | "available" | "with-location" | "no-location") => {
       if (!mapInstance.current || !isGoogleMapsReady()) return
 
       // Actualizar el filtro del desplegable y limpiar mensajes
@@ -658,6 +732,10 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
         case "assigned":
           // Para el zoom, solo incluir asignados que tengan ubicación
           targetCoches = cochesAsignados.filter((c) => c.latitud && c.longitud)
+          break
+        case "reserved":
+          // Para el zoom, solo incluir reservados que tengan ubicación
+          targetCoches = cochesReservados.filter((c) => c.latitud && c.longitud)
           break
         case "available":
           // Para el zoom, solo incluir disponibles que tengan ubicación
@@ -694,7 +772,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
         console.error("Error zooming to vehicles:", error)
       }
     },
-    [cochesConUbicacion, cochesAsignados, cochesDisponibles, isGoogleMapsReady],
+    [cochesConUbicacion, cochesAsignados, cochesReservados, cochesDisponibles, isGoogleMapsReady],
   )
 
   // Función para hacer zoom a un vehículo específico
@@ -728,33 +806,6 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
     },
     [coches, isGoogleMapsReady],
   )
-
-  // Función para manejar la reserva de un vehículo
-  const handleReservar = useCallback(async () => {
-    if (!selectedMatricula || selectedMatricula === "all") return
-
-    setIsReserving(true)
-    setReservationMessage("")
-
-    try {
-      const resultado = await reservarCoche(selectedMatricula)
-      
-      if (resultado.success) {
-        setReservationMessage(`✅ ${resultado.message}`)
-        // Refresh para actualizar la información
-        setTimeout(() => {
-          window.location.reload()
-        }, 2000)
-      } else {
-        setReservationMessage(`❌ ${resultado.error}`)
-      }
-    } catch (error) {
-      console.error("Error reservando coche:", error)
-      setReservationMessage("❌ Error inesperado al reservar el vehículo")
-    } finally {
-      setIsReserving(false)
-    }
-  }, [selectedMatricula])
 
   // Función para abrir el modal de reserva temporal
   const handleAbrirReservaTemporal = useCallback(() => {
@@ -850,18 +901,6 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
     setVehicleMessage("")
   }, [])
 
-  // Función para verificar si se puede mostrar el botón de reserva
-  const shouldShowReserveButton = useCallback(() => {
-    if (!selectedMatricula || selectedMatricula === "all") return false
-    if (!userEmail) return false
-    
-    const coche = coches.find((c) => c.matricula === selectedMatricula)
-    if (!coche) return false
-    
-    // Solo mostrar si el coche no está asignado y no es donante
-    return !coche.asignadoa && !coche.donante
-  }, [selectedMatricula, userEmail, coches])
-
   // Función para manejar la selección de vehículo con select nativo
   const handleVehicleSelectChange = useCallback(
     (event: React.ChangeEvent<HTMLSelectElement>) => {
@@ -885,6 +924,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
             switch (filterMode) {
               case "available": count = cochesDisponibles.length; break
               case "assigned": count = cochesAsignados.length; break
+              case "reserved": count = cochesReservados.length; break
               case "with-location": count = cochesConUbicacion.length; break
             }
             setVehicleMessage(`ℹ️ Filtro activo: resaltando ${count} vehículos en el desplegable`)
@@ -1008,23 +1048,31 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
     const coche = coches.find((c) => c.matricula === matricula)
     if (!coche) return "#000000" // Negro por defecto
 
-    // Si NO hay filtro activo (filterMode === "all"), todas las matrículas en negro
+    const isDisponible = isCocheDisponible(coche)
+    
+    // Si NO hay filtro activo (filterMode === "all"), aplicar nueva lógica:
+    // - Gris claro para no disponibles
+    // - Negro para disponibles
     if (filterMode === "all") {
-      return "#000000" // Negro para todas las matrículas sin filtro
+      return isDisponible ? "#000000" : "#d1d5db" // Negro para disponibles, gris claro para no disponibles
     }
 
     const hasLocation = coche.latitud && coche.longitud && !coche.donante
     const isAssigned = getEmpleadoInfo(coche) || coche.asignadoa
+    const isReserved = !coche.asignadoa && reservasActivas.get(coche.matricula)
 
     // Si hay un filtro activo, colorear solo los que coinciden con el filtro
     let matchesFilter = false
     
     switch (filterMode) {
       case "available":
-        matchesFilter = !isAssigned
+        matchesFilter = isDisponible // Usar la nueva lógica de disponibilidad
         break
       case "assigned":
         matchesFilter = !!isAssigned
+        break
+      case "reserved":
+        matchesFilter = !!isReserved
         break
       case "with-location":
         matchesFilter = !!hasLocation
@@ -1041,6 +1089,8 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
           return "#3b82f6" // Azul para disponibles
         case "assigned":
           return "#10b981" // Verde para asignados
+        case "reserved":
+          return "#f59e0b" // Ámbar para reservados
         case "with-location":
           return "#9333ea" // Púrpura para con ubicación
         case "no-location":
@@ -1053,7 +1103,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
 
     // Fallback (no debería llegar aquí)
     return "#000000"
-  }, [coches, getEmpleadoInfo, filterMode])
+  }, [coches, getEmpleadoInfo, filterMode, isCocheDisponible])
 
   // Función para obtener el texto descriptivo de filtro actual
   const getFilterDescription = useCallback(() => {
@@ -1062,6 +1112,8 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
         return `Resaltando ${cochesDisponibles.length} vehículos disponibles`
       case "assigned":
         return `Resaltando ${cochesAsignados.length} vehículos asignados`
+      case "reserved":
+        return `Resaltando ${cochesReservados.length} vehículos reservados`
       case "with-location":
         return `Resaltando ${cochesConUbicacion.length} vehículos con ubicación`
       case "no-location":
@@ -1070,7 +1122,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
       default:
         return "Mostrando todos los vehículos"
     }
-  }, [filterMode, cochesDisponibles.length, cochesAsignados.length, cochesConUbicacion.length, cochesSinUbicacion.length])
+  }, [filterMode, cochesDisponibles.length, cochesAsignados.length, cochesReservados.length, cochesConUbicacion.length, cochesSinUbicacion.length])
 
   return (
     <Card className="w-full">
@@ -1115,14 +1167,26 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
                   {getFilteredMatriculas().map((matricula) => {
                     const coche = coches.find((c) => c.matricula === matricula)
                     const hasLocation = coche?.latitud && coche?.longitud && !coche?.donante
+                    const isDisponible = coche ? isCocheDisponible(coche) : false
                     const color = getMatriculaColor(matricula)
+                    
+                    // Lógica para el icono:
+                    let icono = ""
+                    if (!isDisponible) {
+                      icono = "🚫" // No disponible (asignado o con reservas)
+                    } else if (hasLocation) {
+                      icono = "📍" // Disponible con ubicación
+                    } else {
+                      icono = "❌" // Disponible sin ubicación
+                    }
+                    
                     return (
                       <option 
                         key={matricula} 
                         value={matricula}
                         style={{ color: color }}
                       >
-                        {matricula} {hasLocation ? "📍" : "❌"}
+                        {matricula} {icono}
                       </option>
                     )
                   })}
@@ -1135,6 +1199,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
                   <div className={`w-3 h-3 rounded-full ${
                     filterMode === "available" ? "bg-blue-500" :
                     filterMode === "assigned" ? "bg-green-500" :
+                    filterMode === "reserved" ? "bg-amber-500" :
                     filterMode === "with-location" ? "bg-purple-500" :
                     filterMode === "no-location" ? "bg-gray-500" : "bg-gray-400"
                   }`}></div>
@@ -1175,22 +1240,14 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
                   </button>
                 </div>
               )}
-              
-              {/* Botón de Reservar (asignación permanente) */}
-              {shouldShowReserveButton() && (
-                <Button
-                  onClick={handleReservar}
-                  disabled={isReserving || isReleasing}
-                  className="bg-green-600 hover:bg-green-700 text-white"
-                  size="sm"
-                >
-                  <UserCheck className="h-4 w-4 mr-2" />
-                  {isReserving ? "Reservando..." : "Reservar"}
-                </Button>
-              )}
 
               {/* Botón de Reserva Temporal */}
-              {selectedMatricula && selectedMatricula !== "all" && !coches.find(c => c.matricula === selectedMatricula)?.donante && (
+              {selectedMatricula && 
+               selectedMatricula !== "all" && 
+               (() => {
+                 const cocheSeleccionado = coches.find(c => c.matricula === selectedMatricula)
+                 return cocheSeleccionado && !cocheSeleccionado.donante && isCocheDisponible(cocheSeleccionado)
+               })() && (
                 <Button
                   onClick={handleAbrirReservaTemporal}
                   disabled={isReserving || isReleasing}
@@ -1200,6 +1257,24 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
                   <Calendar className="h-4 w-4 mr-2" />
                   Reserva Temporal
                 </Button>
+              )}
+
+              {/* Mensaje cuando el coche no está disponible */}
+              {selectedMatricula && 
+               selectedMatricula !== "all" && 
+               (() => {
+                 const cocheSeleccionado = coches.find(c => c.matricula === selectedMatricula)
+                 return cocheSeleccionado && !cocheSeleccionado.donante && !isCocheDisponible(cocheSeleccionado)
+               })() && (
+                <div className="bg-gray-50 border border-gray-200 rounded-md p-3">
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <Ban className="h-4 w-4" />
+                    <span className="text-sm">Este vehículo no está disponible para reservas</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    El vehículo está asignado permanentemente o tiene una reserva temporal activa.
+                  </p>
+                </div>
               )}
               
               {/* Botón de Liberar */}
@@ -1262,7 +1337,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
           </div>
 
           {/* Estadísticas */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 p-3 bg-gray-50 rounded-lg">
             {/* Total sin ubicación */}
             <button
               onClick={() => {
@@ -1271,28 +1346,28 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
                 setVehicleMessage("")
                 setReservationMessage("")
               }}
-              className={`text-center p-2 rounded-lg transition-colors cursor-pointer group ${
+              className={`text-center p-1.5 rounded-lg transition-colors cursor-pointer group ${
                 filterMode === "no-location" 
                   ? "bg-gray-200 shadow-inner" 
                   : "hover:bg-gray-100"
               }`}
               disabled={cochesSinUbicacion.length === 0}
             >
-              <div className={`text-2xl font-bold ${
+              <div className={`text-xl font-bold ${
                 filterMode === "no-location" 
                   ? "text-gray-800" 
                   : "text-gray-600 group-hover:text-gray-700"
               }`}>
                 {cochesSinUbicacion.length}
               </div>
-              <div className={`text-sm ${
+              <div className={`text-xs ${
                 filterMode === "no-location" 
                   ? "text-gray-700" 
                   : "text-gray-600 group-hover:text-gray-700"
               }`}>
                 Total sin ubicación
               </div>
-              <div className="text-xs text-gray-400 mt-1">
+              <div className="text-xs text-gray-400 mt-0.5">
                 {filterMode === "no-location" ? "Filtro activo" : "Click para filtrar"}
               </div>
             </button>
@@ -1300,28 +1375,28 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
             {/* Total con ubicación */}
             <button
               onClick={() => zoomToVehicles("with-location")}
-              className={`text-center p-2 rounded-lg transition-colors cursor-pointer group ${
+              className={`text-center p-1.5 rounded-lg transition-colors cursor-pointer group ${
                 filterMode === "with-location" 
                   ? "bg-purple-100 shadow-inner" 
                   : "hover:bg-purple-50"
               }`}
               disabled={cochesConUbicacion.length === 0}
             >
-              <div className={`text-2xl font-bold ${
+              <div className={`text-xl font-bold ${
                 filterMode === "with-location" 
                   ? "text-purple-800" 
                   : "text-purple-600 group-hover:text-purple-700"
               }`}>
                 {cochesConUbicacion.length}
               </div>
-              <div className={`text-sm ${
+              <div className={`text-xs ${
                 filterMode === "with-location" 
                   ? "text-purple-700" 
                   : "text-gray-600 group-hover:text-gray-700"
               }`}>
                 Total con ubicación
               </div>
-              <div className="text-xs text-gray-400 mt-1">
+              <div className="text-xs text-gray-400 mt-0.5">
                 {filterMode === "with-location" ? "Filtro activo" : "Click para ver en mapa"}
               </div>
             </button>
@@ -1329,57 +1404,86 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
             {/* Asignados */}
             <button
               onClick={() => zoomToVehicles("assigned")}
-              className={`text-center p-2 rounded-lg transition-colors cursor-pointer group ${
+              className={`text-center p-1.5 rounded-lg transition-colors cursor-pointer group ${
                 filterMode === "assigned" 
                   ? "bg-green-100 shadow-inner" 
                   : "hover:bg-green-50"
               }`}
               disabled={cochesAsignados.length === 0}
             >
-              <div className={`text-2xl font-bold ${
+              <div className={`text-xl font-bold ${
                 filterMode === "assigned" 
                   ? "text-green-800" 
                   : "text-green-600 group-hover:text-green-700"
               }`}>
                 {cochesAsignados.length}
               </div>
-              <div className={`text-sm ${
+              <div className={`text-xs ${
                 filterMode === "assigned" 
                   ? "text-green-700" 
                   : "text-gray-600 group-hover:text-gray-700"
               }`}>
                 Asignados
               </div>
-              <div className="text-xs text-gray-400 mt-1">
+              <div className="text-xs text-gray-400 mt-0.5">
                 {filterMode === "assigned" ? "Filtro activo" : "Click para ver en mapa"}
+              </div>
+            </button>
+            
+            {/* Reservados */}
+            <button
+              onClick={() => zoomToVehicles("reserved")}
+              className={`text-center p-1.5 rounded-lg transition-colors cursor-pointer group ${
+                filterMode === "reserved" 
+                  ? "bg-amber-100 shadow-inner" 
+                  : "hover:bg-amber-50"
+              }`}
+              disabled={cochesReservados.length === 0}
+            >
+              <div className={`text-xl font-bold ${
+                filterMode === "reserved" 
+                  ? "text-amber-800" 
+                  : "text-amber-600 group-hover:text-amber-700"
+              }`}>
+                {cochesReservados.length}
+              </div>
+              <div className={`text-xs ${
+                filterMode === "reserved" 
+                  ? "text-amber-700" 
+                  : "text-gray-600 group-hover:text-gray-700"
+              }`}>
+                Reservados
+              </div>
+              <div className="text-xs text-gray-400 mt-0.5">
+                {filterMode === "reserved" ? "Filtro activo" : "Click para ver en mapa"}
               </div>
             </button>
             
             {/* Disponibles */}
             <button
               onClick={() => zoomToVehicles("available")}
-              className={`text-center p-2 rounded-lg transition-colors cursor-pointer group ${
+              className={`text-center p-1.5 rounded-lg transition-colors cursor-pointer group ${
                 filterMode === "available" 
                   ? "bg-blue-100 shadow-inner" 
                   : "hover:bg-blue-50"
               }`}
               disabled={cochesDisponibles.length === 0}
             >
-              <div className={`text-2xl font-bold ${
+              <div className={`text-xl font-bold ${
                 filterMode === "available" 
                   ? "text-blue-800" 
                   : "text-blue-500 group-hover:text-blue-600"
               }`}>
                 {cochesDisponibles.length}
               </div>
-              <div className={`text-sm ${
+              <div className={`text-xs ${
                 filterMode === "available" 
                   ? "text-blue-700" 
                   : "text-gray-600 group-hover:text-gray-700"
               }`}>
                 Disponibles
               </div>
-              <div className="text-xs text-gray-400 mt-1">
+              <div className="text-xs text-gray-400 mt-0.5">
                 {filterMode === "available" ? "Filtro activo" : "Click para ver en mapa"}
               </div>
             </button>
@@ -1395,6 +1499,10 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 bg-green-500 rounded-full"></div>
                 <span>Asignado</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 bg-amber-500 rounded-full"></div>
+                <span>Reservado</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 bg-purple-500 rounded-full"></div>
@@ -1424,6 +1532,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
                     switch (filterMode) {
                       case "available": count = cochesDisponibles.length; break
                       case "assigned": count = cochesAsignados.length; break
+                      case "reserved": count = cochesReservados.length; break
                       case "with-location": count = cochesConUbicacion.length; break
                       case "no-location": count = cochesSinUbicacion.length; break
                     }
