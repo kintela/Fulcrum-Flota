@@ -93,7 +93,12 @@ export default function AsignacionesPermanentesList({
     return false
   })
 
-  if (asignacionesFiltradas.length === 0) {
+  // Ordenar por matrícula
+  const asignacionesOrdenadas = [...asignacionesFiltradas].sort((a, b) => 
+    a.matricula.localeCompare(b.matricula)
+  )
+
+  if (asignacionesOrdenadas.length === 0) {
     return (
       <Card>
         <CardHeader>
@@ -116,12 +121,12 @@ export default function AsignacionesPermanentesList({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Car className="h-5 w-5" />
-          Asignaciones Permanentes ({asignacionesFiltradas.length})
+          Asignaciones Permanentes ({asignacionesOrdenadas.length})
         </CardTitle>
       </CardHeader>
       <CardContent>
         <div className="grid gap-4">
-          {asignacionesFiltradas.map((asignacion) => (
+          {asignacionesOrdenadas.map((asignacion) => (
             <Card key={asignacion.id} className="p-4">
               <div className="flex items-start gap-4">
                 {/* Foto del vehículo */}

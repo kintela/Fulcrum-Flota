@@ -86,7 +86,12 @@ export default function ReservasTemporalesList({
     return false
   })
 
-  if (reservasFiltradas.length === 0) {
+  // Ordenar por matrícula
+  const reservasOrdenadas = [...reservasFiltradas].sort((a, b) => 
+    a.matricula.localeCompare(b.matricula)
+  )
+
+  if (reservasOrdenadas.length === 0) {
     return (
       <Card>
         <CardHeader>
@@ -109,12 +114,12 @@ export default function ReservasTemporalesList({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Calendar className="h-5 w-5" />
-          Reservas Temporales ({reservasFiltradas.length})
+          Reservas Temporales ({reservasOrdenadas.length})
         </CardTitle>
       </CardHeader>
       <CardContent>
         <div className="grid gap-4">
-          {reservasFiltradas.map((reserva) => {
+          {reservasOrdenadas.map((reserva) => {
             const estadoInfo = getEstadoReserva(reserva)
             const puedeCancelarse = puedeSerCancelada(reserva)
             
