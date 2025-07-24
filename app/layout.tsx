@@ -6,6 +6,9 @@ import { getAuthSession } from "@/lib/get-session"
 import AuthProvider from "@/components/auth-provider"
 import Header from "@/components/header"
 
+// Inicializar el sistema de scheduler automáticamente
+import "@/lib/init-scheduler"
+
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {

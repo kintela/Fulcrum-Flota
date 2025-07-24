@@ -11,6 +11,11 @@ export default withAuth(
       return NextResponse.next()
     }
 
+    // Si está en una ruta de cron, permitir acceso (se verifica el token dentro del endpoint)
+    if (pathname.startsWith('/api/cron')) {
+      return NextResponse.next()
+    }
+
     // Si no hay token y no está en una ruta de auth, redirigir al login
     if (!token) {
       const signInUrl = new URL('/auth/signin', req.url)
@@ -27,6 +32,10 @@ export default withAuth(
         if (req.nextUrl.pathname.startsWith('/auth')) {
           return true
         }
+        // Permitir acceso a rutas de cron sin token (se verifica dentro del endpoint)
+        if (req.nextUrl.pathname.startsWith('/api/cron')) {
+          return true
+        }
         // Para todas las demás rutas, requerir token
         return !!token
       },
@@ -39,11 +48,12 @@ export const config = {
     /*
      * Match all request paths except for the ones starting with:
      * - api/auth (auth API routes)
+     * - api/cron (cron job API routes)
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - public folder
      */
-    "/((?!api/auth|_next/static|_next/image|favicon.ico|public/).*)",
+    "/((?!api/auth|api/cron|_next/static|_next/image|favicon.ico|public/).*)",
   ],
 }
