@@ -187,6 +187,25 @@ export async function verificarReservasVencidas() {
     // Procesar cada reserva vencida
     for (const reserva of reservasVencidas) {
       try {
+        // ⚡ BLOQUEO ATÓMICO: Marcar como "en proceso" ANTES de enviar mensajes
+        const { data: reservaBloqueada, error: errorBloqueo } = await supabase
+          .from('reservas')
+          .update({ 
+            notificacion_enviada: true,  // Marcar inmediatamente para evitar duplicados
+            fecha_notificacion: ahora.toISOString()
+          })
+          .eq('id', reserva.id)
+          .eq('notificacion_enviada', false)  // Solo si aún no está notificada
+          .select()
+          .single()
+
+        if (errorBloqueo || !reservaBloqueada) {
+          console.log(`⚠️ Reserva ${reserva.id} ya fue procesada por otro proceso, saltando...`)
+          continue;
+        }
+
+        console.log(`🔒 Reserva ${reserva.id} bloqueada para procesamiento exclusivo`)
+
         // Validar fecha sin corrección - usar tal como está en BD
         if (!reserva.fecha_fin || reserva.fecha_fin === null) {
           console.error(`❌ Reserva ${reserva.id} tiene fecha_fin null/undefined, saltando...`)
@@ -262,31 +281,37 @@ export async function verificarReservasVencidas() {
           console.log(`⚠️ Empleado ${empleado.nombre} no tiene teléfono configurado`)
         }
 
-        // 3. Marcar como notificada si al menos uno fue enviado exitosamente
+        // 3. Si se enviaron notificaciones, marcar estado como completada
         if (emailEnviado || whatsappEnviado) {
-          // Marcar como notificada Y cambiar estado a completada
+          // Solo actualizar el estado, ya marcamos notificacion_enviada al principio
           const { error: updateError } = await supabase
             .from('reservas')
             .update({ 
-              notificacion_enviada: true,
-              fecha_notificacion: ahora.toISOString(),
-              estado: 'completada'  // ← NUEVO: Marcar como completada automáticamente
+              estado: 'completada'  // Solo cambiar estado
             })
             .eq('id', reserva.id)
 
           if (updateError) {
-            console.error(`❌ Error actualizando reserva ${reserva.id}:`, updateError)
-            erroresEnvio++
-          } else {
-            reservasNotificadas++
-            const canales = []
-            if (emailEnviado) canales.push('email')
-            if (whatsappEnviado) canales.push('WhatsApp')
-            console.log(`✅ Notificación enviada por ${canales.join(' y ')}, reserva marcada como completada: ${reserva.id}`)
+            console.error(`❌ Error actualizando estado de reserva ${reserva.id}:`, updateError)
           }
+
+          reservasNotificadas++
+          const canales = []
+          if (emailEnviado) canales.push('email')
+          if (whatsappEnviado) canales.push('WhatsApp')
+          console.log(`✅ Notificación enviada por ${canales.join(' y ')}, reserva marcada como completada: ${reserva.id}`)
         } else {
-          erroresEnvio++
+          // Si no se pudo enviar nada, revertir el bloqueo
           console.error(`❌ No se pudo enviar notificación por ningún canal para reserva ${reserva.id}`)
+          await supabase
+            .from('reservas')
+            .update({ 
+              notificacion_enviada: false,
+              fecha_notificacion: null
+            })
+            .eq('id', reserva.id)
+          
+          erroresEnvio++
         }
 
       } catch (error) {
