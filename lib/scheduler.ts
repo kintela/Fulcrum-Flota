@@ -58,12 +58,15 @@ export function iniciarCronJob() {
 
   console.log('⏰ Cron job adicional: DESACTIVADO temporalmente para evitar duplicados')
   
+  // PRUEBA INICIAL DESHABILITADA PARA EVITAR ENVÍOS AUTOMÁTICOS
   // Para desarrollo: ejecutar una prueba inmediata (después de 10 segundos)
-  if (process.env.NODE_ENV === 'development') {
+  if (false) { // <-- DESHABILITADO COMPLETAMENTE
     setTimeout(() => {
       console.log('🧪 Ejecutando prueba inicial del scheduler en 10 segundos...')
       ejecutarVerificacionNotificaciones()
     }, 10000)
+  } else {
+    console.log('🚫 Prueba inicial del scheduler DESHABILITADA para evitar envíos automáticos')
   }
 }
 
