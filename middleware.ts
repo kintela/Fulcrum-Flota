@@ -16,6 +16,11 @@ export default withAuth(
       return NextResponse.next()
     }
 
+    // Si está en una ruta de debug, permitir acceso sin autenticación
+    if (pathname.startsWith('/api/debug') || pathname.startsWith('/api/public')) {
+      return NextResponse.next()
+    }
+
     // Si no hay token y no está en una ruta de auth, redirigir al login
     if (!token) {
       const signInUrl = new URL('/auth/signin', req.url)
@@ -36,6 +41,10 @@ export default withAuth(
         if (req.nextUrl.pathname.startsWith('/api/cron')) {
           return true
         }
+        // Permitir acceso a rutas de debug sin token
+        if (req.nextUrl.pathname.startsWith('/api/debug') || req.nextUrl.pathname.startsWith('/api/public')) {
+          return true
+        }
         // Para todas las demás rutas, requerir token
         return !!token
       },
@@ -49,11 +58,13 @@ export const config = {
      * Match all request paths except for the ones starting with:
      * - api/auth (auth API routes)
      * - api/cron (cron job API routes)
+     * - api/debug (debug API routes)
+     * - api/public (public API routes)
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - public folder
      */
-    "/((?!api/auth|api/cron|_next/static|_next/image|favicon.ico|public/).*)",
+    "/((?!api/auth|api/cron|api/debug|api/public|_next/static|_next/image|favicon.ico|public/).*)",
   ],
 }
