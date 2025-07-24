@@ -2,6 +2,7 @@
 
 import { supabase } from "@/lib/supabase"
 import { enviarEmailReservaVencida } from "@/lib/email"
+import { sendWhatsAppNotification, formatSpanishPhone } from "@/lib/whatsapp"
 
 export interface ReservaVencida {
   id: number
@@ -13,6 +14,7 @@ export interface ReservaVencida {
     nombre: string
     apellidos: string
     email: string
+    movil?: string
   }
 }
 
@@ -116,11 +118,12 @@ export async function verificarReservasVencidas() {
         empleados!inner (
           nombre,
           apellidos,
-          email
+          email,
+          movil
         )
       `)
       .eq('estado', 'activa')
-      .is('notificacion_enviada', null)
+      .or('notificacion_enviada.is.null,notificacion_enviada.eq.false')
 
     if (error) {
       console.error('❌ Error consultando reservas activas:', error)
@@ -138,13 +141,15 @@ export async function verificarReservasVencidas() {
     if (todasReservasActivas) {
       for (const reserva of todasReservasActivas) {
         try {
-          const fechaCorregida = corregirFechaDesdeBaseDatos(reserva.fecha_fin)
-          const estaVencida = fechaCorregida < haceUnaHora
-          const horasVencida = (ahora.getTime() - fechaCorregida.getTime()) / (1000 * 60 * 60)
+          // NO corregir fecha - usar tal como está en BD (ya está en UTC)
+          const fechaFin = new Date(reserva.fecha_fin)
+          const estaVencida = fechaFin < haceUnaHora
+          const horasVencida = (ahora.getTime() - fechaFin.getTime()) / (1000 * 60 * 60)
           
           console.log(`   📋 Reserva ${reserva.id} (${reserva.matricula}):`)
           console.log(`      Fecha BD: ${reserva.fecha_fin}`)
-          console.log(`      Fecha corregida: ${fechaCorregida.toISOString()}`)
+          console.log(`      Fecha parseada: ${fechaFin.toISOString()}`)
+          console.log(`      Fecha local: ${fechaFin.toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}`)
           console.log(`      Horas transcurridas: ${horasVencida.toFixed(2)}`)
           console.log(`      ¿Vencida? ${estaVencida}`)
           console.log(`      Notificación enviada: ${reserva.notificacion_enviada}`)
@@ -182,41 +187,83 @@ export async function verificarReservasVencidas() {
     // Procesar cada reserva vencida
     for (const reserva of reservasVencidas) {
       try {
-        // Validar y corregir interpretación de fecha
+        // Validar fecha sin corrección - usar tal como está en BD
         if (!reserva.fecha_fin || reserva.fecha_fin === null) {
           console.error(`❌ Reserva ${reserva.id} tiene fecha_fin null/undefined, saltando...`)
           erroresEnvio++
           continue;
         }
         
-        // Usar la fecha corregida (asumiendo que fue introducida en horario español)
-        const fechaFinCorregida = corregirFechaDesdeBaseDatos(reserva.fecha_fin)
+        // Usar la fecha tal como está en BD (ya está en UTC correctamente)
+        const fechaFin = new Date(reserva.fecha_fin)
         
         // Verificar si la fecha parseada es válida
-        if (isNaN(fechaFinCorregida.getTime())) {
+        if (isNaN(fechaFin.getTime())) {
           console.error(`❌ Reserva ${reserva.id} tiene fecha_fin inválida: ${reserva.fecha_fin}, saltando...`)
           erroresEnvio++
           continue;
         }
         
-        const horasVencido = Math.ceil((ahora.getTime() - fechaFinCorregida.getTime()) / (1000 * 60 * 60))
+        const horasVencido = Math.ceil((ahora.getTime() - fechaFin.getTime()) / (1000 * 60 * 60))
 
         console.log(`📨 Enviando notificación para reserva ${reserva.id} - ${reserva.matricula} (${horasVencido}h vencida)`)
 
-        // Enviar email
-        const resultadoEmail = await enviarEmailReservaVencida(
-          (reserva.empleados as any).email,
-          `${(reserva.empleados as any).nombre} ${(reserva.empleados as any).apellidos}`,
-          {
-            matricula: reserva.matricula,
-            marca: 'N/A', // No disponible en esta tabla
-            modelo: 'N/A' // No disponible en esta tabla
-          },
-          fechaFinCorregida,
-          horasVencido
-        )
+        const empleado = reserva.empleados as any
+        let emailEnviado = false
+        let whatsappEnviado = false
 
-        if (resultadoEmail.success) {
+        // 1. Intentar enviar email
+        try {
+          const resultadoEmail = await enviarEmailReservaVencida(
+            empleado.email,
+            `${empleado.nombre} ${empleado.apellidos}`,
+            {
+              matricula: reserva.matricula,
+              marca: 'N/A', // No disponible en esta tabla
+              modelo: 'N/A' // No disponible en esta tabla
+            },
+            fechaFin,
+            horasVencido
+          )
+
+          if (resultadoEmail.success) {
+            emailEnviado = true
+            console.log(`✅ Email enviado exitosamente a ${empleado.email}`)
+          } else {
+            console.error(`❌ Error enviando email: ${resultadoEmail.error}`)
+          }
+        } catch (error) {
+          console.error(`❌ Error enviando email a ${empleado.email}:`, error)
+        }
+
+        // 2. Intentar enviar WhatsApp si tiene móvil
+        if (empleado.movil) {
+          try {
+            const telefonoFormateado = formatSpanishPhone(empleado.movil)
+            console.log(`📱 Enviando WhatsApp a ${telefonoFormateado}`)
+            
+            const resultadoWhatsApp = await sendWhatsAppNotification(
+              telefonoFormateado,
+              `${empleado.nombre} ${empleado.apellidos}`,
+              reserva.matricula,
+              horasVencido
+            )
+
+            if (resultadoWhatsApp.success) {
+              whatsappEnviado = true
+              console.log(`✅ WhatsApp enviado exitosamente a ${telefonoFormateado}`)
+            } else {
+              console.error(`❌ Error enviando WhatsApp: ${resultadoWhatsApp.error}`)
+            }
+          } catch (error) {
+            console.error(`❌ Error enviando WhatsApp a ${empleado.movil}:`, error)
+          }
+        } else {
+          console.log(`⚠️ Empleado ${empleado.nombre} no tiene teléfono configurado`)
+        }
+
+        // 3. Marcar como notificada si al menos uno fue enviado exitosamente
+        if (emailEnviado || whatsappEnviado) {
           // Marcar como notificada Y cambiar estado a completada
           const { error: updateError } = await supabase
             .from('reservas')
@@ -229,13 +276,17 @@ export async function verificarReservasVencidas() {
 
           if (updateError) {
             console.error(`❌ Error actualizando reserva ${reserva.id}:`, updateError)
+            erroresEnvio++
           } else {
             reservasNotificadas++
-            console.log(`✅ Notificación enviada, reserva marcada como completada: ${reserva.id}`)
+            const canales = []
+            if (emailEnviado) canales.push('email')
+            if (whatsappEnviado) canales.push('WhatsApp')
+            console.log(`✅ Notificación enviada por ${canales.join(' y ')}, reserva marcada como completada: ${reserva.id}`)
           }
         } else {
           erroresEnvio++
-          console.error(`❌ Error enviando email para reserva ${reserva.id}:`, resultadoEmail.error)
+          console.error(`❌ No se pudo enviar notificación por ningún canal para reserva ${reserva.id}`)
         }
 
       } catch (error) {
