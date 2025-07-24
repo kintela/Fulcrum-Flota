@@ -16,6 +16,11 @@ export interface ReservaVencida {
     email: string
     movil?: string
   }
+  coche: {
+    matricula: string
+    marca: string
+    modelo: string
+  }
 }
 
 // Función para corregir fechas mal almacenadas en la BD
@@ -83,6 +88,11 @@ export async function verificarReservasVencidas() {
           apellidos,
           email,
           movil
+        ),
+        coches!inner (
+          matricula,
+          marca,
+          modelo
         )
       `)
       .eq('estado', 'activa')
@@ -206,6 +216,7 @@ export async function verificarReservasVencidas() {
         console.log(`📨 Enviando notificación para reserva ${reserva.id} - ${reserva.matricula} (${tiempoVencidoTexto} vencida)`)
 
         const empleado = reserva.empleados as any
+        const coche = reserva.coches as any
         let emailEnviado = false
         let whatsappEnviado = false
         let intentosEnvio = []
@@ -215,7 +226,11 @@ export async function verificarReservasVencidas() {
           const resultadoEmail = await enviarEmailReservaVencida(
             empleado.email,
             `${empleado.nombre} ${empleado.apellidos}`,
-            reserva.matricula,
+            {
+              matricula: coche.matricula,
+              marca: coche.marca,
+              modelo: coche.modelo
+            },
             new Date(reserva.fecha_inicio),
             fechaFin,
             tiempoVencidoTexto
@@ -243,7 +258,7 @@ export async function verificarReservasVencidas() {
             const resultadoWhatsApp = await sendWhatsAppNotification(
               telefonoFormateado,
               `${empleado.nombre} ${empleado.apellidos}`,
-              reserva.matricula,
+              coche.matricula,
               new Date(reserva.fecha_inicio),
               fechaFin,
               tiempoVencidoTexto

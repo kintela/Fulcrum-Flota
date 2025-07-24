@@ -32,6 +32,11 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           apellidos,
           email,
           movil
+        ),
+        coches!inner (
+          matricula,
+          marca,
+          modelo
         )
       `)
       .eq('id', reservaId)
@@ -49,6 +54,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const fechaInicio = new Date(reserva.fecha_inicio)
     const fechaFin = new Date(reserva.fecha_fin)
     const horasReales = (ahora.getTime() - fechaFin.getTime()) / (1000 * 60 * 60)
+    
+    // Extraer información del vehículo
+    const coche = reserva.coches as any
     
     // Calcular tiempo exacto en horas y minutos
     const milisegundosVencidos = ahora.getTime() - fechaFin.getTime()
@@ -71,6 +79,12 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       
       reserva: {
         ...reserva,
+        vehiculo: {
+          matricula: coche.matricula,
+          marca: coche.marca,
+          modelo: coche.modelo,
+          descripcionCompleta: `${coche.marca} ${coche.modelo} (${coche.matricula})`
+        },
         fechaInicioEspañola: fechaInicio.toLocaleString('es-ES', { 
           timeZone: 'Europe/Madrid',
           day: '2-digit',
