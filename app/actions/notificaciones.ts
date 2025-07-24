@@ -120,7 +120,7 @@ export async function verificarReservasVencidas() {
         )
       `)
       .eq('estado', 'activa')
-      .or('notificacion_enviada.is.null,notificacion_enviada.eq.false')
+      .is('notificacion_enviada', null)
 
     if (error) {
       console.error('❌ Error consultando reservas activas:', error)
@@ -142,14 +142,19 @@ export async function verificarReservasVencidas() {
           const estaVencida = fechaCorregida < haceUnaHora
           const horasVencida = (ahora.getTime() - fechaCorregida.getTime()) / (1000 * 60 * 60)
           
-          console.log(`   � Reserva ${reserva.id} (${reserva.matricula}):`)
+          console.log(`   📋 Reserva ${reserva.id} (${reserva.matricula}):`)
           console.log(`      Fecha BD: ${reserva.fecha_fin}`)
           console.log(`      Fecha corregida: ${fechaCorregida.toISOString()}`)
           console.log(`      Horas transcurridas: ${horasVencida.toFixed(2)}`)
           console.log(`      ¿Vencida? ${estaVencida}`)
+          console.log(`      Notificación enviada: ${reserva.notificacion_enviada}`)
           
-          if (estaVencida) {
+          // IMPORTANTE: Verificación doble para evitar duplicados
+          if (estaVencida && reserva.notificacion_enviada !== true) {
             reservasVencidas.push(reserva)
+            console.log(`      ✅ Agregada para notificación`)
+          } else {
+            console.log(`      ❌ No agregada (vencida: ${estaVencida}, notificada: ${reserva.notificacion_enviada})`)
           }
         } catch (error) {
           console.error(`❌ Error procesando reserva ${reserva.id}:`, error)

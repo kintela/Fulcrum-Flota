@@ -33,12 +33,15 @@ async function ejecutarVerificacionNotificaciones() {
 // Programar la tarea para ejecutarse cada hora
 export function iniciarCronJob() {
   console.log('🚀 Iniciando sistema de notificaciones programadas')
+  console.log(`🕒 Hora actual: ${new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}`)
   
   // Verificar configuración
   if (!process.env.CRON_SECRET_TOKEN) {
     console.error('❌ CRON_SECRET_TOKEN no configurado')
     return
   }
+
+  console.log('✅ CRON_SECRET_TOKEN configurado correctamente')
 
   // Ejecutar cada hora en el minuto 0
   cron.schedule('0 * * * *', ejecutarVerificacionNotificaciones, {
@@ -47,12 +50,21 @@ export function iniciarCronJob() {
 
   console.log('⏰ Cron job programado: cada hora en el minuto 0')
   
+  // COMENTADO temporalmente para evitar duplicados
   // También programar una verificación cada 15 minutos durante horas laborales (8-20h)
-  cron.schedule('*/15 8-20 * * 1-5', ejecutarVerificacionNotificaciones, {
-    timezone: "Europe/Madrid"
-  })
+  // cron.schedule('*/15 8-20 * * 1-5', ejecutarVerificacionNotificaciones, {
+  //   timezone: "Europe/Madrid"
+  // })
 
-  console.log('⏰ Cron job adicional: cada 15 minutos de 8:00 a 20:00, Lunes a Viernes')
+  console.log('⏰ Cron job adicional: DESACTIVADO temporalmente para evitar duplicados')
+  
+  // Para desarrollo: ejecutar una prueba inmediata (después de 10 segundos)
+  if (process.env.NODE_ENV === 'development') {
+    setTimeout(() => {
+      console.log('🧪 Ejecutando prueba inicial del scheduler en 10 segundos...')
+      ejecutarVerificacionNotificaciones()
+    }, 10000)
+  }
 }
 
 // Función para detener todos los cron jobs

@@ -4,18 +4,29 @@ import { probarConfiguracionEmail, enviarEmailPrueba } from '@/lib/email'
 
 export async function GET(request: NextRequest) {
   try {
-    // Verificar si la petición viene de un cron job autorizado
+    // Verificar autorización: puede ser nuestro token o headers de Vercel Cron
     const authHeader = request.headers.get('authorization')
-    const expectedToken = process.env.CRON_SECRET_TOKEN
+    const vercelCronSecret = request.headers.get('authorization')
+    const userAgent = request.headers.get('user-agent')
     
-    if (!expectedToken || authHeader !== `Bearer ${expectedToken}`) {
+    const expectedToken = process.env.CRON_SECRET_TOKEN
+    const isVercelCron = userAgent?.includes('vercel-cron') || 
+                        request.headers.get('x-vercel-cron') === '1'
+    
+    // Permitir si es Vercel Cron o si tiene nuestro token
+    if (!isVercelCron && (!expectedToken || authHeader !== `Bearer ${expectedToken}`)) {
       return NextResponse.json(
-        { error: 'No autorizado' }, 
+        { 
+          error: 'No autorizado',
+          timestamp: new Date().toISOString(),
+          source: isVercelCron ? 'vercel-cron' : 'manual'
+        }, 
         { status: 401 }
       )
     }
 
     console.log('🚀 Iniciando verificación programada de reservas vencidas')
+    console.log(`📍 Fuente: ${isVercelCron ? 'Vercel Cron' : 'Manual/Local'}`)
     
     // Verificar configuración de email
     const emailConfig = await probarConfiguracionEmail()
