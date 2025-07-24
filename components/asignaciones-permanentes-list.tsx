@@ -234,9 +234,11 @@ export default function AsignacionesPermanentesList({
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
-                        <AlertDialogTitle className="flex items-center gap-2">
-                          <AlertTriangle className="h-5 w-5 text-amber-500" />
-                          Confirmar liberación
+                        <AlertDialogTitle asChild>
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5 text-amber-500" />
+                            Confirmar liberación
+                          </div>
                         </AlertDialogTitle>
                         <AlertDialogDescription>
                           ¿Estás seguro de que deseas liberar el vehículo{' '}
