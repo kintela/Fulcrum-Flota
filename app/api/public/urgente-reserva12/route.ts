@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase'
 
 export async function GET() {
   try {
-    console.log('🔍 URGENTE: Verificando estado de reserva ID 12')
+    console.log('🔍 URGENTE: Verificando estado de reserva ID 14')
     
     const { data: reserva, error } = await supabase
       .from("reservas")
@@ -11,6 +11,7 @@ export async function GET() {
         id,
         matricula,
         empleado_id,
+        fecha_inicio,
         fecha_fin,
         estado,
         notificacion_enviada,
@@ -24,7 +25,7 @@ export async function GET() {
           movil
         )
       `)
-      .eq('id', 12)
+      .eq('id', 14)
       .single()
 
     if (error) {
@@ -32,8 +33,14 @@ export async function GET() {
     }
 
     const ahora = new Date()
+    const fechaInicio = new Date(reserva.fecha_inicio)
     const fechaFin = new Date(reserva.fecha_fin)
     const horasReales = (ahora.getTime() - fechaFin.getTime()) / (1000 * 60 * 60)
+    
+    // Calcular tiempo exacto en horas y minutos
+    const milisegundosVencidos = ahora.getTime() - fechaFin.getTime()
+    const horasVencidas = Math.floor(milisegundosVencidos / (1000 * 60 * 60))
+    const minutosVencidos = Math.floor((milisegundosVencidos % (1000 * 60 * 60)) / (1000 * 60))
 
     const diagnostico = {
       timestamp: ahora.toISOString(),
@@ -41,8 +48,11 @@ export async function GET() {
       
       reserva: {
         ...reserva,
-        fechaFinParsed: fechaFin.toISOString(),
-        fechaFinLocal: fechaFin.toLocaleString('es-ES', { timeZone: 'Europe/Madrid' }),
+        fechaInicioEspañola: fechaInicio.toLocaleString('es-ES', { timeZone: 'Europe/Madrid' }),
+        fechaFinEspañola: fechaFin.toLocaleString('es-ES', { timeZone: 'Europe/Madrid' }),
+        fechaInicioUTC: fechaInicio.toISOString(),
+        fechaFinUTC: fechaFin.toISOString(),
+        tiempoVencidoExacto: `${horasVencidas}h ${minutosVencidos}m`,
         horasTranscurridasReales: Math.round(horasReales * 100) / 100
       },
       
