@@ -165,6 +165,28 @@ export async function verificarReservasVencidas() {
         console.log(`   Milisegundos transcurridos: ${milisegundosTranscurridos}`)
         console.log(`   Horas exactas: ${horasTranscurridasExactas.toFixed(2)}`)
         console.log(`   Horas redondeadas: ${horasVencido}`)
+        
+        // DIAGNÓSTICO ESPECIAL PARA RESERVA 12
+        if (reserva.id === 12) {
+          console.log(`🔍 DIAGNÓSTICO ESPECIAL RESERVA 12:`)
+          console.log(`   Tiempo ahora (getTime()): ${ahora.getTime()}`)
+          console.log(`   Tiempo fecha_fin (getTime()): ${fechaFin.getTime()}`)
+          console.log(`   Diferencia en ms: ${milisegundosTranscurridos}`)
+          console.log(`   Diferencia en minutos: ${(milisegundosTranscurridos / (1000 * 60)).toFixed(2)}`)
+          console.log(`   Diferencia en horas: ${horasTranscurridasExactas.toFixed(4)}`)
+          
+          // Test manual: si la reserva caducó a las 09:30 y ahora son las 15:27
+          // Debería ser: 15:27 - 09:30 = 5:57 = 5.95 horas ≈ 6 horas
+          const esperado = 6.0
+          const diferencia = Math.abs(horasTranscurridasExactas - esperado)
+          console.log(`   VERIFICACIÓN: Esperado ~${esperado}h, Calculado: ${horasTranscurridasExactas.toFixed(2)}h, Diferencia: ${diferencia.toFixed(2)}h`)
+          
+          if (diferencia > 0.5) {
+            console.log(`   ⚠️ PROBLEMA: Diferencia > 0.5h suggests timezone issue!`)
+            console.log(`   🔧 POSIBLE CAUSA: La fecha en BD puede estar mal guardada`)
+          }
+        }
+        
         console.log(`📨 Enviando notificación para reserva ${reserva.id} - ${reserva.matricula} (${horasVencido}h vencida)`)
 
         const empleado = reserva.empleados as any
