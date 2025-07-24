@@ -37,6 +37,20 @@ function corregirFechaDesdeBaseDatos(fechaBD: string): Date {
   return fechaEspañola
 }
 
+// Función para calcular tiempo vencido en formato legible
+function calcularTiempoVencido(milisegundosTranscurridos: number): string {
+  const horas = Math.floor(milisegundosTranscurridos / (1000 * 60 * 60))
+  const minutos = Math.floor((milisegundosTranscurridos % (1000 * 60 * 60)) / (1000 * 60))
+  
+  if (horas > 0 && minutos > 0) {
+    return `${horas} hora${horas !== 1 ? 's' : ''} y ${minutos} minuto${minutos !== 1 ? 's' : ''}`
+  } else if (horas > 0) {
+    return `${horas} hora${horas !== 1 ? 's' : ''}`
+  } else {
+    return `${minutos} minuto${minutos !== 1 ? 's' : ''}`
+  }
+}
+
 export async function verificarReservasVencidas() {
   try {
     console.log('🔍 Verificando reservas vencidas...')
@@ -60,6 +74,7 @@ export async function verificarReservasVencidas() {
         id,
         matricula,
         empleado_id,
+        fecha_inicio,
         fecha_fin,
         estado,
         notificacion_enviada,
@@ -153,26 +168,27 @@ export async function verificarReservasVencidas() {
           continue;
         }
         
-        // Calcular horas transcurridas con más precisión
-        const milisegundosTranscurridos = ahora.getTime() - fechaFin.getTime()
-        const horasTranscurridasExactas = milisegundosTranscurridos / (1000 * 60 * 60)
+        // Calcular tiempo vencido con precisión
+        const milisegundosVencidos = ahora.getTime() - fechaFin.getTime()
+        const tiempoVencidoTexto = calcularTiempoVencido(milisegundosVencidos)
+        const horasTranscurridasExactas = milisegundosVencidos / (1000 * 60 * 60)
         const horasVencido = Math.round(horasTranscurridasExactas)
 
         console.log(`📨 CÁLCULO DETALLADO para reserva ${reserva.id} - ${reserva.matricula}:`)
         console.log(`   Ahora UTC: ${ahora.toISOString()} (${ahora.toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })})`)
         console.log(`   Fecha fin BD: ${reserva.fecha_fin}`)
         console.log(`   Fecha fin parseada: ${fechaFin.toISOString()} (${fechaFin.toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })})`)
-        console.log(`   Milisegundos transcurridos: ${milisegundosTranscurridos}`)
+        console.log(`   Milisegundos transcurridos: ${milisegundosVencidos}`)
         console.log(`   Horas exactas: ${horasTranscurridasExactas.toFixed(2)}`)
-        console.log(`   Horas redondeadas: ${horasVencido}`)
+        console.log(`   Tiempo vencido: ${tiempoVencidoTexto}`)
         
         // DIAGNÓSTICO ESPECIAL PARA RESERVA 12
         if (reserva.id === 12) {
           console.log(`🔍 DIAGNÓSTICO ESPECIAL RESERVA 12:`)
           console.log(`   Tiempo ahora (getTime()): ${ahora.getTime()}`)
           console.log(`   Tiempo fecha_fin (getTime()): ${fechaFin.getTime()}`)
-          console.log(`   Diferencia en ms: ${milisegundosTranscurridos}`)
-          console.log(`   Diferencia en minutos: ${(milisegundosTranscurridos / (1000 * 60)).toFixed(2)}`)
+          console.log(`   Diferencia en ms: ${milisegundosVencidos}`)
+          console.log(`   Diferencia en minutos: ${(milisegundosVencidos / (1000 * 60)).toFixed(2)}`)
           console.log(`   Diferencia en horas: ${horasTranscurridasExactas.toFixed(4)}`)
           
           // Test manual: si la reserva caducó a las 09:30 y ahora son las 15:27
@@ -186,8 +202,8 @@ export async function verificarReservasVencidas() {
             console.log(`   🔧 POSIBLE CAUSA: La fecha en BD puede estar mal guardada`)
           }
         }
-        
-        console.log(`📨 Enviando notificación para reserva ${reserva.id} - ${reserva.matricula} (${horasVencido}h vencida)`)
+
+        console.log(`📨 Enviando notificación para reserva ${reserva.id} - ${reserva.matricula} (${tiempoVencidoTexto} vencida)`)
 
         const empleado = reserva.empleados as any
         let emailEnviado = false
@@ -199,13 +215,10 @@ export async function verificarReservasVencidas() {
           const resultadoEmail = await enviarEmailReservaVencida(
             empleado.email,
             `${empleado.nombre} ${empleado.apellidos}`,
-            {
-              matricula: reserva.matricula,
-              marca: 'N/A',
-              modelo: 'N/A'
-            },
+            reserva.matricula,
+            new Date(reserva.fecha_inicio),
             fechaFin,
-            horasVencido
+            tiempoVencidoTexto
           )
 
           if (resultadoEmail.success) {
@@ -231,7 +244,9 @@ export async function verificarReservasVencidas() {
               telefonoFormateado,
               `${empleado.nombre} ${empleado.apellidos}`,
               reserva.matricula,
-              horasVencido
+              new Date(reserva.fecha_inicio),
+              fechaFin,
+              tiempoVencidoTexto
             )
 
             if (resultadoWhatsApp.success) {
