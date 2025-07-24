@@ -16,6 +16,11 @@ export interface ReservaVencida {
     email: string
     movil?: string
   }
+  coche: {
+    matricula: string
+    marca: string
+    modelo: string
+  }
 }
 
 // Función para corregir fechas mal almacenadas en la BD
@@ -37,6 +42,20 @@ function corregirFechaDesdeBaseDatos(fechaBD: string): Date {
   return fechaEspañola
 }
 
+// Función para calcular tiempo vencido en formato legible
+function calcularTiempoVencido(milisegundosTranscurridos: number): string {
+  const horas = Math.floor(milisegundosTranscurridos / (1000 * 60 * 60))
+  const minutos = Math.floor((milisegundosTranscurridos % (1000 * 60 * 60)) / (1000 * 60))
+  
+  if (horas > 0 && minutos > 0) {
+    return `${horas} hora${horas !== 1 ? 's' : ''} y ${minutos} minuto${minutos !== 1 ? 's' : ''}`
+  } else if (horas > 0) {
+    return `${horas} hora${horas !== 1 ? 's' : ''}`
+  } else {
+    return `${minutos} minuto${minutos !== 1 ? 's' : ''}`
+  }
+}
+
 export async function verificarReservasVencidas() {
   try {
     console.log('🔍 Verificando reservas vencidas...')
@@ -50,60 +69,8 @@ export async function verificarReservasVencidas() {
     console.log(`🕒 Hora actual UTC: ${ahora.toISOString()}`)
     console.log(`🕒 Hora actual local (Madrid): ${ahora.toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}`)
     console.log(`⏰ Buscando reservas que finalizaron antes de: ${haceUnaHora.toISOString()}`)
-    console.log(`⏰ Hace una hora (UTC): ${haceUnaHora.toLocaleString('en-US', { timeZone: 'UTC' })}`)
-    console.log(`⏰ Hace una hora (Madrid): ${haceUnaHora.toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}`)
-    console.log(`📋 IMPORTANTE: Trabajamos en UTC. En verano Madrid = UTC+2`)
-    console.log(`📋 Si son las 18:00 en Madrid, son las 16:00 UTC`)
-    console.log(`📋 Reserva termina 15:30 UTC = 17:30 Madrid`)
-    
-    // Test específico para la reserva 10 - PROBLEMA DETECTADO!
-    // La fecha en BD es 2025-07-23 15:30:00+00 pero fue seleccionada en horario español
-    // Esto significa que el usuario seleccionó 15:30 hora española pero se guardó como 15:30 UTC
-    
-    // CORRECCIÓN: La reserva realmente termina a las 15:30 hora española
-    // que son las 13:30 UTC en verano (España = UTC+2)
-    const fechaRealEspañola = new Date('2025-07-23T15:30:00+02:00') // 15:30 hora española
-    const fechaRealUTC = new Date('2025-07-23T13:30:00.000Z') // Equivalente en UTC
-    
-    const horasTranscurridasReales = (ahora.getTime() - fechaRealUTC.getTime()) / (1000 * 60 * 60)
-    console.log(`🧪 TEST RESERVA 10 (CORRIGIENDO TIMEZONE):`)
-    console.log(`   ❌ BD almacena: 2025-07-23 15:30:00+00 (incorrecto)`)
-    console.log(`   ✅ Hora real española: ${fechaRealEspañola.toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}`)
-    console.log(`   ✅ Equivalente UTC: ${fechaRealUTC.toISOString()}`)
-    console.log(`   Hora actual UTC: ${ahora.toISOString()}`)
-    console.log(`   Hora actual Madrid: ${ahora.toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}`)
-    console.log(`   Horas transcurridas (corregidas): ${horasTranscurridasReales.toFixed(2)}`)
-    console.log(`   ¿Está vencida ahora? ${fechaRealUTC < haceUnaHora}`)
-    console.log(`   📋 EXPLICACIÓN: 15:30 España = 13:30 UTC. Si ahora son 16:00 UTC, han pasado 2.5h`)
 
-    // Verificar datos raw de la reserva 10 en la base de datos
-    const { data: reserva10Raw } = await supabase
-      .from("reservas")
-      .select('id, matricula, fecha_fin, estado')
-      .eq('id', 10)
-      .single()
-    
-    if (reserva10Raw) {
-      console.log(`📋 DATOS RAW RESERVA 10 EN BD:`)
-      console.log(`   ID: ${reserva10Raw.id}`)
-      console.log(`   Matrícula: ${reserva10Raw.matricula}`)
-      console.log(`   Fecha fin raw: ${reserva10Raw.fecha_fin}`)
-      console.log(`   Estado: ${reserva10Raw.estado}`)
-      
-      // Parsear la fecha tal como viene de la BD y corregirla
-      const fechaBDOriginal = new Date(reserva10Raw.fecha_fin)
-      const fechaCorregida = corregirFechaDesdeBaseDatos(reserva10Raw.fecha_fin)
-      
-      console.log(`   Fecha BD original: ${fechaBDOriginal.toISOString()} (${fechaBDOriginal.toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })})`)
-      console.log(`   Fecha corregida: ${fechaCorregida.toISOString()} (${fechaCorregida.toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })})`)
-      console.log(`   ¿Está vencida (corregida)? ${fechaCorregida < haceUnaHora}`)
-      
-      const horasVencidaCorregida = (ahora.getTime() - fechaCorregida.getTime()) / (1000 * 60 * 60)
-      console.log(`   Horas vencida (corregida): ${horasVencidaCorregida.toFixed(2)}`)
-    }
-
-    // CAMBIO IMPORTANTE: Como las fechas en BD están mal (hora española guardada como UTC),
-    // necesitamos obtener TODAS las reservas activas y filtrar en código
+    // Obtener todas las reservas activas para filtrar manualmente
     console.log(`🔍 Obteniendo todas las reservas activas para filtrar manualmente...`)
     
     const { data: todasReservasActivas, error } = await supabase
@@ -112,6 +79,7 @@ export async function verificarReservasVencidas() {
         id,
         matricula,
         empleado_id,
+        fecha_inicio,
         fecha_fin,
         estado,
         notificacion_enviada,
@@ -120,6 +88,11 @@ export async function verificarReservasVencidas() {
           apellidos,
           email,
           movil
+        ),
+        coches!inner (
+          matricula,
+          marca,
+          modelo
         )
       `)
       .eq('estado', 'activa')
@@ -135,13 +108,13 @@ export async function verificarReservasVencidas() {
 
     console.log(`📊 Total reservas activas encontradas: ${todasReservasActivas?.length || 0}`)
     
-    // Filtrar manualmente las que están realmente vencidas (corrigiendo fechas)
+    // Filtrar manualmente las que están realmente vencidas (usando fechas sin corrección)
     const reservasVencidas = []
     
     if (todasReservasActivas) {
       for (const reserva of todasReservasActivas) {
         try {
-          // NO corregir fecha - usar tal como está en BD (ya está en UTC)
+          // Usar la fecha tal como está en BD (ya está en UTC correctamente)
           const fechaFin = new Date(reserva.fecha_fin)
           const estaVencida = fechaFin < haceUnaHora
           const horasVencida = (ahora.getTime() - fechaFin.getTime()) / (1000 * 60 * 60)
@@ -149,12 +122,11 @@ export async function verificarReservasVencidas() {
           console.log(`   📋 Reserva ${reserva.id} (${reserva.matricula}):`)
           console.log(`      Fecha BD: ${reserva.fecha_fin}`)
           console.log(`      Fecha parseada: ${fechaFin.toISOString()}`)
-          console.log(`      Fecha local: ${fechaFin.toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}`)
           console.log(`      Horas transcurridas: ${horasVencida.toFixed(2)}`)
           console.log(`      ¿Vencida? ${estaVencida}`)
           console.log(`      Notificación enviada: ${reserva.notificacion_enviada}`)
           
-          // IMPORTANTE: Verificación doble para evitar duplicados
+          // Verificación doble para evitar duplicados
           if (estaVencida && reserva.notificacion_enviada !== true) {
             reservasVencidas.push(reserva)
             console.log(`      ✅ Agregada para notificación`)
@@ -187,7 +159,9 @@ export async function verificarReservasVencidas() {
     // Procesar cada reserva vencida
     for (const reserva of reservasVencidas) {
       try {
-        // Validar fecha sin corrección - usar tal como está en BD
+        console.log(`📨 Procesando reserva ${reserva.id} - ${reserva.matricula}`)
+
+        // Validar fecha - usar tal como está en BD
         if (!reserva.fecha_fin || reserva.fecha_fin === null) {
           console.error(`❌ Reserva ${reserva.id} tiene fecha_fin null/undefined, saltando...`)
           erroresEnvio++
@@ -204,13 +178,48 @@ export async function verificarReservasVencidas() {
           continue;
         }
         
-        const horasVencido = Math.ceil((ahora.getTime() - fechaFin.getTime()) / (1000 * 60 * 60))
+        // Calcular tiempo vencido con precisión
+        const milisegundosVencidos = ahora.getTime() - fechaFin.getTime()
+        const tiempoVencidoTexto = calcularTiempoVencido(milisegundosVencidos)
+        const horasTranscurridasExactas = milisegundosVencidos / (1000 * 60 * 60)
+        const horasVencido = Math.round(horasTranscurridasExactas)
 
-        console.log(`📨 Enviando notificación para reserva ${reserva.id} - ${reserva.matricula} (${horasVencido}h vencida)`)
+        console.log(`📨 CÁLCULO DETALLADO para reserva ${reserva.id} - ${reserva.matricula}:`)
+        console.log(`   Ahora UTC: ${ahora.toISOString()} (${ahora.toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })})`)
+        console.log(`   Fecha fin BD: ${reserva.fecha_fin}`)
+        console.log(`   Fecha fin parseada: ${fechaFin.toISOString()} (${fechaFin.toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })})`)
+        console.log(`   Milisegundos transcurridos: ${milisegundosVencidos}`)
+        console.log(`   Horas exactas: ${horasTranscurridasExactas.toFixed(2)}`)
+        console.log(`   Tiempo vencido: ${tiempoVencidoTexto}`)
+        
+        // DIAGNÓSTICO ESPECIAL PARA RESERVA 12
+        if (reserva.id === 12) {
+          console.log(`🔍 DIAGNÓSTICO ESPECIAL RESERVA 12:`)
+          console.log(`   Tiempo ahora (getTime()): ${ahora.getTime()}`)
+          console.log(`   Tiempo fecha_fin (getTime()): ${fechaFin.getTime()}`)
+          console.log(`   Diferencia en ms: ${milisegundosVencidos}`)
+          console.log(`   Diferencia en minutos: ${(milisegundosVencidos / (1000 * 60)).toFixed(2)}`)
+          console.log(`   Diferencia en horas: ${horasTranscurridasExactas.toFixed(4)}`)
+          
+          // Test manual: si la reserva caducó a las 09:30 y ahora son las 15:27
+          // Debería ser: 15:27 - 09:30 = 5:57 = 5.95 horas ≈ 6 horas
+          const esperado = 6.0
+          const diferencia = Math.abs(horasTranscurridasExactas - esperado)
+          console.log(`   VERIFICACIÓN: Esperado ~${esperado}h, Calculado: ${horasTranscurridasExactas.toFixed(2)}h, Diferencia: ${diferencia.toFixed(2)}h`)
+          
+          if (diferencia > 0.5) {
+            console.log(`   ⚠️ PROBLEMA: Diferencia > 0.5h suggests timezone issue!`)
+            console.log(`   🔧 POSIBLE CAUSA: La fecha en BD puede estar mal guardada`)
+          }
+        }
+
+        console.log(`📨 Enviando notificación para reserva ${reserva.id} - ${reserva.matricula} (${tiempoVencidoTexto} vencida)`)
 
         const empleado = reserva.empleados as any
+        const coche = reserva.coches as any
         let emailEnviado = false
         let whatsappEnviado = false
+        let intentosEnvio = []
 
         // 1. Intentar enviar email
         try {
@@ -218,21 +227,25 @@ export async function verificarReservasVencidas() {
             empleado.email,
             `${empleado.nombre} ${empleado.apellidos}`,
             {
-              matricula: reserva.matricula,
-              marca: 'N/A', // No disponible en esta tabla
-              modelo: 'N/A' // No disponible en esta tabla
+              matricula: coche.matricula,
+              marca: coche.marca,
+              modelo: coche.modelo
             },
+            new Date(reserva.fecha_inicio),
             fechaFin,
-            horasVencido
+            tiempoVencidoTexto
           )
 
           if (resultadoEmail.success) {
             emailEnviado = true
+            intentosEnvio.push('✅ Email enviado exitosamente')
             console.log(`✅ Email enviado exitosamente a ${empleado.email}`)
           } else {
+            intentosEnvio.push(`❌ Error email: ${resultadoEmail.error}`)
             console.error(`❌ Error enviando email: ${resultadoEmail.error}`)
           }
         } catch (error) {
+          intentosEnvio.push(`❌ Error email: ${error}`)
           console.error(`❌ Error enviando email a ${empleado.email}:`, error)
         }
 
@@ -245,32 +258,37 @@ export async function verificarReservasVencidas() {
             const resultadoWhatsApp = await sendWhatsAppNotification(
               telefonoFormateado,
               `${empleado.nombre} ${empleado.apellidos}`,
-              reserva.matricula,
-              horasVencido
+              coche.matricula,
+              new Date(reserva.fecha_inicio),
+              fechaFin,
+              tiempoVencidoTexto
             )
 
             if (resultadoWhatsApp.success) {
               whatsappEnviado = true
+              intentosEnvio.push('✅ WhatsApp enviado exitosamente')
               console.log(`✅ WhatsApp enviado exitosamente a ${telefonoFormateado}`)
             } else {
+              intentosEnvio.push(`❌ Error WhatsApp: ${resultadoWhatsApp.error}`)
               console.error(`❌ Error enviando WhatsApp: ${resultadoWhatsApp.error}`)
             }
           } catch (error) {
+            intentosEnvio.push(`❌ Error WhatsApp: ${error}`)
             console.error(`❌ Error enviando WhatsApp a ${empleado.movil}:`, error)
           }
         } else {
-          console.log(`⚠️ Empleado ${empleado.nombre} no tiene teléfono configurado`)
+          intentosEnvio.push('⚠️ No tiene móvil configurado')
+          console.log(`⚠️ Empleado ${empleado.nombre} no tiene móvil configurado`)
         }
 
-        // 3. Marcar como notificada si al menos uno fue enviado exitosamente
+        // 3. CRÍTICO: SOLO MARCAR COMO NOTIFICADA SI AL MENOS UNO SE ENVIÓ EXITOSAMENTE
         if (emailEnviado || whatsappEnviado) {
-          // Marcar como notificada Y cambiar estado a completada
           const { error: updateError } = await supabase
             .from('reservas')
             .update({ 
               notificacion_enviada: true,
               fecha_notificacion: ahora.toISOString(),
-              estado: 'completada'  // ← NUEVO: Marcar como completada automáticamente
+              estado: 'completada'
             })
             .eq('id', reserva.id)
 
@@ -282,11 +300,12 @@ export async function verificarReservasVencidas() {
             const canales = []
             if (emailEnviado) canales.push('email')
             if (whatsappEnviado) canales.push('WhatsApp')
-            console.log(`✅ Notificación enviada por ${canales.join(' y ')}, reserva marcada como completada: ${reserva.id}`)
+            console.log(`✅ Reserva ${reserva.id} notificada por ${canales.join(' y ')} y marcada como completada`)
           }
         } else {
           erroresEnvio++
           console.error(`❌ No se pudo enviar notificación por ningún canal para reserva ${reserva.id}`)
+          console.error(`📋 Intentos realizados: ${intentosEnvio.join(', ')}`)
         }
 
       } catch (error) {

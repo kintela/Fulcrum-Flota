@@ -35,13 +35,25 @@ export async function enviarEmailReservaVencida(
     marca: string;
     modelo: string;
   },
+  fechaInicio: Date,
   fechaFinalizacion: Date,
-  horasVencido: number
+  tiempoVencido: string
 ) {
   try {
     const transporter = createEmailTransporter();
 
-    const fechaFormateada = fechaFinalizacion.toLocaleDateString('es-ES', {
+    // Formatear fechas en hora española
+    const fechaInicioFormateada = fechaInicio.toLocaleDateString('es-ES', {
+      timeZone: 'Europe/Madrid',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+    const fechaFinFormateada = fechaFinalizacion.toLocaleDateString('es-ES', {
+      timeZone: 'Europe/Madrid',
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -164,12 +176,16 @@ export async function enviarEmailReservaVencida(
               <span class="value">${vehiculo.marca} ${vehiculo.modelo}</span>
             </div>
             <div class="info-row">
+              <span class="label">Fecha de inicio:</span>
+              <span class="value">${fechaInicioFormateada}</span>
+            </div>
+            <div class="info-row">
               <span class="label">Fecha de finalización:</span>
-              <span class="value">${fechaFormateada}</span>
+              <span class="value">${fechaFinFormateada}</span>
             </div>
             <div class="info-row">
               <span class="label">Tiempo vencido:</span>
-              <span class="value">${horasVencido} hora(s)</span>
+              <span class="value">${tiempoVencido}</span>
             </div>
           </div>
           
@@ -205,8 +221,9 @@ Le informamos que su reserva del siguiente vehículo ha vencido:
 
 Matrícula: ${vehiculo.matricula}
 Vehículo: ${vehiculo.marca} ${vehiculo.modelo}
-Fecha de finalización: ${fechaFormateada}
-Tiempo vencido: ${horasVencido} hora(s)
+Fecha de inicio: ${fechaInicioFormateada}
+Fecha de finalización: ${fechaFinFormateada}
+Tiempo vencido: ${tiempoVencido}
 
 ACCIÓN REQUERIDA: Por favor, proceda a devolver el vehículo lo antes posible. 
 Si ya lo ha devuelto, puede ignorar este mensaje.

@@ -62,13 +62,39 @@ export async function sendWhatsAppNotification(
   phoneNumber: string, 
   empleadoNombre: string, 
   vehiculoMatricula: string, 
-  horasVencidas: number
+  fechaInicio: Date,
+  fechaFin: Date,
+  tiempoVencido: string
 ) {
+  // Formatear fechas en hora española
+  const fechaInicioEspañol = fechaInicio.toLocaleString('es-ES', { 
+    timeZone: 'Europe/Madrid',
+    day: '2-digit',
+    month: '2-digit', 
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+  
+  const fechaFinEspañol = fechaFin.toLocaleString('es-ES', { 
+    timeZone: 'Europe/Madrid',
+    day: '2-digit',
+    month: '2-digit', 
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+
   const message = `🚗 *NOTIFICACIÓN FULCRUM FLOTA*
 
 Hola ${empleadoNombre},
 
-El vehículo con matrícula *${vehiculoMatricula}* que tienes asignado lleva *${horasVencidas.toFixed(1)} horas* de retraso en su devolución.
+El vehículo con matrícula *${vehiculoMatricula}* que tienes asignado lleva *${tiempoVencido}* de retraso en su devolución.
+
+📅 *Detalles de la reserva:*
+• Inicio: ${fechaInicioEspañol}
+• Fin: ${fechaFinEspañol}
+• Tiempo vencido: ${tiempoVencido}
 
 Por favor, devuelve el vehículo lo antes posible.
 

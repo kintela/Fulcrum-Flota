@@ -55,6 +55,11 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
       const fechaFinCompleta = new Date(fechaFin)
       const [horasFin, minutosFin] = horaFin.split(":").map(Number)
       fechaFinCompleta.setHours(horasFin, minutosFin, 0, 0)
+      
+      console.log(`🕒 DEBUG FECHAS RESERVA:`)
+      console.log(`   Usuario selecciona: ${fechaFin.toDateString()} ${horaFin}`)
+      console.log(`   Fecha local creada: ${fechaFinCompleta.toString()}`)
+      console.log(`   Fecha UTC para BD: ${fechaFinCompleta.toISOString()}`)
 
       // Validar que las fechas sean válidas
       if (isBefore(fechaInicioCompleta, new Date())) {
