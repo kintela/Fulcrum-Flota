@@ -47,43 +47,27 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
         return
       }
 
-      // Crear las fechas completas con horas EN TIMEZONE ESPAÑOL
-      // IMPORTANTE: Necesitamos asegurar que las horas se interpretan como hora española
+      // Crear las fechas completas con horas
       const fechaInicioCompleta = new Date(fechaInicio)
       const [horasInicio, minutosInicio] = horaInicio.split(":").map(Number)
-      
+      fechaInicioCompleta.setHours(horasInicio, minutosInicio, 0, 0)
+
       const fechaFinCompleta = new Date(fechaFin)
       const [horasFin, minutosFin] = horaFin.split(":").map(Number)
-      
-      // CRÍTICO: Crear fechas que representen la hora española correctamente
-      // Ejemplo: Si usuario selecciona 09:30, debe guardarse como 07:30 UTC (España = UTC+2 en verano)
-      
-      // Crear fecha en timezone español explícitamente
-      const fechaEspañolInicio = new Date(fechaInicio.getFullYear(), fechaInicio.getMonth(), fechaInicio.getDate(), horasInicio, minutosInicio, 0, 0)
-      const fechaEspañolFin = new Date(fechaFin.getFullYear(), fechaFin.getMonth(), fechaFin.getDate(), horasFin, minutosFin, 0, 0)
-      
-      // Ajustar para timezone español (UTC+2 en verano, UTC+1 en invierno)
-      // Simplificamos asumiendo verano (UTC+2)
-      const offsetEspaña = 2 * 60 // 2 horas en minutos
-      const offsetLocal = fechaEspañolInicio.getTimezoneOffset() // minutos que el sistema local está detrás de UTC
-      const ajusteTotal = offsetEspaña * 60 * 1000 + offsetLocal * 60 * 1000 // convertir a milisegundos
-      
-      const fechaInicioUTC = new Date(fechaEspañolInicio.getTime() - ajusteTotal)
-      const fechaFinUTC = new Date(fechaEspañolFin.getTime() - ajusteTotal)
+      fechaFinCompleta.setHours(horasFin, minutosFin, 0, 0)
       
       console.log(`🕒 DEBUG FECHAS RESERVA:`)
-      console.log(`   Fecha usuario: ${fechaFin.toDateString()} ${horaFin}`)
-      console.log(`   Fecha España: ${fechaEspañolFin.toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}`)
-      console.log(`   Fecha UTC final: ${fechaFinUTC.toISOString()}`)
-      console.log(`   Para BD: ${fechaFinUTC.toISOString()}`)
+      console.log(`   Usuario selecciona: ${fechaFin.toDateString()} ${horaFin}`)
+      console.log(`   Fecha local creada: ${fechaFinCompleta.toString()}`)
+      console.log(`   Fecha UTC para BD: ${fechaFinCompleta.toISOString()}`)
 
       // Validar que las fechas sean válidas
-      if (isBefore(fechaInicioUTC, new Date())) {
+      if (isBefore(fechaInicioCompleta, new Date())) {
         setError("La fecha de inicio no puede ser anterior a la fecha actual")
         return
       }
 
-      if (isAfter(fechaInicioUTC, fechaFinUTC)) {
+      if (isAfter(fechaInicioCompleta, fechaFinCompleta)) {
         setError("La fecha de fin debe ser posterior a la fecha de inicio")
         return
       }
@@ -91,8 +75,8 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
       // Verificar disponibilidad antes de crear la reserva
       const disponibilidad = await verificarDisponibilidad(
         matricula,
-        fechaInicioUTC.toISOString(),
-        fechaFinUTC.toISOString()
+        fechaInicioCompleta.toISOString(),
+        fechaFinCompleta.toISOString()
       )
 
       if (!disponibilidad.success) {
@@ -108,8 +92,8 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
       // Crear la reserva
       const resultado = await crearReservaTemporal({
         matricula,
-        fecha_inicio: fechaInicioUTC.toISOString(),
-        fecha_fin: fechaFinUTC.toISOString(),
+        fecha_inicio: fechaInicioCompleta.toISOString(),
+        fecha_fin: fechaFinCompleta.toISOString(),
         observaciones: observaciones.trim() || undefined
       })
 
