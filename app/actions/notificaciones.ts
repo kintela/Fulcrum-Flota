@@ -153,8 +153,18 @@ export async function verificarReservasVencidas() {
           continue;
         }
         
-        const horasVencido = Math.ceil((ahora.getTime() - fechaFin.getTime()) / (1000 * 60 * 60))
+        // Calcular horas transcurridas con más precisión
+        const milisegundosTranscurridos = ahora.getTime() - fechaFin.getTime()
+        const horasTranscurridasExactas = milisegundosTranscurridos / (1000 * 60 * 60)
+        const horasVencido = Math.round(horasTranscurridasExactas)
 
+        console.log(`📨 CÁLCULO DETALLADO para reserva ${reserva.id} - ${reserva.matricula}:`)
+        console.log(`   Ahora UTC: ${ahora.toISOString()} (${ahora.toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })})`)
+        console.log(`   Fecha fin BD: ${reserva.fecha_fin}`)
+        console.log(`   Fecha fin parseada: ${fechaFin.toISOString()} (${fechaFin.toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })})`)
+        console.log(`   Milisegundos transcurridos: ${milisegundosTranscurridos}`)
+        console.log(`   Horas exactas: ${horasTranscurridasExactas.toFixed(2)}`)
+        console.log(`   Horas redondeadas: ${horasVencido}`)
         console.log(`📨 Enviando notificación para reserva ${reserva.id} - ${reserva.matricula} (${horasVencido}h vencida)`)
 
         const empleado = reserva.empleados as any
