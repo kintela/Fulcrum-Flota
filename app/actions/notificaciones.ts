@@ -2,6 +2,7 @@
 
 import { supabase } from "@/lib/supabase"
 import { enviarEmailReservaVencida } from "@/lib/email"
+import { sendWhatsAppNotification, formatSpanishPhone } from "@/lib/whatsapp"
 
 export interface ReservaVencida {
   id: number
@@ -13,6 +14,7 @@ export interface ReservaVencida {
     nombre: string
     apellidos: string
     email: string
+    movil?: string
   }
 }
 
@@ -116,7 +118,8 @@ export async function verificarReservasVencidas() {
         empleados!inner (
           nombre,
           apellidos,
-          email
+          email,
+          movil
         )
       `)
       .eq('estado', 'activa')
@@ -203,20 +206,62 @@ export async function verificarReservasVencidas() {
 
         console.log(`📨 Enviando notificación para reserva ${reserva.id} - ${reserva.matricula} (${horasVencido}h vencida)`)
 
-        // Enviar email
-        const resultadoEmail = await enviarEmailReservaVencida(
-          (reserva.empleados as any).email,
-          `${(reserva.empleados as any).nombre} ${(reserva.empleados as any).apellidos}`,
-          {
-            matricula: reserva.matricula,
-            marca: 'N/A', // No disponible en esta tabla
-            modelo: 'N/A' // No disponible en esta tabla
-          },
-          fechaFinCorregida,
-          horasVencido
-        )
+        const empleado = reserva.empleados as any
+        let emailEnviado = false
+        let whatsappEnviado = false
 
-        if (resultadoEmail.success) {
+        // 1. Intentar enviar email
+        try {
+          const resultadoEmail = await enviarEmailReservaVencida(
+            empleado.email,
+            `${empleado.nombre} ${empleado.apellidos}`,
+            {
+              matricula: reserva.matricula,
+              marca: 'N/A', // No disponible en esta tabla
+              modelo: 'N/A' // No disponible en esta tabla
+            },
+            fechaFinCorregida,
+            horasVencido
+          )
+
+          if (resultadoEmail.success) {
+            emailEnviado = true
+            console.log(`✅ Email enviado exitosamente a ${empleado.email}`)
+          } else {
+            console.error(`❌ Error enviando email: ${resultadoEmail.error}`)
+          }
+        } catch (error) {
+          console.error(`❌ Error enviando email a ${empleado.email}:`, error)
+        }
+
+        // 2. Intentar enviar WhatsApp si tiene móvil
+        if (empleado.movil) {
+          try {
+            const telefonoFormateado = formatSpanishPhone(empleado.movil)
+            console.log(`📱 Enviando WhatsApp a ${telefonoFormateado}`)
+            
+            const resultadoWhatsApp = await sendWhatsAppNotification(
+              telefonoFormateado,
+              `${empleado.nombre} ${empleado.apellidos}`,
+              reserva.matricula,
+              horasVencido
+            )
+
+            if (resultadoWhatsApp.success) {
+              whatsappEnviado = true
+              console.log(`✅ WhatsApp enviado exitosamente a ${telefonoFormateado}`)
+            } else {
+              console.error(`❌ Error enviando WhatsApp: ${resultadoWhatsApp.error}`)
+            }
+          } catch (error) {
+            console.error(`❌ Error enviando WhatsApp a ${empleado.movil}:`, error)
+          }
+        } else {
+          console.log(`⚠️ Empleado ${empleado.nombre} no tiene teléfono configurado`)
+        }
+
+        // 3. Marcar como notificada si al menos uno fue enviado exitosamente
+        if (emailEnviado || whatsappEnviado) {
           // Marcar como notificada Y cambiar estado a completada
           const { error: updateError } = await supabase
             .from('reservas')
@@ -229,13 +274,17 @@ export async function verificarReservasVencidas() {
 
           if (updateError) {
             console.error(`❌ Error actualizando reserva ${reserva.id}:`, updateError)
+            erroresEnvio++
           } else {
             reservasNotificadas++
-            console.log(`✅ Notificación enviada, reserva marcada como completada: ${reserva.id}`)
+            const canales = []
+            if (emailEnviado) canales.push('email')
+            if (whatsappEnviado) canales.push('WhatsApp')
+            console.log(`✅ Notificación enviada por ${canales.join(' y ')}, reserva marcada como completada: ${reserva.id}`)
           }
         } else {
           erroresEnvio++
-          console.error(`❌ Error enviando email para reserva ${reserva.id}:`, resultadoEmail.error)
+          console.error(`❌ No se pudo enviar notificación por ningún canal para reserva ${reserva.id}`)
         }
 
       } catch (error) {
