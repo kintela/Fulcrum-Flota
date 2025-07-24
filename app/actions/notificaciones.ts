@@ -123,7 +123,7 @@ export async function verificarReservasVencidas() {
         )
       `)
       .eq('estado', 'activa')
-      .is('notificacion_enviada', null)
+      .or('notificacion_enviada.is.null,notificacion_enviada.eq.false')
 
     if (error) {
       console.error('❌ Error consultando reservas activas:', error)
@@ -141,13 +141,15 @@ export async function verificarReservasVencidas() {
     if (todasReservasActivas) {
       for (const reserva of todasReservasActivas) {
         try {
-          const fechaCorregida = corregirFechaDesdeBaseDatos(reserva.fecha_fin)
-          const estaVencida = fechaCorregida < haceUnaHora
-          const horasVencida = (ahora.getTime() - fechaCorregida.getTime()) / (1000 * 60 * 60)
+          // NO corregir fecha - usar tal como está en BD (ya está en UTC)
+          const fechaFin = new Date(reserva.fecha_fin)
+          const estaVencida = fechaFin < haceUnaHora
+          const horasVencida = (ahora.getTime() - fechaFin.getTime()) / (1000 * 60 * 60)
           
           console.log(`   📋 Reserva ${reserva.id} (${reserva.matricula}):`)
           console.log(`      Fecha BD: ${reserva.fecha_fin}`)
-          console.log(`      Fecha corregida: ${fechaCorregida.toISOString()}`)
+          console.log(`      Fecha parseada: ${fechaFin.toISOString()}`)
+          console.log(`      Fecha local: ${fechaFin.toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}`)
           console.log(`      Horas transcurridas: ${horasVencida.toFixed(2)}`)
           console.log(`      ¿Vencida? ${estaVencida}`)
           console.log(`      Notificación enviada: ${reserva.notificacion_enviada}`)
@@ -185,24 +187,24 @@ export async function verificarReservasVencidas() {
     // Procesar cada reserva vencida
     for (const reserva of reservasVencidas) {
       try {
-        // Validar y corregir interpretación de fecha
+        // Validar fecha sin corrección - usar tal como está en BD
         if (!reserva.fecha_fin || reserva.fecha_fin === null) {
           console.error(`❌ Reserva ${reserva.id} tiene fecha_fin null/undefined, saltando...`)
           erroresEnvio++
           continue;
         }
         
-        // Usar la fecha corregida (asumiendo que fue introducida en horario español)
-        const fechaFinCorregida = corregirFechaDesdeBaseDatos(reserva.fecha_fin)
+        // Usar la fecha tal como está en BD (ya está en UTC correctamente)
+        const fechaFin = new Date(reserva.fecha_fin)
         
         // Verificar si la fecha parseada es válida
-        if (isNaN(fechaFinCorregida.getTime())) {
+        if (isNaN(fechaFin.getTime())) {
           console.error(`❌ Reserva ${reserva.id} tiene fecha_fin inválida: ${reserva.fecha_fin}, saltando...`)
           erroresEnvio++
           continue;
         }
         
-        const horasVencido = Math.ceil((ahora.getTime() - fechaFinCorregida.getTime()) / (1000 * 60 * 60))
+        const horasVencido = Math.ceil((ahora.getTime() - fechaFin.getTime()) / (1000 * 60 * 60))
 
         console.log(`📨 Enviando notificación para reserva ${reserva.id} - ${reserva.matricula} (${horasVencido}h vencida)`)
 
@@ -220,7 +222,7 @@ export async function verificarReservasVencidas() {
               marca: 'N/A', // No disponible en esta tabla
               modelo: 'N/A' // No disponible en esta tabla
             },
-            fechaFinCorregida,
+            fechaFin,
             horasVencido
           )
 
