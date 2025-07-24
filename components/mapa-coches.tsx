@@ -29,6 +29,8 @@ interface MapaCochesProps {
   empleados?: any[]
   userRole?: string
   userEmail?: string
+  miCocheMatricula?: string // Nueva prop para identificar el coche del usuario actual
+  misReservas?: Array<{ matricula: string; id: number; estado: string }> // Reservas temporales del usuario
   onFunctionsReady?: (functions: {
     zoomToVehicle: (matricula: string) => void
     activateLocationMode: (matricula: string) => void
@@ -162,7 +164,7 @@ function useGoogleMaps() {
   return { isLoaded, error, loadGoogleMaps, isGoogleMapsReady }
 }
 
-export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunctionsReady }: MapaCochesProps) {
+export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCocheMatricula, misReservas = [], onFunctionsReady }: MapaCochesProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstance = useRef<any>(null)
   const markers = useRef<any[]>([])
@@ -314,25 +316,38 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
           const isAssigned = !!empleadoInfo || !!coche.asignadoa
           
           // Debug: información del vehículo y usuario
-          /*console.log(`🚗 Procesando ${coche.matricula}:`, {
-            asignadoa: coche.asignadoa,
-            empleadoInfo: empleadoInfo,
-            userEmail: userEmail,
-            userRole: userRole,
-            empleadoEmail: empleadoInfo?.email
-          })*/
+          if (coche.matricula === '1234-AAA') {
+            console.log(`🚗 DEBUG ${coche.matricula}:`, {
+              asignadoa: coche.asignadoa,
+              empleadoInfo: empleadoInfo,
+              userEmail: userEmail,
+              userRole: userRole,
+              empleadoEmail: empleadoInfo?.email,
+              isUserVehicle: userEmail && empleadoInfo && empleadoInfo.email === userEmail
+            })
+          }
           
           // Determinar si es un vehículo del usuario actual
-          // Para administradores: verificar si está asignado a su email
-          // Para usuarios: verificar solo si tienen ese rol y el vehículo está asignado a ellos
+          // 1. Por asignación permanente: verificar si está asignado a su email
+          // 2. Por reserva temporal: verificar si tiene una reserva activa de este coche
           const isUserVehicle = userEmail && empleadoInfo && empleadoInfo.email === userEmail
+          const tieneReservaActiva = misReservas?.some(reserva => 
+            reserva.matricula === coche.matricula && reserva.estado === 'activa'
+          )
           
-          //console.log(`🎯 ${coche.matricula} - isUserVehicle:`, isUserVehicle)
+          // Es "mi coche" si está asignado permanentemente O tengo una reserva activa
+          const esMiCoche = isUserVehicle || tieneReservaActiva
+          
+          //console.log(`🎯 ${coche.matricula} - isUserVehicle:`, isUserVehicle, 'tieneReservaActiva:', tieneReservaActiva, 'esMiCoche:', esMiCoche)
 
           // Determinar el color del marcador
           let fillColor = "#3b82f6" // Azul por defecto (disponible)
-          if (isUserVehicle) {
-            fillColor = "#dc2626" // Rojo para vehículos del usuario (tanto admin como usuario regular)
+          
+          // Si es el coche del usuario actual (cancelando reserva), siempre rojo
+          if (miCocheMatricula && coche.matricula === miCocheMatricula) {
+            fillColor = "#dc2626" // Rojo para el coche del usuario actual
+          } else if (esMiCoche) {
+            fillColor = "#dc2626" // Rojo para vehículos del usuario (asignación permanente O reserva temporal)
           } else if (isAssigned) {
             fillColor = "#10b981" // Verde para asignados a otros
           }
@@ -341,9 +356,11 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
           // Administradores: pueden reubicar cualquier vehículo
           // Usuarios: solo pueden reubicar sus vehículos asignados
           const canRelocate = userRole === 'administrador' || 
-            (userRole === 'usuario' && isUserVehicle)
+            (userRole === 'usuario' && esMiCoche)
 
-          // Crear marcador
+          // Crear marcador con tamaño especial para "mis coches"
+          const markerSize = esMiCoche || (miCocheMatricula && coche.matricula === miCocheMatricula) ? 14 : 10
+          
           const marker = new window.google.maps.Marker({
             position,
             map,
@@ -351,7 +368,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, onFunc
             draggable: canRelocate, // Hacer arrastrable si el usuario tiene permisos
             icon: {
               path: window.google.maps.SymbolPath.CIRCLE,
-              scale: 10,
+              scale: markerSize, // Tamaño dinámico: 14 para mis coches, 10 para otros
               fillColor: fillColor,
               fillOpacity: 0.8,
               strokeColor: "#ffffff",

@@ -35,7 +35,13 @@ interface Reserva {
   }
 }
 
-export function MisReservas() {
+export function MisReservas({ 
+  onCocheEnCancelacion,
+  onReservasChange 
+}: { 
+  onCocheEnCancelacion?: (matricula: string | null) => void
+  onReservasChange?: (reservas: Array<{ matricula: string; id: number; estado: string }>) => void
+}) {
   const [reservas, setReservas] = useState<Reserva[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
@@ -52,7 +58,16 @@ export function MisReservas() {
       const resultado = await obtenerReservasUsuario()
       
       if (resultado.success) {
-        setReservas(resultado.reservas || [])
+        const reservasData = resultado.reservas || []
+        setReservas(reservasData)
+        
+        // Notificar al dashboard sobre las reservas del usuario
+        const reservasParaMapa = reservasData.map(reserva => ({
+          matricula: reserva.coches.matricula,
+          id: reserva.id,
+          estado: reserva.estado
+        }))
+        onReservasChange?.(reservasParaMapa)
       } else {
         setError(resultado.error || "Error al cargar las reservas")
       }
@@ -79,6 +94,8 @@ export function MisReservas() {
         await cargarReservas()
         setShowCancelDialog(false)
         setReservaToCancel(null)
+        // Limpiar el coche en cancelación
+        onCocheEnCancelacion?.(null)
       } else {
         setError(resultado.error || "Error al cancelar la reserva")
       }
@@ -93,11 +110,15 @@ export function MisReservas() {
   const handleConfirmarCancelacion = (reserva: Reserva) => {
     setReservaToCancel(reserva)
     setShowCancelDialog(true)
+    // Notificar al dashboard qué coche está en cancelación
+    onCocheEnCancelacion?.(reserva.coches.matricula)
   }
 
   const handleCerrarDialog = () => {
     setShowCancelDialog(false)
     setReservaToCancel(null)
+    // Limpiar el coche en cancelación
+    onCocheEnCancelacion?.(null)
   }
 
   const handleCapturarUbicacion = async (matricula: string, reservaId: number) => {
