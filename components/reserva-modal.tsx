@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -30,6 +30,63 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
   const [error, setError] = useState("")
   const [showCalendarInicio, setShowCalendarInicio] = useState(false)
   const [showCalendarFin, setShowCalendarFin] = useState(false)
+
+  // Nueva lógica: calcular hora mínima permitida para inicio si la fecha seleccionada es hoy
+  const minHoraInicioHoy = useMemo(() => {
+    if (!fechaInicio) return null
+    const hoy = new Date()
+    if (fechaInicio.toDateString() !== hoy.toDateString()) return null
+    // Redondear a siguiente bloque de 30 minutos
+    const minutes = hoy.getMinutes()
+    const rounded = new Date(hoy)
+    if (minutes < 30) {
+      rounded.setMinutes(30, 0, 0)
+    } else {
+      rounded.setHours(rounded.getHours() + 1, 0, 0, 0)
+    }
+    const hh = rounded.getHours().toString().padStart(2, '0')
+    const mm = rounded.getMinutes().toString().padStart(2, '0')
+    return `${hh}:${mm}`
+  }, [fechaInicio])
+
+  // NUEVO: hora mínima de fin cuando inicio y fin son el mismo día
+  const minHoraFin = useMemo(() => {
+    if (!fechaInicio || !fechaFin) return null
+    if (fechaInicio.toDateString() !== fechaFin.toDateString()) return null
+    // sumar 30 min a horaInicio
+    const [h, m] = horaInicio.split(":").map(Number)
+    const base = new Date()
+    base.setHours(h, m, 0, 0)
+    base.setMinutes(base.getMinutes() + 30) // mínimo media hora después
+    let hh = base.getHours()
+    let mm = base.getMinutes()
+    if (hh >= 24) return "24:00" // marcador para obligar a pasar a día siguiente
+    return `${hh.toString().padStart(2,'0')}:${mm.toString().padStart(2,'0')}`
+  }, [fechaInicio, fechaFin, horaInicio])
+
+  // Si la hora seleccionada queda por debajo tras cambiar fecha -> ajustar
+  useEffect(() => {
+    if (minHoraInicioHoy && horaInicio < minHoraInicioHoy) {
+      setHoraInicio(minHoraInicioHoy)
+    }
+  }, [minHoraInicioHoy, horaInicio])
+
+  // Ajustar hora fin si es inválida respecto a inicio (mismo día)
+  useEffect(() => {
+    if (minHoraFin === "24:00") {
+      // mover fecha fin al día siguiente y poner 00:00
+      if (fechaFin && fechaInicio && fechaFin.toDateString() === fechaInicio.toDateString()) {
+        const next = new Date(fechaFin)
+        next.setDate(next.getDate() + 1)
+        setFechaFin(next)
+        setHoraFin("00:00")
+      }
+      return
+    }
+    if (minHoraFin && horaFin < minHoraFin && minHoraFin !== "24:00") {
+      setHoraFin(minHoraFin)
+    }
+  }, [minHoraFin, horaFin, fechaFin, fechaInicio])
 
   const today = new Date()
   const tomorrow = new Date(today)
@@ -207,12 +264,18 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
                 onChange={(e) => setHoraInicio(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                {generarHoras().map((hora) => (
-                  <option key={hora} value={hora}>
-                    {hora}
-                  </option>
-                ))}
+                {generarHoras().map((hora) => {
+                  const disabledOpt = !!minHoraInicioHoy && hora < minHoraInicioHoy
+                  return (
+                    <option key={hora} value={hora} disabled={disabledOpt}>
+                      {hora}{disabledOpt ? ' (no disponible)' : ''}
+                    </option>
+                  )
+                })}
               </select>
+              {minHoraInicioHoy && (
+                <p className="mt-1 text-xs text-gray-500">Mínimo hoy: {minHoraInicioHoy}</p>
+              )}
             </div>
           </div>
 
@@ -258,12 +321,24 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
                 onChange={(e) => setHoraFin(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                {generarHoras().map((hora) => (
-                  <option key={hora} value={hora}>
-                    {hora}
-                  </option>
-                ))}
+                {generarHoras().map((hora) => {
+                  let disabledOpt = false
+                  if (fechaInicio && fechaFin && fechaInicio.toDateString() === fechaFin.toDateString()) {
+                    if (minHoraFin === "24:00") disabledOpt = true
+                    else if (minHoraFin) disabledOpt = hora <= horaInicio || hora < minHoraFin
+                  }
+                  return (
+                    <option key={hora} value={hora} disabled={disabledOpt}>
+                      {hora}{disabledOpt ? ' (no disponible)' : ''}
+                    </option>
+                  )
+                })}
               </select>
+              {fechaInicio && fechaFin && fechaInicio.toDateString() === fechaFin.toDateString() && (
+                <p className="mt-1 text-xs text-gray-500">
+                  {minHoraFin === "24:00" ? 'El fin debe pasar al día siguiente' : `Mínimo fin: ${minHoraFin}`}
+                </p>
+              )}
             </div>
           </div>
 
