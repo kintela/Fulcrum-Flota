@@ -1,6 +1,7 @@
 "use server"
 
 import { supabase } from "@/lib/supabase"
+import { enviarEmailInicioReserva } from "@/lib/email"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
 
@@ -355,7 +356,7 @@ export async function activarReservasPendientes() {
     // Buscar reservas en estado pendiente con fecha_inicio <= ahora
     const { data: pendientes, error } = await supabase
       .from('reservas')
-      .select('id, fecha_inicio, fecha_fin, matricula')
+      .select('id, fecha_inicio, fecha_fin, matricula, empleado_id, coches(marca,modelo), empleados(email,nombre,apellidos)')
       .eq('estado', 'pendiente')
       .lte('fecha_inicio', ahora.toISOString())
 
@@ -368,18 +369,36 @@ export async function activarReservasPendientes() {
       return { success: true, activadas: 0 }
     }
 
-    const ids = pendientes.map(r => r.id)
-    const { error: updateError } = await supabase
-      .from('reservas')
-      .update({ estado: 'activa' })
-      .in('id', ids)
-
-    if (updateError) {
-      console.error('Error actualizando reservas a activas:', updateError)
-      return { success: false, error: 'Error activando reservas' }
+    const ids: number[] = []
+    let emailsEnviados = 0
+    for (const r of pendientes) {
+      try {
+        const { error: upErr } = await supabase.from('reservas').update({ estado: 'activa' }).eq('id', r.id)
+        if (upErr) {
+          console.error('Error activando reserva', r.id, upErr)
+          continue
+        }
+        ids.push(r.id)
+        // Enviar email si hay datos
+        const email = (r as any).empleados?.email
+        const nombre = (r as any).empleados?.nombre || ''
+        const coche = (r as any).coches
+        if (email && coche) {
+          const resEmail = await enviarEmailInicioReserva(
+            email,
+            nombre,
+            { matricula: r.matricula, marca: coche.marca, modelo: coche.modelo },
+            new Date(r.fecha_inicio),
+            new Date(r.fecha_fin)
+          )
+          if (resEmail.success) emailsEnviados++
+        }
+      } catch (e) {
+        console.error('Error procesando activación individual', r.id, e)
+      }
     }
 
-    return { success: true, activadas: ids.length, ids }
+    return { success: true, activadas: ids.length, ids, emailsEnviados }
   } catch (error) {
     console.error('Error en activarReservasPendientes:', error)
     return { success: false, error: 'Error inesperado activando reservas' }

@@ -682,18 +682,17 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
     }
   }, [clearMarkers])
 
-  // Effect para cargar reservas activas cuando cambien los coches
+  // Effect para cargar / refrescar reservas activas cuando cambian los coches O las reservas del usuario (crear/cancelar/completar)
   useEffect(() => {
     if (coches.length > 0) {
       const matriculas = coches
         .filter(coche => !coche.donante)
         .map(coche => coche.matricula)
-      
       if (matriculas.length > 0) {
         verificarReservasActivas(matriculas)
       }
     }
-  }, [coches, verificarReservasActivas])
+  }, [coches, misReservas, verificarReservasActivas])
 
   const handleRefresh = useCallback(() => {
     window.location.reload()

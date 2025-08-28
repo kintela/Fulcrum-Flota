@@ -361,8 +361,11 @@ export function MisReservas({
                       </div>
                       
                       <div className="text-xs text-gray-500">
-                        {format(new Date(reserva.fecha_inicio), "PPP", { locale: es })} -{" "}
-                        {format(new Date(reserva.fecha_fin), "PPP", { locale: es })}
+                        {(() => {
+                          const inicio = new Date(reserva.fecha_inicio)
+                          const fin = new Date(reserva.fecha_fin)
+                          return `${format(inicio, 'dd/MM/yyyy HH:mm')} a ${format(fin, 'dd/MM/yyyy HH:mm')}`
+                        })()}
                       </div>
                     </div>
                   ))}

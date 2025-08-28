@@ -382,3 +382,58 @@ Sistema de Notificaciones Automáticas
     };
   }
 }
+
+// Email al inicio (activación) de una reserva pendiente
+export async function enviarEmailInicioReserva(
+  emailDestino: string,
+  nombreEmpleado: string,
+  vehiculo: { matricula: string; marca: string; modelo: string },
+  fechaInicio: Date,
+  fechaFin: Date
+) {
+  try {
+    const transporter = createEmailTransporter()
+
+    const inicioFmt = fechaInicio.toLocaleDateString('es-ES', {
+      timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    })
+    const finFmt = fechaFin.toLocaleDateString('es-ES', {
+      timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    })
+
+    const asunto = `✅ Comienza tu reserva - ${vehiculo.matricula}`
+    const texto = `
+INICIO DE RESERVA
+
+Hola ${nombreEmpleado},
+
+Tu reserva del vehículo ${vehiculo.marca} ${vehiculo.modelo} (${vehiculo.matricula}) ha comenzado.
+
+Inicio: ${inicioFmt}
+Fin previsto: ${finFmt}
+
+Recuerda marcarla como completada cuando devuelvas el vehículo
+
+---
+Fulcrum Fleet Management
+Este es un mensaje automático.
+    `
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /><title>Inicio de Reserva</title><style>body{font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#333;max-width:620px;margin:0 auto;padding:24px;background:#f5f7fa} .card{background:#fff;border-radius:10px;padding:28px;box-shadow:0 2px 8px rgba(0,0,0,0.06)} h1{margin:0 0 12px;font-size:22px;color:#16a34a} .veh{background:#f0fdf4;border:1px solid #bbf7d0;padding:16px;border-radius:8px;margin:16px 0} .footer{margin-top:32px;font-size:12px;color:#666;text-align:center} .pill{display:inline-block;background:#16a34a;color:#fff;padding:4px 10px;border-radius:999px;font-size:12px;margin-bottom:8px}</style></head><body><div class="card"><span class="pill">Reserva activada</span><h1>Comienza tu reserva</h1><p>Hola <strong>${nombreEmpleado}</strong>,</p><p>Tu reserva ha pasado automáticamente de <strong>pendiente</strong> a <strong>activa</strong>.</p><div class="veh"><strong>Vehículo:</strong> ${vehiculo.marca} ${vehiculo.modelo} (${vehiculo.matricula})<br/><strong>Inicio:</strong> ${inicioFmt}<br/><strong>Fin previsto:</strong> ${finFmt}</div><p>Recuerda marcarla como <em>completada</em> cuando devuelvas el vehículo.</p><div class="footer">Fulcrum Fleet Management · Aviso automático</div></div></body></html>`
+
+    const mailOptions = {
+      from: { name: 'Fulcrum Fleet Management', address: emailConfig.auth.user },
+      to: emailDestino,
+      subject: asunto,
+      text: texto,
+      html
+    }
+
+    const r = await transporter.sendMail(mailOptions)
+    console.log('📧 Email inicio reserva enviado:', r.messageId)
+    return { success: true, messageId: r.messageId }
+  } catch (error) {
+    console.error('❌ Error enviando email inicio reserva:', error)
+    return { success: false, error: error instanceof Error ? error.message : 'Error desconocido' }
+  }
+}
