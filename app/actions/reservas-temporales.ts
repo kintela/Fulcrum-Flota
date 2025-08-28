@@ -347,3 +347,41 @@ export async function verificarDisponibilidad(matricula: string, fechaInicio: st
     }
   }
 }
+
+// Activar reservas pendientes cuyo inicio ya llegó (cron)
+export async function activarReservasPendientes() {
+  try {
+    const ahora = new Date()
+    // Buscar reservas en estado pendiente con fecha_inicio <= ahora
+    const { data: pendientes, error } = await supabase
+      .from('reservas')
+      .select('id, fecha_inicio, fecha_fin, matricula')
+      .eq('estado', 'pendiente')
+      .lte('fecha_inicio', ahora.toISOString())
+
+    if (error) {
+      console.error('Error consultando reservas pendientes para activar:', error)
+      return { success: false, error: 'Error consultando reservas pendientes' }
+    }
+
+    if (!pendientes || pendientes.length === 0) {
+      return { success: true, activadas: 0 }
+    }
+
+    const ids = pendientes.map(r => r.id)
+    const { error: updateError } = await supabase
+      .from('reservas')
+      .update({ estado: 'activa' })
+      .in('id', ids)
+
+    if (updateError) {
+      console.error('Error actualizando reservas a activas:', updateError)
+      return { success: false, error: 'Error activando reservas' }
+    }
+
+    return { success: true, activadas: ids.length, ids }
+  } catch (error) {
+    console.error('Error en activarReservasPendientes:', error)
+    return { success: false, error: 'Error inesperado activando reservas' }
+  }
+}
