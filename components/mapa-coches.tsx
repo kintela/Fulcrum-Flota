@@ -188,8 +188,8 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
     matricula: string
     marcaModelo: string
   } | null>(null)
-  // Mapa: matricula -> { enCurso: boolean; vencida: boolean }
-  const [reservasActivas, setReservasActivas] = useState<Map<string, { enCurso: boolean; vencida: boolean }>>(new Map())
+  // Mapa: matricula -> { enCurso: boolean; vencida: boolean; programada: boolean; proximaInicio?: string; proximaFin?: string }
+  const [reservasActivas, setReservasActivas] = useState<Map<string, { enCurso: boolean; vencida: boolean; programada: boolean; proximaInicio?: string; proximaFin?: string }>>(new Map())
 
   // Crear mapa de empleados
   const empleadosMap = new Map()
@@ -214,7 +214,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
 
   // Función para verificar si un coche tiene reservas activas
   const verificarReservasActivas = useCallback(async (matriculas: string[]) => {
-    const nuevasReservas = new Map<string, { enCurso: boolean; vencida: boolean }>()
+    const nuevasReservas = new Map<string, { enCurso: boolean; vencida: boolean; programada: boolean; proximaInicio?: string; proximaFin?: string }>()
 
     const promesas = matriculas.map(async (matricula) => {
       try {
@@ -226,25 +226,37 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
 
         if (error) {
           console.warn(`Error verificando reservas para ${matricula}:`, error)
-          nuevasReservas.set(matricula, { enCurso: false, vencida: false })
+          nuevasReservas.set(matricula, { enCurso: false, vencida: false, programada: false })
           return
         }
 
         const ahora = new Date()
         let enCurso = false
         let vencida = false
+        let programada = false
+        let proximaInicio: string | undefined
+        let proximaFin: string | undefined
 
         reservas?.forEach(r => {
           const inicio = new Date(r.fecha_inicio)
-            , fin = new Date(r.fecha_fin)
+          const fin = new Date(r.fecha_fin)
           if (ahora >= inicio && ahora <= fin) enCurso = true
-          if (ahora > fin) vencida = true // activa pero pasada de hora => vencida no marcada
+          if (ahora > fin) vencida = true
+          if (inicio > ahora) {
+            // Reserva futura (programada). Elegir la más próxima.
+            if (!proximaInicio || new Date(proximaInicio) > inicio) {
+              proximaInicio = r.fecha_inicio
+              proximaFin = r.fecha_fin
+            }
+          }
         })
 
-        nuevasReservas.set(matricula, { enCurso, vencida })
+        if (!enCurso && !vencida && proximaInicio) programada = true
+
+        nuevasReservas.set(matricula, { enCurso, vencida, programada, proximaInicio, proximaFin })
       } catch (error) {
         console.warn(`Error verificando reservas para ${matricula}:`, error)
-        nuevasReservas.set(matricula, { enCurso: false, vencida: false })
+        nuevasReservas.set(matricula, { enCurso: false, vencida: false, programada: false })
       }
     })
 
@@ -254,12 +266,12 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
 
   // Función para determinar si un coche está disponible
   const isCocheDisponible = useCallback((coche: Coche) => {
-    // Disponible solo si no está asignado, no es donante y NO tiene ninguna reserva activa (en curso o vencida no completada)
+    // Disponible si: no está asignado, no es donante, y no tiene reserva en curso ni vencida. Programada NO bloquea.
     const noEstaAsignado = !coche.asignadoa
     const estadoReserva = reservasActivas.get(coche.matricula)
-    const sinReservaActiva = !(estadoReserva?.enCurso || estadoReserva?.vencida)
+    const sinReservaBloqueante = !(estadoReserva?.enCurso || estadoReserva?.vencida)
     const noEsDonante = !coche.donante
-    return noEstaAsignado && sinReservaActiva && noEsDonante
+    return noEstaAsignado && sinReservaBloqueante && noEsDonante
   }, [reservasActivas])
 
   // Función para limpiar marcadores
@@ -723,7 +735,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
   const cochesAsignados = todosLosCoches.filter((c) => getEmpleadoInfo(c) || c.asignadoa)
   const cochesReservados = todosLosCoches.filter((c) => {
     const estadoReserva = reservasActivas.get(c.matricula)
-    const tieneReserva = !!(estadoReserva?.enCurso || estadoReserva?.vencida)
+    const tieneReserva = !!(estadoReserva?.enCurso || estadoReserva?.vencida) // programada no cuenta como reservado aún
     return !c.asignadoa && tieneReserva
   })
   const cochesDisponibles = todosLosCoches.filter((c) => isCocheDisponible(c))
@@ -1075,7 +1087,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
     const hasLocation = coche.latitud && coche.longitud && !coche.donante
     const isAssigned = getEmpleadoInfo(coche) || coche.asignadoa
   const estadoReserva = reservasActivas.get(coche.matricula)
-  const isReserved = !coche.asignadoa && (estadoReserva?.enCurso || estadoReserva?.vencida)
+  const isReserved = !coche.asignadoa && (estadoReserva?.enCurso || estadoReserva?.vencida) // programada no
 
     // Si hay un filtro activo, colorear solo los que coinciden con el filtro
     let matchesFilter = false
@@ -1187,20 +1199,31 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
                     const color = getMatriculaColor(matricula)
                     const estadoReserva = reservasActivas.get(matricula)
                     
-                    // Lógica para el icono diferenciando tipos de reserva activa
+                    // Lógica para el icono diferenciando estados
                     let icono = ""
-                    if (!isDisponible) {
-                      if (estadoReserva?.vencida) {
-                        icono = "⚠️" // Reserva activa vencida no completada
-                      } else if (estadoReserva?.enCurso) {
-                        icono = "⏳" // Reserva activa en curso
-                      } else {
-                        icono = "🚫" // No disponible por asignación permanente
+                    let extra = ""
+                    if (estadoReserva?.vencida) {
+                      icono = "⚠️" // vencida no completada
+                    } else if (estadoReserva?.enCurso) {
+                      icono = "⏳" // en curso
+                    } else if (!isDisponible) {
+                      icono = "🚫" // asignado permanente u otra causa
+                    } else if (estadoReserva?.programada) {
+                      icono = "⏰" // próxima reserva programada (emoji más compatible)
+                      if (estadoReserva.proximaInicio && estadoReserva.proximaFin) {
+                        try {
+                          const inicio = new Date(estadoReserva.proximaInicio)
+                          const fin = new Date(estadoReserva.proximaFin)
+                          const sameDay = inicio.toDateString() === fin.toDateString()
+                          const fmt = (d: Date) => d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+                          const dia = inicio.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })
+                          extra = ` ${sameDay ? dia + ' ' : ''}${fmt(inicio)}-${fmt(fin)}`
+                        } catch {}
                       }
                     } else if (hasLocation) {
-                      icono = "📍" // Disponible con ubicación
+                      icono = "📍"
                     } else {
-                      icono = "❌" // Disponible sin ubicación
+                      icono = "❌"
                     }
                     
                     return (
@@ -1209,7 +1232,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
                         value={matricula}
                         style={{ color: color }}
                       >
-                        {matricula} {icono}{estadoReserva?.vencida ? ' (vencida)' : estadoReserva?.enCurso ? ' (reservada)' : ''}
+                        {matricula} {icono || '[Prog]'}{estadoReserva?.vencida ? ' (vencida)' : estadoReserva?.enCurso ? ' (reservada)' : estadoReserva?.programada ? `${extra}` : ''}
                       </option>
                     )
                   })}
