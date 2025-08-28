@@ -265,6 +265,47 @@ export async function cancelarReserva(reservaId: number) {
   }
 }
 
+export async function completarReserva(reservaId: number) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return { success: false, error: 'Usuario no autenticado' }
+    }
+    const { data: empleado, error: empleadoError } = await supabase
+      .from('empleados')
+      .select('id')
+      .eq('email', session.user.email)
+      .single()
+    if (empleadoError || !empleado) {
+      return { success: false, error: 'No se encontró el empleado asociado a este usuario' }
+    }
+    const { data: reserva, error: reservaError } = await supabase
+      .from('reservas')
+      .select('*')
+      .eq('id', reservaId)
+      .eq('empleado_id', empleado.id)
+      .single()
+    if (reservaError || !reserva) {
+      return { success: false, error: 'Reserva no encontrada o no autorizada' }
+    }
+    if (reserva.estado !== 'activa') {
+      return { success: false, error: 'Sólo se pueden completar reservas activas' }
+    }
+    const { error: updateError } = await supabase
+      .from('reservas')
+      .update({ estado: 'completada' })
+      .eq('id', reservaId)
+    if (updateError) {
+      console.error('Error completando reserva:', updateError)
+      return { success: false, error: 'Error al completar la reserva' }
+    }
+    return { success: true, message: 'Reserva marcada como completada' }
+  } catch (error) {
+    console.error('Error en completarReserva:', error)
+    return { success: false, error: 'Error inesperado al completar la reserva' }
+  }
+}
+
 export async function verificarDisponibilidad(matricula: string, fechaInicio: string, fechaFin: string) {
   try {
     // Verificar si hay reservas activas que se solapen con el período solicitado

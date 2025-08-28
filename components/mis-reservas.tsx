@@ -17,7 +17,7 @@ import {
 import { Calendar, Clock, Car, X, RefreshCw, AlertTriangle, MapPin, Loader2 } from "lucide-react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
-import { obtenerReservasUsuario, cancelarReserva } from "@/app/actions/reservas-temporales"
+import { obtenerReservasUsuario, cancelarReserva, completarReserva } from "@/app/actions/reservas-temporales"
 import { capturarYAsignarUbicacion } from "@/lib/ubicacion-utils"
 
 interface Reserva {
@@ -49,6 +49,7 @@ export function MisReservas({
   const [showCancelDialog, setShowCancelDialog] = useState(false)
   const [reservaToCancel, setReservaToCancel] = useState<Reserva | null>(null)
   const [capturandoUbicacion, setCapturandoUbicacion] = useState<number | null>(null)
+  const [completingId, setCompletingId] = useState<number | null>(null)
 
   const cargarReservas = async () => {
     setIsLoading(true)
@@ -293,6 +294,31 @@ export function MisReservas({
                           </span>
                         </div>
                       </div>
+                      {getEstadoReserva(reserva) === 'vencida' && (
+                        <div className="mt-3 flex flex-wrap gap-2 items-center">
+                          <p className="text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded px-2 py-1">
+                            Vencida pero no marcada como completada
+                          </p>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={completingId === reserva.id}
+                            onClick={async () => {
+                              setCompletingId(reserva.id)
+                              const resp = await completarReserva(reserva.id)
+                              if (!resp.success) {
+                                alert(resp.error)
+                              } else {
+                                await cargarReservas()
+                              }
+                              setCompletingId(null)
+                            }}
+                            className="text-xs h-6 px-2 border-orange-300 hover:bg-orange-100"
+                          >
+                            {completingId === reserva.id ? 'Guardando...' : 'Marcar completada'}
+                          </Button>
+                        </div>
+                      )}
                       
                       {reserva.observaciones && (
                         <div className="mt-3 p-2 bg-white rounded border">

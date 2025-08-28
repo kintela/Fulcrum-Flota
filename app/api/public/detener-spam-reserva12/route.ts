@@ -12,8 +12,7 @@ export async function POST() {
       .from('reservas')
       .update({ 
         notificacion_enviada: true,
-        fecha_notificacion: ahora.toISOString(),
-        estado: 'completada'
+        fecha_notificacion: ahora.toISOString()
       })
       .eq('id', 12)
 

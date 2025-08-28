@@ -161,24 +161,23 @@ export async function verificarReservasVencidasV2() {
 
         // PASO 2.5: Finalizar el procesamiento
         if (emailEnviado || whatsappEnviado) {
-          // Marcar como completada exitosamente
+          // No cambiamos estado automáticamente; sólo marcamos notificación.
           const { error: updateFinalError } = await supabase
             .from('reservas')
             .update({ 
-              notificacion_enviada: true,
-              estado: 'completada'
+              notificacion_enviada: true
             })
             .eq('id', reserva.id)
 
           if (updateFinalError) {
-            console.error(`❌ Error finalizando reserva ${reserva.id}:`, updateFinalError)
+            console.error(`❌ Error registrando notificación para reserva ${reserva.id}:`, updateFinalError)
             erroresEnvio++
           } else {
             reservasNotificadas++
             const canales = []
             if (emailEnviado) canales.push('email')
             if (whatsappEnviado) canales.push('WhatsApp')
-            console.log(`✅ Reserva ${reserva.id} procesada exitosamente por ${canales.join(' y ')}`)
+            console.log(`✅ Reserva ${reserva.id} notificada por ${canales.join(' y ')} (estado permanece ${reserva.estado})`)
           }
         } else {
           // Revertir el claim si no se pudo enviar nada

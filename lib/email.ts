@@ -195,17 +195,13 @@ export async function enviarEmailReservaVencida(
           </div>
 
           <div class="warning-text" style="background: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460;">
-            <strong>Información importante:</strong> Su reserva ha sido marcada automáticamente como 
-            <strong>COMPLETADA</strong> en el sistema debido al tiempo transcurrido. Si necesita extender 
-            la reserva, contacte con administración inmediatamente.
+            <strong>Información:</strong> La reserva sigue figurando como <strong>ACTIVA</strong> hasta que
+            la completes tú mismo en el sistema al devolver el vehículo.
           </div>
           
-          <p>Si tiene alguna consulta o necesita extender la reserva, por favor contacte con el departamento correspondiente.</p>
           
           <div class="footer">
             <p><strong>Fulcrum Fleet Management</strong></p>
-            <p>Este es un mensaje automático. Por favor, no responda a este email.</p>
-            <p>Para consultas, contacte con su supervisor o el departamento de administración.</p>
           </div>
         </div>
       </body>
@@ -228,9 +224,8 @@ Tiempo vencido: ${tiempoVencido}
 ACCIÓN REQUERIDA: Por favor, proceda a devolver el vehículo lo antes posible. 
 Si ya lo ha devuelto, puede ignorar este mensaje.
 
-IMPORTANTE: Su reserva ha sido marcada automáticamente como COMPLETADA en el sistema 
-debido al tiempo transcurrido. Si necesita extender la reserva, contacte con 
-administración inmediatamente.
+INFORMACIÓN: La reserva permanece ACTIVA hasta que la marques como completada al devolver
+el vehículo. Si necesitas extenderla, solicita una ampliación antes de finalizar.
 
 Si tiene alguna consulta o necesita extender la reserva, por favor contacte con Roberto Quintela.
 
