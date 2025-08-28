@@ -188,7 +188,8 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
     matricula: string
     marcaModelo: string
   } | null>(null)
-  const [reservasActivas, setReservasActivas] = useState<Map<string, boolean>>(new Map())
+  // Mapa: matricula -> { enCurso: boolean; vencida: boolean }
+  const [reservasActivas, setReservasActivas] = useState<Map<string, { enCurso: boolean; vencida: boolean }>>(new Map())
 
   // Crear mapa de empleados
   const empleadosMap = new Map()
@@ -213,56 +214,52 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
 
   // Función para verificar si un coche tiene reservas activas
   const verificarReservasActivas = useCallback(async (matriculas: string[]) => {
-    const nuevasReservas = new Map<string, boolean>()
-    
-    // Verificar cada matrícula en paralelo
+    const nuevasReservas = new Map<string, { enCurso: boolean; vencida: boolean }>()
+
     const promesas = matriculas.map(async (matricula) => {
       try {
-        // Verificar si hay reservas activas en este momento
         const { data: reservas, error } = await supabase
-          .from("reservas")
-          .select("id, fecha_inicio, fecha_fin")
+          .from('reservas')
+          .select('id, fecha_inicio, fecha_fin')
           .eq('matricula', matricula)
           .eq('estado', 'activa')
-        
+
         if (error) {
           console.warn(`Error verificando reservas para ${matricula}:`, error)
-          nuevasReservas.set(matricula, false)
+          nuevasReservas.set(matricula, { enCurso: false, vencida: false })
           return
         }
-        
-        // Verificar si alguna reserva está activa en este momento
+
         const ahora = new Date()
-        const tieneReservaActiva = reservas?.some(reserva => {
-          const fechaInicio = new Date(reserva.fecha_inicio)
-          const fechaFin = new Date(reserva.fecha_fin)
-          const estaActiva = ahora >= fechaInicio && ahora <= fechaFin
-          
-          return estaActiva
-        }) || false
-        
-        nuevasReservas.set(matricula, tieneReservaActiva)
+        let enCurso = false
+        let vencida = false
+
+        reservas?.forEach(r => {
+          const inicio = new Date(r.fecha_inicio)
+            , fin = new Date(r.fecha_fin)
+          if (ahora >= inicio && ahora <= fin) enCurso = true
+          if (ahora > fin) vencida = true // activa pero pasada de hora => vencida no marcada
+        })
+
+        nuevasReservas.set(matricula, { enCurso, vencida })
       } catch (error) {
         console.warn(`Error verificando reservas para ${matricula}:`, error)
-        nuevasReservas.set(matricula, false)
+        nuevasReservas.set(matricula, { enCurso: false, vencida: false })
       }
     })
-    
+
     await Promise.all(promesas)
     setReservasActivas(nuevasReservas)
   }, [])
 
   // Función para determinar si un coche está disponible
   const isCocheDisponible = useCallback((coche: Coche) => {
-    // Un coche está disponible si:
-    // 1. No está asignado permanentemente a nadie
-    // 2. No tiene reservas temporales activas
-    // 3. No es un vehículo donante
+    // Disponible solo si no está asignado, no es donante y NO tiene ninguna reserva activa (en curso o vencida no completada)
     const noEstaAsignado = !coche.asignadoa
-    const noTieneReservasActivas = !reservasActivas.get(coche.matricula)
+    const estadoReserva = reservasActivas.get(coche.matricula)
+    const sinReservaActiva = !(estadoReserva?.enCurso || estadoReserva?.vencida)
     const noEsDonante = !coche.donante
-    
-    return noEstaAsignado && noTieneReservasActivas && noEsDonante
+    return noEstaAsignado && sinReservaActiva && noEsDonante
   }, [reservasActivas])
 
   // Función para limpiar marcadores
@@ -725,7 +722,8 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
   const todosLosCoches = coches.filter((c) => !c.donante)
   const cochesAsignados = todosLosCoches.filter((c) => getEmpleadoInfo(c) || c.asignadoa)
   const cochesReservados = todosLosCoches.filter((c) => {
-    const tieneReserva = reservasActivas.get(c.matricula)
+    const estadoReserva = reservasActivas.get(c.matricula)
+    const tieneReserva = !!(estadoReserva?.enCurso || estadoReserva?.vencida)
     return !c.asignadoa && tieneReserva
   })
   const cochesDisponibles = todosLosCoches.filter((c) => isCocheDisponible(c))
@@ -1076,7 +1074,8 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
 
     const hasLocation = coche.latitud && coche.longitud && !coche.donante
     const isAssigned = getEmpleadoInfo(coche) || coche.asignadoa
-    const isReserved = !coche.asignadoa && reservasActivas.get(coche.matricula)
+  const estadoReserva = reservasActivas.get(coche.matricula)
+  const isReserved = !coche.asignadoa && (estadoReserva?.enCurso || estadoReserva?.vencida)
 
     // Si hay un filtro activo, colorear solo los que coinciden con el filtro
     let matchesFilter = false
@@ -1186,11 +1185,18 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
                     const hasLocation = coche?.latitud && coche?.longitud && !coche?.donante
                     const isDisponible = coche ? isCocheDisponible(coche) : false
                     const color = getMatriculaColor(matricula)
+                    const estadoReserva = reservasActivas.get(matricula)
                     
-                    // Lógica para el icono:
+                    // Lógica para el icono diferenciando tipos de reserva activa
                     let icono = ""
                     if (!isDisponible) {
-                      icono = "🚫" // No disponible (asignado o con reservas)
+                      if (estadoReserva?.vencida) {
+                        icono = "⚠️" // Reserva activa vencida no completada
+                      } else if (estadoReserva?.enCurso) {
+                        icono = "⏳" // Reserva activa en curso
+                      } else {
+                        icono = "🚫" // No disponible por asignación permanente
+                      }
                     } else if (hasLocation) {
                       icono = "📍" // Disponible con ubicación
                     } else {
@@ -1203,7 +1209,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
                         value={matricula}
                         style={{ color: color }}
                       >
-                        {matricula} {icono}
+                        {matricula} {icono}{estadoReserva?.vencida ? ' (vencida)' : estadoReserva?.enCurso ? ' (reservada)' : ''}
                       </option>
                     )
                   })}
@@ -1289,7 +1295,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
                     <span className="text-sm">Este vehículo no está disponible para reservas</span>
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
-                    El vehículo está asignado permanentemente o tiene una reserva temporal activa.
+                    El vehículo está asignado permanentemente o tiene una reserva temporal activa (en curso o vencida sin completar).
                   </p>
                 </div>
               )}

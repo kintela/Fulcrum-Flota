@@ -308,27 +308,33 @@ export async function completarReserva(reservaId: number) {
 
 export async function verificarDisponibilidad(matricula: string, fechaInicio: string, fechaFin: string) {
   try {
-    // Verificar si hay reservas activas que se solapen con el período solicitado
-    const { data: reservasConflicto, error } = await supabase
-      .from("reservas")
-      .select("id, fecha_inicio, fecha_fin")
+    // Obtener TODAS las reservas activas del vehículo
+    const { data: reservasActivas, error } = await supabase
+      .from('reservas')
+      .select('id, fecha_inicio, fecha_fin')
       .eq('matricula', matricula)
       .eq('estado', 'activa')
-      .or(`and(fecha_inicio.lte.${fechaFin},fecha_fin.gte.${fechaInicio})`)
 
     if (error) {
-      console.error("Error verificando disponibilidad:", error)
-      return {
-        success: false,
-        error: "Error al verificar disponibilidad"
-      }
+      console.error('Error verificando disponibilidad:', error)
+      return { success: false, error: 'Error al verificar disponibilidad' }
     }
 
-    return {
-      success: true,
-      disponible: !reservasConflicto || reservasConflicto.length === 0,
-      conflictos: reservasConflicto || []
-    }
+    const inicioSolicitado = new Date(fechaInicio)
+    const finSolicitado = new Date(fechaFin)
+    const ahora = new Date()
+
+    const conflictos = (reservasActivas || []).filter(r => {
+      const inicio = new Date(r.fecha_inicio)
+      const fin = new Date(r.fecha_fin)
+      // 1. Reserva activa todavía en curso (intervalos se solapan)
+      const solapa = inicio <= finSolicitado && fin >= inicioSolicitado
+      // 2. Reserva activa ya vencida pero no marcada (fin < ahora)
+      const vencidaNoCompletada = fin < ahora
+      return solapa || vencidaNoCompletada
+    })
+
+    return { success: true, disponible: conflictos.length === 0, conflictos }
 
   } catch (error) {
     console.error("Error en verificarDisponibilidad:", error)
