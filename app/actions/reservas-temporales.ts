@@ -78,7 +78,10 @@ export async function crearReservaTemporal(data: CrearReservaData) {
       }
     }
 
-    // Crear la reserva temporal
+  // Determinar estado inicial: 'pendiente' si todavía no ha comenzado, sino 'activa'
+  const estadoInicial = fechaInicio > ahora ? 'pendiente' : 'activa'
+
+  // Crear la reserva temporal
     const { data: reserva, error: reservaError } = await supabase
       .from("reservas")
       .insert([
@@ -88,7 +91,7 @@ export async function crearReservaTemporal(data: CrearReservaData) {
           fecha_inicio: data.fecha_inicio,
           fecha_fin: data.fecha_fin,
           observaciones: data.observaciones || null,
-          estado: 'activa'
+      estado: estadoInicial
         }
       ])
       .select()
@@ -229,11 +232,11 @@ export async function cancelarReserva(reservaId: number) {
       }
     }
 
-    // Solo permitir cancelar reservas activas
-    if (reserva.estado !== 'activa') {
+  // Solo permitir cancelar reservas activas o pendientes
+  if (!(reserva.estado === 'activa' || reserva.estado === 'pendiente')) {
       return {
         success: false,
-        error: "Solo se pueden cancelar reservas activas"
+    error: "Solo se pueden cancelar reservas activas o pendientes"
       }
     }
 
@@ -308,12 +311,12 @@ export async function completarReserva(reservaId: number) {
 
 export async function verificarDisponibilidad(matricula: string, fechaInicio: string, fechaFin: string) {
   try {
-    // Obtener TODAS las reservas activas del vehículo
+    // Obtener reservas activas o pendientes del vehículo (pendiente = programada futura)
     const { data: reservasActivas, error } = await supabase
       .from('reservas')
       .select('id, fecha_inicio, fecha_fin')
       .eq('matricula', matricula)
-      .eq('estado', 'activa')
+      .in('estado', ['activa','pendiente'])
 
     if (error) {
       console.error('Error verificando disponibilidad:', error)
@@ -327,10 +330,10 @@ export async function verificarDisponibilidad(matricula: string, fechaInicio: st
     const conflictos = (reservasActivas || []).filter(r => {
       const inicio = new Date(r.fecha_inicio)
       const fin = new Date(r.fecha_fin)
-      // 1. Reserva activa todavía en curso (intervalos se solapan)
+      // Solape temporal con la solicitud
       const solapa = inicio <= finSolicitado && fin >= inicioSolicitado
-      // 2. Reserva activa ya vencida pero no marcada (fin < ahora)
-      const vencidaNoCompletada = fin < ahora
+      // Reserva activa ya vencida pero no marcada (fin < ahora) -> sigue bloqueando
+      const vencidaNoCompletada = fin < ahora && inicio <= ahora
       return solapa || vencidaNoCompletada
     })
 
