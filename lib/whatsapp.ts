@@ -17,6 +17,9 @@ interface WhatsAppMessage {
   mediaUrl?: string; // URL opcional de imagen/archivo
 }
 
+// Env var para activar sondeo de estado tras enviar ("true"/"1")
+const trackStatus = (process.env.TWILIO_WHATSAPP_TRACK_STATUS || '').toLowerCase() === 'true' || process.env.TWILIO_WHATSAPP_TRACK_STATUS === '1'
+
 export async function sendWhatsAppMessage({ to, message, mediaUrl }: WhatsAppMessage) {
   try {
     // Validar formato del número (debe incluir código de país)
@@ -40,12 +43,37 @@ export async function sendWhatsAppMessage({ to, message, mediaUrl }: WhatsAppMes
 
     const twilioMessage = await client.messages.create(messageData);
 
-    console.log(`✅ WhatsApp enviado exitosamente. SID: ${twilioMessage.sid}`);
-    
+    console.log(`✅ WhatsApp enviado exitosamente. SID: ${twilioMessage.sid} status inicial: ${twilioMessage.status}`);
+
+    let finalStatus = twilioMessage.status;
+    let errorCode: string | number | undefined = (twilioMessage as any).errorCode;
+    let errorMessage: string | undefined = (twilioMessage as any).errorMessage;
+
+    if (trackStatus) {
+      // Sondear hasta 6 veces (unos ~9s) para intentar obtener delivered / failed
+      for (let intento = 0; intento < 6; intento++) {
+        if ([ 'delivered', 'failed', 'undelivered', 'read', 'canceled' ].includes(finalStatus)) break;
+        await new Promise(r => setTimeout(r, 1500));
+        try {
+          const fetched = await client.messages(twilioMessage.sid).fetch();
+            finalStatus = fetched.status as typeof finalStatus;
+            errorCode = (fetched as any).errorCode;
+            errorMessage = (fetched as any).errorMessage;
+            console.log(`[WhatsApp Tracking] intento ${intento+1} status=${finalStatus} errorCode=${errorCode ?? ''}`);
+        } catch (e) {
+          console.warn('[WhatsApp Tracking] error al sondear estado', e);
+          break;
+        }
+      }
+    }
+
     return {
       success: true,
       messageSid: twilioMessage.sid,
-      status: twilioMessage.status
+      status: finalStatus,
+      errorCode,
+      errorMessage,
+      tracked: trackStatus
     };
 
   } catch (error) {
@@ -55,6 +83,33 @@ export async function sendWhatsAppMessage({ to, message, mediaUrl }: WhatsAppMes
       success: false,
       error: error instanceof Error ? error.message : 'Error desconocido'
     };
+  }
+}
+
+// Helper para depurar un SID concreto (se podría exponer por una ruta admin si hiciera falta)
+export async function debugWhatsAppMessage(sid: string) {
+  try {
+    const msg = await client.messages(sid).fetch();
+    console.log('[WhatsApp Debug]', {
+      sid: msg.sid,
+      status: msg.status,
+      to: msg.to,
+      from: msg.from,
+      errorCode: (msg as any).errorCode,
+      errorMessage: (msg as any).errorMessage,
+      dateSent: msg.dateSent,
+      dateCreated: msg.dateCreated,
+      dateUpdated: msg.dateUpdated
+    });
+    return {
+      success: true,
+      status: msg.status,
+      errorCode: (msg as any).errorCode,
+      errorMessage: (msg as any).errorMessage
+    }
+  } catch (e:any) {
+    console.error('[WhatsApp Debug] fallo', e);
+    return { success:false, error: e.message }
   }
 }
 

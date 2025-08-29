@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    const resultado = await activarReservasPendientes()
+  const resultado = await activarReservasPendientes({ manual: true })
     return NextResponse.json({ ...resultado, timestamp: new Date().toISOString() })
   } catch (error) {
     return NextResponse.json({ error: 'Error interno', details: error instanceof Error ? error.message : 'desconocido' }, { status: 500 })
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     if (body.action && body.action !== 'run') {
       return NextResponse.json({ error: 'Acción no válida' }, { status: 400 })
     }
-    const resultado = await activarReservasPendientes()
+  const resultado = await activarReservasPendientes({ manual: true })
     return NextResponse.json({ ...resultado, timestamp: new Date().toISOString() })
   } catch (error) {
     return NextResponse.json({ error: 'Error interno', details: error instanceof Error ? error.message : 'desconocido' }, { status: 500 })

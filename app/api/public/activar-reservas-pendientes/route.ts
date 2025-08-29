@@ -3,7 +3,7 @@ import { activarReservasPendientes } from '@/app/actions/reservas-temporales'
 
 export async function POST() {
   try {
-    const resultado = await activarReservasPendientes()
+  const resultado = await activarReservasPendientes({ manual: true })
     return NextResponse.json({
       ...resultado,
       timestamp: new Date().toISOString()

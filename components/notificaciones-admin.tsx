@@ -353,6 +353,12 @@ export default function NotificacionesAdmin() {
                   IDs: {resultadoActivacion.ids.join(', ')}
                 </div>
               )}
+              {(resultadoActivacion.emailsEnviados !== undefined || resultadoActivacion.whatsappsEnviados !== undefined) && (
+                <div className="text-muted-foreground text-xs flex gap-4 mt-1">
+                  {resultadoActivacion.emailsEnviados !== undefined && <span>Emails: {resultadoActivacion.emailsEnviados}</span>}
+                  {resultadoActivacion.whatsappsEnviados !== undefined && <span>WhatsApps: {resultadoActivacion.whatsappsEnviados}</span>}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
