@@ -2,13 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Calendar, User, Car, Clock, X, AlertTriangle, MapPin, Loader2 } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Calendar, User, Car, Clock, X, AlertTriangle, MapPin, Loader2 } from "lucide-react"
 import { format, isAfter, isBefore, parseISO } from "date-fns"
-import { es } from "date-fns/locale"
-import { useState } from "react"
 import { es } from "date-fns/locale"
 import { useState } from "react"
 import {
@@ -319,7 +313,7 @@ export default function ReservasTemporalesList({
                                           ) : (
                                             <div className="flex items-center gap-2">
                                               <MapPin className="h-4 w-4" />
-                                              � TEST - Registrar ubicación actual del vehículo
+                                              Registrar ubicación actual del vehículo
                                             </div>
                                           )}
                                         </Button>
