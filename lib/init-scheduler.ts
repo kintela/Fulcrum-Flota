@@ -1,10 +1,16 @@
-// Inicialización automática del sistema de scheduler
-// Solo se ejecuta en el servidor (no en el browser)
+// SCHEDULER COMPLETAMENTE DESHABILITADO
+// Solo se ejecutará manualmente via API o con Vercel Cron Jobs
 
 import { iniciarCronJob } from './scheduler'
 
+console.log('🚫 SCHEDULER AUTOMÁTICO DESHABILITADO')
+console.log('   Solo se ejecutará:')
+console.log('   - Manualmente via /api/public/forzar-notificaciones')
+console.log('   - Automáticamente con Vercel Cron Jobs en producción')
+
+// CÓDIGO COMPLETAMENTE DESHABILITADO - No se ejecuta nunca automáticamente
 // Verificar si estamos en el servidor (no en el browser)
-if (typeof window === 'undefined') {
+if (false) { // <-- FORZAMOS A FALSE PARA NUNCA EJECUTAR
   console.log('🔍 Verificando configuración del scheduler...')
   console.log('📍 Ejecutando en servidor (correcto)')
   console.log(`🌍 NODE_ENV: ${process.env.NODE_ENV}`)

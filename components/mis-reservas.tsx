@@ -14,10 +14,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Calendar, Clock, Car, X, RefreshCw, AlertTriangle } from "lucide-react"
+import { Calendar, Clock, Car, X, RefreshCw, AlertTriangle, MapPin, Loader2 } from "lucide-react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
-import { obtenerReservasUsuario, cancelarReserva } from "@/app/actions/reservas-temporales"
+import { obtenerReservasUsuario, cancelarReserva, completarReserva } from "@/app/actions/reservas-temporales"
+import { capturarYAsignarUbicacion } from "@/lib/ubicacion-utils"
 
 interface Reserva {
   id: number
@@ -34,13 +35,21 @@ interface Reserva {
   }
 }
 
-export function MisReservas() {
+export function MisReservas({ 
+  onCocheEnCancelacion,
+  onReservasChange 
+}: { 
+  onCocheEnCancelacion?: (matricula: string | null) => void
+  onReservasChange?: (reservas: Array<{ matricula: string; id: number; estado: string }>) => void
+}) {
   const [reservas, setReservas] = useState<Reserva[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
   const [cancellingId, setCancellingId] = useState<number | null>(null)
   const [showCancelDialog, setShowCancelDialog] = useState(false)
   const [reservaToCancel, setReservaToCancel] = useState<Reserva | null>(null)
+  const [capturandoUbicacion, setCapturandoUbicacion] = useState<number | null>(null)
+  const [completingId, setCompletingId] = useState<number | null>(null)
 
   const cargarReservas = async () => {
     setIsLoading(true)
@@ -50,7 +59,16 @@ export function MisReservas() {
       const resultado = await obtenerReservasUsuario()
       
       if (resultado.success) {
-        setReservas(resultado.reservas || [])
+        const reservasData = resultado.reservas || []
+        setReservas(reservasData)
+        
+        // Notificar al dashboard sobre las reservas del usuario
+        const reservasParaMapa = reservasData.map(reserva => ({
+          matricula: reserva.coches.matricula,
+          id: reserva.id,
+          estado: reserva.estado
+        }))
+        onReservasChange?.(reservasParaMapa)
       } else {
         setError(resultado.error || "Error al cargar las reservas")
       }
@@ -77,6 +95,8 @@ export function MisReservas() {
         await cargarReservas()
         setShowCancelDialog(false)
         setReservaToCancel(null)
+        // Limpiar el coche en cancelación
+        onCocheEnCancelacion?.(null)
       } else {
         setError(resultado.error || "Error al cancelar la reserva")
       }
@@ -91,11 +111,36 @@ export function MisReservas() {
   const handleConfirmarCancelacion = (reserva: Reserva) => {
     setReservaToCancel(reserva)
     setShowCancelDialog(true)
+    // Notificar al dashboard qué coche está en cancelación
+    onCocheEnCancelacion?.(reserva.coches.matricula)
   }
 
   const handleCerrarDialog = () => {
     setShowCancelDialog(false)
     setReservaToCancel(null)
+    // Limpiar el coche en cancelación
+    onCocheEnCancelacion?.(null)
+  }
+
+  const handleCapturarUbicacion = async (matricula: string, reservaId: number) => {
+    console.log('🔧 [MisReservas] Capturando ubicación para:', matricula, reservaId)
+    setCapturandoUbicacion(reservaId)
+    
+    try {
+      const resultado = await capturarYAsignarUbicacion(matricula)
+      console.log('📍 [MisReservas] Resultado captura ubicación:', resultado)
+      
+      if (resultado.success) {
+        alert(`📍 Ubicación capturada exitosamente para ${matricula}`)
+      } else {
+        alert(`❌ Error: ${resultado.mensaje}`)
+      }
+    } catch (error) {
+      console.error('❌ [MisReservas] Error capturando ubicación:', error)
+      alert('❌ Error inesperado al capturar la ubicación')
+    } finally {
+      setCapturandoUbicacion(null)
+    }
   }
 
   const getEstadoBadge = (reserva: Reserva) => {
@@ -249,6 +294,31 @@ export function MisReservas() {
                           </span>
                         </div>
                       </div>
+                      {getEstadoReserva(reserva) === 'vencida' && (
+                        <div className="mt-3 flex flex-wrap gap-2 items-center">
+                          <p className="text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded px-2 py-1">
+                            Vencida pero no marcada como completada
+                          </p>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={completingId === reserva.id}
+                            onClick={async () => {
+                              setCompletingId(reserva.id)
+                              const resp = await completarReserva(reserva.id)
+                              if (!resp.success) {
+                                alert(resp.error)
+                              } else {
+                                await cargarReservas()
+                              }
+                              setCompletingId(null)
+                            }}
+                            className="text-xs h-6 px-2 border-orange-300 hover:bg-orange-100"
+                          >
+                            {completingId === reserva.id ? 'Guardando...' : 'Marcar completada'}
+                          </Button>
+                        </div>
+                      )}
                       
                       {reserva.observaciones && (
                         <div className="mt-3 p-2 bg-white rounded border">
@@ -291,8 +361,11 @@ export function MisReservas() {
                       </div>
                       
                       <div className="text-xs text-gray-500">
-                        {format(new Date(reserva.fecha_inicio), "PPP", { locale: es })} -{" "}
-                        {format(new Date(reserva.fecha_fin), "PPP", { locale: es })}
+                        {(() => {
+                          const inicio = new Date(reserva.fecha_inicio)
+                          const fin = new Date(reserva.fecha_fin)
+                          return `${format(inicio, 'dd/MM/yyyy HH:mm')} a ${format(fin, 'dd/MM/yyyy HH:mm')}`
+                        })()}
                       </div>
                     </div>
                   ))}
@@ -317,33 +390,70 @@ export function MisReservas() {
         <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-red-600" />
-                Confirmar cancelación
+              <AlertDialogTitle asChild>
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-red-600" />
+                  Confirmar cancelación
+                </div>
               </AlertDialogTitle>
-              <AlertDialogDescription className="space-y-2">
-                <p>¿Estás seguro de que quieres cancelar esta reserva?</p>
-                {reservaToCancel && (
-                  <div className="mt-3 p-3 bg-gray-50 rounded-md border">
-                    <p className="font-semibold text-gray-900">
-                      {reservaToCancel.coches.matricula} - {reservaToCancel.coches.marca} {reservaToCancel.coches.modelo}
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      <strong>Desde:</strong> {format(new Date(reservaToCancel.fecha_inicio), "PPP 'a las' HH:mm", { locale: es })}
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      <strong>Hasta:</strong> {format(new Date(reservaToCancel.fecha_fin), "PPP 'a las' HH:mm", { locale: es })}
-                    </p>
-                    {reservaToCancel.observaciones && (
-                      <p className="text-sm text-gray-600 mt-2">
-                        <strong>Observaciones:</strong> {reservaToCancel.observaciones}
+              <AlertDialogDescription asChild>
+                <div className="space-y-2">
+                  <p>¿Estás seguro de que quieres cancelar esta reserva?</p>
+                  {reservaToCancel && (
+                    <div className="mt-3 p-3 bg-gray-50 rounded-md border">
+                      <p className="font-semibold text-gray-900">
+                        {reservaToCancel.coches.matricula} - {reservaToCancel.coches.marca} {reservaToCancel.coches.modelo}
                       </p>
-                    )}
-                  </div>
-                )}
-                <p className="text-sm text-red-600 font-medium">
-                  Esta acción no se puede deshacer.
-                </p>
+                      <p className="text-sm text-gray-600">
+                        <strong>Desde:</strong> {format(new Date(reservaToCancel.fecha_inicio), "PPP 'a las' HH:mm", { locale: es })}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        <strong>Hasta:</strong> {format(new Date(reservaToCancel.fecha_fin), "PPP 'a las' HH:mm", { locale: es })}
+                      </p>
+                      {reservaToCancel.observaciones && (
+                        <p className="text-sm text-gray-600 mt-2">
+                          <strong>Observaciones:</strong> {reservaToCancel.observaciones}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Sección de capturar ubicación */}
+                  {reservaToCancel && (
+                    <div className="bg-blue-50 p-4 rounded-md border border-blue-200">
+                      <p className="text-sm text-blue-700 mb-3">
+                        💡 <strong>¿Dónde está el vehículo?</strong> Antes de cancelar, puedes registrar automáticamente la ubicación actual del vehículo:
+                      </p>
+                      
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-blue-600 hover:text-blue-700 hover:bg-blue-100 w-full"
+                        disabled={capturandoUbicacion === reservaToCancel.id}
+                        onClick={() => {
+                          console.log('� [MisReservas] Capturando ubicación - Matrícula:', reservaToCancel.coches.matricula, 'Reserva ID:', reservaToCancel.id)
+                          handleCapturarUbicacion(reservaToCancel.coches.matricula, reservaToCancel.id)
+                        }}
+                      >
+                        {capturandoUbicacion === reservaToCancel.id ? (
+                          <div className="flex items-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Obteniendo ubicación GPS...
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-4 w-4" />
+                            � Registrar ubicación actual del vehículo
+                          </div>
+                        )}
+                      </Button>
+                    </div>
+                  )}
+                  
+                  <p className="text-sm text-red-600 font-medium">
+                    Esta acción no se puede deshacer.
+                  </p>
+                </div>
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

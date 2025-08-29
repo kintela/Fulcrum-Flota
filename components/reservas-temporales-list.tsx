@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, User, Car, Clock, X, AlertTriangle } from "lucide-react"
+import { Calendar, User, Car, Clock, X, AlertTriangle, MapPin, Loader2 } from "lucide-react"
 import { format, isAfter, isBefore, parseISO } from "date-fns"
 import { es } from "date-fns/locale"
 import { useState } from "react"
@@ -16,6 +16,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { capturarYAsignarUbicacion } from "@/lib/ubicacion-utils"
 import type { ReservaTemporal } from "@/app/actions/reservas-admin"
 
 interface ReservasTemporalesListProps {
@@ -60,6 +61,28 @@ export default function ReservasTemporalesList({
   cancelandoReserva, 
   searchText 
 }: ReservasTemporalesListProps) {
+  const [capturandoUbicacion, setCapturandoUbicacion] = useState<number | null>(null)
+
+  const handleCapturarUbicacion = async (matricula: string, reservaId: number) => {
+    console.log('🔧 Capturando ubicación para:', matricula, reservaId)
+    setCapturandoUbicacion(reservaId)
+    
+    try {
+      const resultado = await capturarYAsignarUbicacion(matricula)
+      console.log('📍 Resultado captura ubicación:', resultado)
+      
+      if (resultado.success) {
+        alert(`📍 Ubicación capturada exitosamente para ${matricula}`)
+      } else {
+        alert(`❌ Error: ${resultado.mensaje}`)
+      }
+    } catch (error) {
+      console.error('❌ Error capturando ubicación:', error)
+      alert('❌ Error inesperado al capturar la ubicación')
+    } finally {
+      setCapturandoUbicacion(null)
+    }
+  }
   // Filtrar reservas por texto de búsqueda
   const reservasFiltradas = reservas.filter((reserva) => {
     if (!searchText.trim()) return true
@@ -162,6 +185,13 @@ export default function ReservasTemporalesList({
                   const estadoInfo = getEstadoReserva(reserva)
                   const puedeCancelarse = puedeSerCancelada(reserva)
                   
+                  // Debug log
+                  console.log(`🔍 Reserva ${reserva.id} (${matricula}):`, {
+                    estado: reserva.estado,
+                    puedeCancelarse,
+                    estadoInfo
+                  })
+                  
                   return (
                     <div key={reserva.id} className="bg-gray-50 p-4 rounded-lg">
                       <div className="flex items-start justify-between">
@@ -213,57 +243,98 @@ export default function ReservasTemporalesList({
                           )}
                         </div>
 
-                        {/* Botón de cancelar */}
-                        {puedeCancelarse && (
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50 ml-4"
-                                disabled={cancelandoReserva === reserva.id}
-                              >
-                                {cancelandoReserva === reserva.id ? (
-                                  <div className="flex items-center gap-2">
-                                    <div className="animate-spin h-4 w-4 border-2 border-red-600 border-t-transparent rounded-full" />
-                                    Cancelando...
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center gap-2">
-                                    <X className="h-4 w-4" />
-                                    Cancelar
-                                  </div>
-                                )}
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle className="flex items-center gap-2">
-                                  <AlertTriangle className="h-5 w-5 text-amber-500" />
-                                  Confirmar cancelación
-                                </AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  ¿Estás seguro de que deseas cancelar la reserva #{index + 1} del vehículo{' '}
-                                  <strong>{matricula}</strong> ({coche.marca} {coche.modelo})?
-                                  <br />
-                                  <br />
-                                  Esta acción no se puede deshacer y el empleado{' '}
-                                  <strong>{reserva.empleados.nombre} {reserva.empleados.apellidos}</strong>{' '}
-                                  será notificado de la cancelación.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>No, mantener reserva</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => onCancelarReserva(reserva.id)}
-                                  className="bg-red-600 hover:bg-red-700"
+                        {/* Solo botón de cancelar - la ubicación estará dentro del dialog */}
+                        <div className="flex items-center gap-2 ml-4">
+                          {/* Botón de cancelar */}
+                          {puedeCancelarse && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  disabled={cancelandoReserva === reserva.id || capturandoUbicacion === reserva.id}
                                 >
-                                  Sí, cancelar reserva
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        )}
+                                  {cancelandoReserva === reserva.id ? (
+                                    <div className="flex items-center gap-2">
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                      Cancelando...
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-2">
+                                      <X className="h-4 w-4" />
+                                      Cancelar
+                                    </div>
+                                  )}
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle asChild>
+                                    <div className="flex items-center gap-2">
+                                      <AlertTriangle className="h-5 w-5 text-amber-500" />
+                                      Confirmar cancelación
+                                    </div>
+                                  </AlertDialogTitle>
+                                  <AlertDialogDescription asChild>
+                                    <div>
+                                      <p>
+                                        ¿Estás seguro de que deseas cancelar la reserva #{index + 1} del vehículo{' '}
+                                        <strong>{matricula}</strong> ({coche.marca} {coche.modelo})?
+                                      </p>
+                                      <br />
+                                      <p>
+                                        Esta acción no se puede deshacer y el empleado{' '}
+                                        <strong>{reserva.empleados.nombre} {reserva.empleados.apellidos}</strong>{' '}
+                                        será notificado de la cancelación.
+                                      </p>
+                                      <br />
+                                      <div className="bg-blue-50 p-4 rounded-md border border-blue-200">
+                                        <p className="text-sm text-blue-700 mb-3">
+                                          💡 <strong>¿Dónde está el vehículo?</strong> Antes de cancelar, puedes registrar automáticamente la ubicación actual del vehículo:
+                                        </p>
+                                        
+                                        {/* Botón de capturar ubicación dentro del dialog */}
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-100 w-full"
+                                          disabled={capturandoUbicacion === reserva.id}
+                                          onClick={() => {
+                                            console.log('🔴 CLICK BOTÓN UBICACIÓN - Matrícula:', matricula, 'Reserva ID:', reserva.id)
+                                            handleCapturarUbicacion(matricula, reserva.id)
+                                          }}
+                                        >
+                                          {capturandoUbicacion === reserva.id ? (
+                                            <div className="flex items-center gap-2">
+                                              <Loader2 className="h-4 w-4 animate-spin" />
+                                              Obteniendo ubicación GPS...
+                                            </div>
+                                          ) : (
+                                            <div className="flex items-center gap-2">
+                                              <MapPin className="h-4 w-4" />
+                                              Registrar ubicación actual del vehículo
+                                            </div>
+                                          )}
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>No, mantener reserva</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => onCancelarReserva(reserva.id)}
+                                    className="bg-red-600 hover:bg-red-700"
+                                    disabled={capturandoUbicacion === reserva.id}
+                                  >
+                                    {capturandoUbicacion === reserva.id ? 'Ubicando...' : 'Sí, cancelar reserva'}
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )

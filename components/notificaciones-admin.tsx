@@ -26,6 +26,7 @@ export default function NotificacionesAdmin() {
   const [cargando, setCargando] = useState(false)
   const [resultado, setResultado] = useState<ResultadoPrueba | null>(null)
   const [estadisticas, setEstadisticas] = useState<EstadisticasNotificaciones | null>(null)
+  const [resultadoActivacion, setResultadoActivacion] = useState<any | null>(null)
 
   const probarConfiguracion = async () => {
     setCargando(true)
@@ -92,6 +93,18 @@ export default function NotificacionesAdmin() {
         message: 'Error enviando email de prueba',
         timestamp: new Date().toISOString()
       })
+    }
+    setCargando(false)
+  }
+
+  const activarPendientesManual = async () => {
+    setCargando(true)
+    try {
+      const resp = await fetch('/api/cron/activar-reservas-pendientes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'run' }) })
+      const data = await resp.json()
+      setResultadoActivacion(data)
+    } catch (e:any) {
+      setResultadoActivacion({ success:false, error:'Error ejecutando activación', details: e?.message, timestamp: new Date().toISOString() })
     }
     setCargando(false)
   }
@@ -188,7 +201,7 @@ export default function NotificacionesAdmin() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              <Badge variant={estadisticas?.configuracionEmail ? 'success' : 'destructive'}>
+              <Badge variant={estadisticas?.configuracionEmail ? 'default' : 'destructive'}>
                 {estadisticas?.configuracionEmail ? 'OK' : 'Error'}
               </Badge>
             </div>
@@ -256,6 +269,25 @@ export default function NotificacionesAdmin() {
             </Button>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Activar Reservas Pendientes</CardTitle>
+            <CardDescription>
+              Pasa a 'activa' las reservas cuyo inicio ya llegó
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              onClick={activarPendientesManual}
+              disabled={cargando}
+              variant="outline"
+              className="w-full"
+            >
+              {cargando ? 'Activando...' : 'Activar Pendientes'}
+            </Button>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Resultados */}
@@ -289,6 +321,42 @@ export default function NotificacionesAdmin() {
                       Errores de envío: {resultado.data.erroresEnvio}
                     </div>
                   )}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {resultadoActivacion && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              {resultadoActivacion.success ? (
+                <CheckCircle className="h-5 w-5 text-green-500" />
+              ) : (
+                <AlertCircle className="h-5 w-5 text-red-500" />
+              )}
+              Resultado Activación Pendientes
+            </CardTitle>
+            <CardDescription>
+              Ejecutado el {new Date(resultadoActivacion.timestamp || Date.now()).toLocaleString('es-ES')}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2 text-sm">
+              <p className={resultadoActivacion.success ? 'text-green-600' : 'text-red-600'}>
+                {resultadoActivacion.success ? `Reservas activadas: ${resultadoActivacion.activadas || 0}` : (resultadoActivacion.error || 'Error')}
+              </p>
+              {resultadoActivacion.ids && (
+                <div className="text-muted-foreground text-xs">
+                  IDs: {resultadoActivacion.ids.join(', ')}
+                </div>
+              )}
+              {(resultadoActivacion.emailsEnviados !== undefined || resultadoActivacion.whatsappsEnviados !== undefined) && (
+                <div className="text-muted-foreground text-xs flex gap-4 mt-1">
+                  {resultadoActivacion.emailsEnviados !== undefined && <span>Emails: {resultadoActivacion.emailsEnviados}</span>}
+                  {resultadoActivacion.whatsappsEnviados !== undefined && <span>WhatsApps: {resultadoActivacion.whatsappsEnviados}</span>}
                 </div>
               )}
             </div>

@@ -711,6 +711,16 @@ export default function DashboardClient({
     activateLocationMode: (matricula: string) => void
     cancelLocationMode: () => void
   } | null>(null)
+  
+  // Estado para rastrear el coche que está siendo cancelado
+  const [cocheEnCancelacion, setCocheEnCancelacion] = useState<string | null>(null)
+  
+  // Estado para las reservas del usuario (se actualizará desde MisReservas)
+  const [misReservas, setMisReservas] = useState<Array<{ matricula: string; id: number; estado: string }>>([])
+
+  const handleReservasChange = (reservas: Array<{ matricula: string; id: number; estado: string }>) => {
+    setMisReservas(reservas)
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
@@ -750,7 +760,10 @@ export default function DashboardClient({
 
         {/* Mis Reservas - Visible para todos los usuarios */}
         <Suspense fallback={<div>Cargando reservas...</div>}>
-          <MisReservas />
+          <MisReservas 
+            onCocheEnCancelacion={setCocheEnCancelacion}
+            onReservasChange={handleReservasChange}
+          />
         </Suspense>
 
         {/* Mapa de vehículos - Visible para todos los usuarios */}
@@ -760,6 +773,8 @@ export default function DashboardClient({
             empleados={empleados} 
             userRole={userRole}
             userEmail={userEmail}
+            miCocheMatricula={cocheEnCancelacion}
+            misReservas={misReservas}
             onFunctionsReady={setMapFunctions}
           />
         </Suspense>

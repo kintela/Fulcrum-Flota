@@ -283,12 +283,12 @@ export async function verificarReservasVencidas() {
 
         // 3. CRÍTICO: SOLO MARCAR COMO NOTIFICADA SI AL MENOS UNO SE ENVIÓ EXITOSAMENTE
         if (emailEnviado || whatsappEnviado) {
+          // Ya no cambiamos el estado automáticamente; sólo marcamos la notificación.
           const { error: updateError } = await supabase
             .from('reservas')
             .update({ 
               notificacion_enviada: true,
-              fecha_notificacion: ahora.toISOString(),
-              estado: 'completada'
+              fecha_notificacion: ahora.toISOString()
             })
             .eq('id', reserva.id)
 
@@ -300,7 +300,7 @@ export async function verificarReservasVencidas() {
             const canales = []
             if (emailEnviado) canales.push('email')
             if (whatsappEnviado) canales.push('WhatsApp')
-            console.log(`✅ Reserva ${reserva.id} notificada por ${canales.join(' y ')} y marcada como completada`)
+            console.log(`✅ Reserva ${reserva.id} notificada por ${canales.join(' y ')} (estado permanece ${reserva.estado})`)
           }
         } else {
           erroresEnvio++
