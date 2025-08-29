@@ -5,8 +5,7 @@ import { probarConfiguracionEmail, enviarEmailPrueba } from '@/lib/email'
 export async function GET(request: NextRequest) {
   try {
     // Verificar autorización: puede ser nuestro token o headers de Vercel Cron
-    const authHeader = request.headers.get('authorization')
-    const vercelCronSecret = request.headers.get('authorization')
+  const authHeader = request.headers.get('authorization')
     const userAgent = request.headers.get('user-agent')
     
     const expectedToken = process.env.CRON_SECRET_TOKEN
@@ -51,20 +50,18 @@ export async function GET(request: NextRequest) {
         reservasNotificadas: resultado.reservasNotificadas || 0,
         erroresEnvio: resultado.erroresEnvio || 0
       },
-      timestamp: new Date().toISOString()
-    })
+      timestamp: new Date().toISOString(),
+      source: isVercelCron ? 'cron' : 'manual'
+    }, { headers: { 'Cache-Control': 'no-store' } })
 
   } catch (error) {
     console.error('❌ Error en cron job de notificaciones:', error)
     
-    return NextResponse.json(
-      { 
+    return NextResponse.json({ 
         error: 'Error interno del servidor',
         message: error instanceof Error ? error.message : 'Error desconocido',
         timestamp: new Date().toISOString()
-      }, 
-      { status: 500 }
-    )
+      }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
   }
 }
 
@@ -80,8 +77,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: emailConfig,
         message: emailConfig ? 'Configuración de email válida' : 'Error en configuración de email',
-        timestamp: new Date().toISOString()
-      })
+        timestamp: new Date().toISOString(),
+        source: 'manual'
+      }, { headers: { 'Cache-Control': 'no-store' } })
     }
 
     if (body.action === 'send-test') {
@@ -97,8 +95,9 @@ export async function POST(request: NextRequest) {
           messageId: resultado.messageId,
           destinatario: resultado.destinatario
         } : undefined,
-        timestamp: new Date().toISOString()
-      })
+        timestamp: new Date().toISOString(),
+        source: 'manual'
+      }, { headers: { 'Cache-Control': 'no-store' } })
     }
 
     if (body.action === 'run') {
@@ -113,8 +112,9 @@ export async function POST(request: NextRequest) {
           reservasNotificadas: resultado.reservasNotificadas || 0,
           erroresEnvio: resultado.erroresEnvio || 0
         },
-        timestamp: new Date().toISOString()
-      })
+        timestamp: new Date().toISOString(),
+        source: 'manual'
+      }, { headers: { 'Cache-Control': 'no-store' } })
     }
 
     return NextResponse.json(
@@ -125,13 +125,10 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('❌ Error en POST cron job:', error)
     
-    return NextResponse.json(
-      { 
+    return NextResponse.json({ 
         error: 'Error interno del servidor',
         message: error instanceof Error ? error.message : 'Error desconocido',
         timestamp: new Date().toISOString()
-      }, 
-      { status: 500 }
-    )
+      }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
   }
 }
