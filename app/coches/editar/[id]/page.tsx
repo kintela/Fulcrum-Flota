@@ -56,9 +56,8 @@ export default async function EditarCochePage({ params }: { params: { id: string
                 Volver
               </Button>
             </Link>
-            <h1 className="text-3xl font-bold text-gray-900">Editar Vehículo</h1>
+            <h1 className="text-3xl font-bold text-gray-900">Editar Vehículo · {coche.matricula}</h1>
           </div>
-          <p className="text-gray-600">Modificar información del vehículo {coche.matricula}</p>
         </div>
 
         {/* Formulario principal - Una sola columna */}
@@ -69,7 +68,7 @@ export default async function EditarCochePage({ params }: { params: { id: string
             </CardHeader>
             <CardContent>
               <form action={editarCoche} className="space-y-6">
-                <input type="hidden" name="matricula" value={coche.matricula} />
+                <input type="hidden" name="matricula_original" value={coche.matricula} />
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -87,16 +86,12 @@ export default async function EditarCochePage({ params }: { params: { id: string
                     <Label htmlFor="color">Color</Label>
                     <Input id="color" name="color" defaultValue={coche.color || ""} />
                   </div>
-                  <div>
-                    <Label htmlFor="año">Año</Label>
-                    <Input id="año" name="año" type="number" defaultValue={coche.año || ""} />
-                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="kilometros">Kilómetros</Label>
-                    <Input id="kilometros" name="kilometros" type="number" defaultValue={coche.kilometros || ""} />
+                    <Label htmlFor="kms">Kilómetros</Label>
+                    <Input id="kms" name="kms" type="number" defaultValue={coche.kms || ""} />
                   </div>
                   <div>
                     <Label htmlFor="combustible">Combustible</Label>
@@ -116,21 +111,33 @@ export default async function EditarCochePage({ params }: { params: { id: string
                   </div>
                 </div>
 
-                <div>
-                  <Label htmlFor="asignadoa">Asignado a</Label>
-                  <select
-                    id="asignadoa"
-                    name="asignadoa"
-                    defaultValue={coche.asignadoa?.toString() || "0"}
-                    className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <option value="0">Sin asignar</option>
-                    {empleados.map((empleado) => (
-                      <option key={empleado.id} value={empleado.id.toString()}>
-                        {empleado.nombre} {empleado.apellidos}
-                      </option>
-                    ))}
-                  </select>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                  <div>
+                    <Label htmlFor="asignadoa">Asignado a</Label>
+                    <select
+                      id="asignadoa"
+                      name="asignadoa"
+                      defaultValue={coche.asignadoa?.toString() || "0"}
+                      className="flex h-10 w-full md:w-3/4 items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <option value="0">Sin asignar</option>
+                      {empleados.map((empleado) => (
+                        <option key={empleado.id} value={empleado.id.toString()}>
+                          {empleado.nombre} {empleado.apellidos}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <Label htmlFor="matricula">Matrícula</Label>
+                    <Input
+                      id="matricula"
+                      name="matricula"
+                      defaultValue={coche.matricula || ""}
+                      required
+                      className="uppercase"
+                    />
+                  </div>
                 </div>
 
                 <div>

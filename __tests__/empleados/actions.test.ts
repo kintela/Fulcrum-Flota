@@ -57,7 +57,7 @@ describe("crearEmpleado Server Action", () => {
     formData.append("apellidos", "Pérez García")
     formData.append("email", "juan.perez@empresa.com")
     formData.append("movil", "600123456")
-    formData.append("contraseña", "123456")
+    formData.append("role", "usuario")
 
     const result = await crearEmpleado(formData)
 
@@ -72,12 +72,12 @@ describe("crearEmpleado Server Action", () => {
     formData.append("nombre", "")
     formData.append("apellidos", "Pérez García")
     formData.append("email", "juan.perez@empresa.com")
-    formData.append("contraseña", "123456")
+    formData.append("role", "usuario")
 
     const result = await crearEmpleado(formData)
 
     expect(result.success).toBe(false)
-    expect(result.error).toBe("Los campos nombre, apellidos, email y contraseña son obligatorios")
+    expect(result.error).toBe("Faltan los campos obligatorios: nombre")
   })
 
   it("valida formato de email", async () => {
@@ -85,25 +85,12 @@ describe("crearEmpleado Server Action", () => {
     formData.append("nombre", "Juan")
     formData.append("apellidos", "Pérez García")
     formData.append("email", "email-invalido")
-    formData.append("contraseña", "123456")
+    formData.append("role", "usuario")
 
     const result = await crearEmpleado(formData)
 
     expect(result.success).toBe(false)
     expect(result.error).toBe("El formato del email no es válido")
-  })
-
-  it("valida longitud mínima de contraseña", async () => {
-    const formData = new FormData()
-    formData.append("nombre", "Juan")
-    formData.append("apellidos", "Pérez García")
-    formData.append("email", "juan.perez@empresa.com")
-    formData.append("contraseña", "123")
-
-    const result = await crearEmpleado(formData)
-
-    expect(result.success).toBe(false)
-    expect(result.error).toBe("La contraseña debe tener al menos 6 caracteres")
   })
 
   it("detecta email duplicado", async () => {
@@ -125,7 +112,7 @@ describe("crearEmpleado Server Action", () => {
     formData.append("nombre", "Juan")
     formData.append("apellidos", "Pérez García")
     formData.append("email", "juan.perez@empresa.com")
-    formData.append("contraseña", "123456")
+    formData.append("role", "usuario")
 
     const result = await crearEmpleado(formData)
 
@@ -166,7 +153,7 @@ describe("crearEmpleado Server Action", () => {
     formData.append("nombre", "Juan")
     formData.append("apellidos", "Pérez García")
     formData.append("email", "juan.perez@empresa.com")
-    formData.append("contraseña", "123456")
+    formData.append("role", "usuario")
 
     const result = await crearEmpleado(formData)
 
@@ -208,7 +195,7 @@ describe("crearEmpleado Server Action", () => {
     formData.append("apellidos", "García López")
     formData.append("email", "maria.garcia@empresa.com")
     formData.append("movil", "600123456")
-    formData.append("contraseña", "password123")
+    formData.append("role", "administrador")
 
     await crearEmpleado(formData)
 
@@ -218,7 +205,7 @@ describe("crearEmpleado Server Action", () => {
         apellidos: "García López",
         email: "maria.garcia@empresa.com",
         movil: "600123456",
-        contraseña: "password123",
+        role: "administrador",
       }),
     ])
   })
@@ -257,7 +244,7 @@ describe("crearEmpleado Server Action", () => {
     formData.append("apellidos", "Pérez García")
     formData.append("email", "juan.perez@empresa.com")
     formData.append("movil", "")
-    formData.append("contraseña", "123456")
+    formData.append("role", "usuario")
 
     await crearEmpleado(formData)
 
@@ -267,7 +254,7 @@ describe("crearEmpleado Server Action", () => {
         apellidos: "Pérez García",
         email: "juan.perez@empresa.com",
         movil: null,
-        contraseña: "123456",
+        role: "usuario",
       }),
     ])
   })
@@ -280,7 +267,7 @@ describe("crearEmpleado Server Action", () => {
       formData.append("nombre", "Juan")
       formData.append("apellidos", "Pérez García")
       formData.append("email", email)
-      formData.append("contraseña", "123456")
+      formData.append("role", "usuario")
 
       // Mock para verificar email no duplicado
       const mockSelect = jest.fn().mockReturnValue({

@@ -189,7 +189,20 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
     marcaModelo: string
   } | null>(null)
   // Mapa: matricula -> { enCurso: boolean; vencida: boolean; programada: boolean; proximaInicio?: string; proximaFin?: string }
-  const [reservasActivas, setReservasActivas] = useState<Map<string, { enCurso: boolean; vencida: boolean; programada: boolean; proximaInicio?: string; proximaFin?: string }>>(new Map())
+  const [reservasActivas, setReservasActivas] = useState<
+    Map<
+      string,
+      {
+        enCurso: boolean
+        vencida: boolean
+        programada: boolean
+        bloquea: boolean
+        bloqueoDesde?: string
+        proximaInicio?: string
+        proximaFin?: string
+      }
+    >
+  >(new Map())
 
   // Crear mapa de empleados
   const empleadosMap = new Map()
@@ -214,19 +227,30 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
 
   // Función para verificar si un coche tiene reservas activas
   const verificarReservasActivas = useCallback(async (matriculas: string[]) => {
-    const nuevasReservas = new Map<string, { enCurso: boolean; vencida: boolean; programada: boolean; proximaInicio?: string; proximaFin?: string }>()
+    const nuevasReservas = new Map<
+      string,
+      {
+        enCurso: boolean
+        vencida: boolean
+        programada: boolean
+        bloquea: boolean
+        bloqueoDesde?: string
+        proximaInicio?: string
+        proximaFin?: string
+      }
+    >()
 
     const promesas = matriculas.map(async (matricula) => {
       try {
         const { data: reservas, error } = await supabase
-          .from('reservas')
-          .select('id, fecha_inicio, fecha_fin')
-          .eq('matricula', matricula)
-          .eq('estado', 'activa')
+          .from("reservas")
+          .select("id, estado, fecha_inicio, fecha_fin, bloqueo_desde, margen_bloqueo")
+          .eq("matricula", matricula)
+          .in("estado", ["activa", "pendiente"])
 
         if (error) {
           console.warn(`Error verificando reservas para ${matricula}:`, error)
-          nuevasReservas.set(matricula, { enCurso: false, vencida: false, programada: false })
+          nuevasReservas.set(matricula, { enCurso: false, vencida: false, programada: false, bloquea: false })
           return
         }
 
@@ -234,16 +258,28 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
         let enCurso = false
         let vencida = false
         let programada = false
+        let bloquea = false
         let proximaInicio: string | undefined
         let proximaFin: string | undefined
+        let bloqueoDesde: string | undefined
 
-        reservas?.forEach(r => {
+        reservas?.forEach((r) => {
           const inicio = new Date(r.fecha_inicio)
           const fin = new Date(r.fecha_fin)
-          if (ahora >= inicio && ahora <= fin) enCurso = true
-          if (ahora > fin) vencida = true
-          if (inicio > ahora) {
-            // Reserva futura (programada). Elegir la más próxima.
+          const bloqueo = r.bloqueo_desde ? new Date(r.bloqueo_desde) : null
+
+          const enVentana = ahora >= inicio && ahora <= fin
+          const vencidaLocal = ahora > fin
+          const bloqueadoPorMargen = bloqueo ? ahora >= bloqueo && ahora <= fin : false
+          const esProgramada = !enVentana && !vencidaLocal && inicio > ahora
+
+          if (enVentana) enCurso = true
+          if (vencidaLocal) vencida = true
+          if (bloqueadoPorMargen) {
+            bloquea = true
+            bloqueoDesde = r.bloqueo_desde
+          }
+          if (esProgramada) {
             if (!proximaInicio || new Date(proximaInicio) > inicio) {
               proximaInicio = r.fecha_inicio
               proximaFin = r.fecha_fin
@@ -252,11 +288,12 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
         })
 
         if (!enCurso && !vencida && proximaInicio) programada = true
+        if (enCurso) bloquea = true
 
-        nuevasReservas.set(matricula, { enCurso, vencida, programada, proximaInicio, proximaFin })
+        nuevasReservas.set(matricula, { enCurso, vencida, programada, bloquea, bloqueoDesde, proximaInicio, proximaFin })
       } catch (error) {
         console.warn(`Error verificando reservas para ${matricula}:`, error)
-        nuevasReservas.set(matricula, { enCurso: false, vencida: false, programada: false })
+        nuevasReservas.set(matricula, { enCurso: false, vencida: false, programada: false, bloquea: false })
       }
     })
 
@@ -266,10 +303,10 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
 
   // Función para determinar si un coche está disponible
   const isCocheDisponible = useCallback((coche: Coche) => {
-    // Disponible si: no está asignado, no es donante, y no tiene reserva en curso ni vencida. Programada NO bloquea.
+    // Disponible si: no está asignado, no es donante, y no tiene reserva en curso, vencida o bloqueada por margen. Programada NO bloquea salvo que el margen haya empezado.
     const noEstaAsignado = !coche.asignadoa
     const estadoReserva = reservasActivas.get(coche.matricula)
-    const sinReservaBloqueante = !(estadoReserva?.enCurso || estadoReserva?.vencida)
+    const sinReservaBloqueante = !(estadoReserva?.enCurso || estadoReserva?.vencida || estadoReserva?.bloquea)
     const noEsDonante = !coche.donante
     return noEstaAsignado && sinReservaBloqueante && noEsDonante
   }, [reservasActivas])
@@ -734,7 +771,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
   const cochesAsignados = todosLosCoches.filter((c) => getEmpleadoInfo(c) || c.asignadoa)
   const cochesReservados = todosLosCoches.filter((c) => {
     const estadoReserva = reservasActivas.get(c.matricula)
-    const tieneReserva = !!(estadoReserva?.enCurso || estadoReserva?.vencida) // programada no cuenta como reservado aún
+    const tieneReserva = !!(estadoReserva?.enCurso || estadoReserva?.vencida || estadoReserva?.bloquea) // programada no cuenta salvo margen activo
     return !c.asignadoa && tieneReserva
   })
   const cochesDisponibles = todosLosCoches.filter((c) => isCocheDisponible(c))
@@ -1086,7 +1123,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
     const hasLocation = coche.latitud && coche.longitud && !coche.donante
     const isAssigned = getEmpleadoInfo(coche) || coche.asignadoa
   const estadoReserva = reservasActivas.get(coche.matricula)
-  const isReserved = !coche.asignadoa && (estadoReserva?.enCurso || estadoReserva?.vencida) // programada no
+  const isReserved = !coche.asignadoa && (estadoReserva?.enCurso || estadoReserva?.vencida || estadoReserva?.bloquea) // programada no
 
     // Si hay un filtro activo, colorear solo los que coinciden con el filtro
     let matchesFilter = false

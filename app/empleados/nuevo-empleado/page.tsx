@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { crearEmpleado } from "./actions"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
@@ -15,6 +16,7 @@ import { useRouter } from "next/navigation"
 export default function NuevoEmpleadoPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [role, setRole] = useState("usuario")
   const router = useRouter()
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -104,18 +106,19 @@ export default function NuevoEmpleadoPage() {
                 </div>
 
                 <div className="md:col-span-2">
-                  <Label htmlFor="contraseña">Contraseña *</Label>
-                  <Input
-                    id="contraseña"
-                    name="contraseña"
-                    type="password"
-                    placeholder="Contraseña temporal"
-                    required
-                    minLength={6}
-                    className="mt-1"
-                  />
+                  <Label htmlFor="role">Rol</Label>
+                  <Select value={role} onValueChange={setRole}>
+                    <SelectTrigger id="role" className="mt-1">
+                      <SelectValue placeholder="Selecciona un rol" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="usuario">Usuario</SelectItem>
+                      <SelectItem value="administrador">Administrador</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <input type="hidden" name="role" value={role} />
                   <p className="text-sm text-gray-500 mt-1">
-                    Mínimo 6 caracteres. El empleado podrá cambiarla cuando se implemente el sistema de login.
+                    Por defecto se crea como usuario. Usa este selector si debe ser administrador.
                   </p>
                 </div>
               </div>

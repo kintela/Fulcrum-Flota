@@ -5,21 +5,37 @@ import { revalidatePath } from "next/cache"
 
 export async function crearEmpleado(formData: FormData) {
   try {
-    // Extraer datos del formulario
+    const getValue = (key: string) => {
+      const value = formData.get(key)
+      return typeof value === "string" ? value.trim() : ""
+    }
+
+    // Extraer datos del formulario con trim para evitar falsos negativos
     const empleadoData = {
-      nombre: formData.get("nombre") as string,
-      apellidos: formData.get("apellidos") as string,
-      email: formData.get("email") as string,
-      movil: (formData.get("movil") as string) || null,
-      contraseña: formData.get("contraseña") as string,
+      nombre: getValue("nombre"),
+      apellidos: getValue("apellidos"),
+      email: getValue("email"),
+      movil: getValue("movil") || null,
       role: (formData.get("role") as string) || "usuario", // Añadir campo role con valor por defecto
     }
 
+    // Validar rol permitido
+    const allowedRoles = ["usuario", "administrador"]
+    if (!allowedRoles.includes(empleadoData.role)) {
+      empleadoData.role = "usuario"
+    }
+
     // Validaciones básicas
-    if (!empleadoData.nombre || !empleadoData.apellidos || !empleadoData.email || !empleadoData.contraseña) {
+    const missingFields = []
+    if (!empleadoData.nombre) missingFields.push("nombre")
+    if (!empleadoData.apellidos) missingFields.push("apellidos")
+    if (!empleadoData.email) missingFields.push("email")
+
+    if (missingFields.length > 0) {
+      const lista = missingFields.join(", ")
       return {
         success: false,
-        error: "Los campos nombre, apellidos, email y contraseña son obligatorios",
+        error: `Faltan los campos obligatorios: ${lista}`,
       }
     }
 
@@ -29,14 +45,6 @@ export async function crearEmpleado(formData: FormData) {
       return {
         success: false,
         error: "El formato del email no es válido",
-      }
-    }
-
-    // Validar longitud de contraseña
-    if (empleadoData.contraseña.length < 6) {
-      return {
-        success: false,
-        error: "La contraseña debe tener al menos 6 caracteres",
       }
     }
 
