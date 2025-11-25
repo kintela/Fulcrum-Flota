@@ -34,7 +34,7 @@ describe("Formulario de Nuevo Empleado", () => {
     expect(screen.getByLabelText("Apellidos *")).toBeInTheDocument()
     expect(screen.getByLabelText("Email *")).toBeInTheDocument()
     expect(screen.getByLabelText("Móvil")).toBeInTheDocument()
-    expect(screen.getByLabelText("Contraseña *")).toBeInTheDocument()
+    expect(screen.getByLabelText("Rol")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Crear Empleado" })).toBeInTheDocument()
   })
 
@@ -44,12 +44,10 @@ describe("Formulario de Nuevo Empleado", () => {
     const nombreInput = screen.getByLabelText("Nombre *")
     const apellidosInput = screen.getByLabelText("Apellidos *")
     const emailInput = screen.getByLabelText("Email *")
-    const contraseñaInput = screen.getByLabelText("Contraseña *")
 
     expect(nombreInput).toHaveAttribute("required")
     expect(apellidosInput).toHaveAttribute("required")
     expect(emailInput).toHaveAttribute("required")
-    expect(contraseñaInput).toHaveAttribute("required")
   })
 
   it("muestra placeholders correctos", () => {
@@ -59,7 +57,6 @@ describe("Formulario de Nuevo Empleado", () => {
     expect(screen.getByPlaceholderText("Pérez García")).toBeInTheDocument()
     expect(screen.getByPlaceholderText("juan.perez@empresa.com")).toBeInTheDocument()
     expect(screen.getByPlaceholderText("600123456")).toBeInTheDocument()
-    expect(screen.getByPlaceholderText("Contraseña temporal")).toBeInTheDocument()
   })
 
   it("envía el formulario con datos válidos", async () => {
@@ -77,9 +74,8 @@ describe("Formulario de Nuevo Empleado", () => {
     fireEvent.change(screen.getByLabelText("Email *"), {
       target: { value: "juan.perez@empresa.com" },
     })
-    fireEvent.change(screen.getByLabelText("Contraseña *"), {
-      target: { value: "123456" },
-    })
+    fireEvent.click(screen.getByLabelText("Rol"))
+    fireEvent.click(screen.getByText("Administrador"))
 
     // Enviar formulario
     fireEvent.click(screen.getByRole("button", { name: "Crear Empleado" }))
@@ -111,9 +107,6 @@ describe("Formulario de Nuevo Empleado", () => {
     fireEvent.change(screen.getByLabelText("Móvil"), {
       target: { value: "600123456" },
     })
-    fireEvent.change(screen.getByLabelText("Contraseña *"), {
-      target: { value: "password123" },
-    })
 
     // Enviar formulario
     fireEvent.click(screen.getByRole("button", { name: "Crear Empleado" }))
@@ -128,7 +121,7 @@ describe("Formulario de Nuevo Empleado", () => {
     expect(formDataCall.get("apellidos")).toBe("García López")
     expect(formDataCall.get("email")).toBe("maria.garcia@empresa.com")
     expect(formDataCall.get("movil")).toBe("600123456")
-    expect(formDataCall.get("contraseña")).toBe("password123")
+    expect(formDataCall.get("role")).toBe("usuario")
   })
 
   it("muestra error cuando falla la creación", async () => {
@@ -148,9 +141,6 @@ describe("Formulario de Nuevo Empleado", () => {
     })
     fireEvent.change(screen.getByLabelText("Email *"), {
       target: { value: "juan.perez@empresa.com" },
-    })
-    fireEvent.change(screen.getByLabelText("Contraseña *"), {
-      target: { value: "123456" },
     })
 
     // Enviar formulario
@@ -180,9 +170,6 @@ describe("Formulario de Nuevo Empleado", () => {
     fireEvent.change(screen.getByLabelText("Email *"), {
       target: { value: "juan.perez@empresa.com" },
     })
-    fireEvent.change(screen.getByLabelText("Contraseña *"), {
-      target: { value: "123456" },
-    })
 
     // Enviar formulario
     fireEvent.click(screen.getByRole("button", { name: "Crear Empleado" }))
@@ -202,20 +189,6 @@ describe("Formulario de Nuevo Empleado", () => {
 
     const movilInput = screen.getByLabelText("Móvil")
     expect(movilInput).toHaveAttribute("type", "tel")
-  })
-
-  it("valida el tipo de input contraseña", () => {
-    render(<NuevoEmpleadoPage />)
-
-    const contraseñaInput = screen.getByLabelText("Contraseña *")
-    expect(contraseñaInput).toHaveAttribute("type", "password")
-  })
-
-  it("muestra información sobre la contraseña", () => {
-    render(<NuevoEmpleadoPage />)
-
-    expect(screen.getByText(/Mínimo 6 caracteres/)).toBeInTheDocument()
-    expect(screen.getByText(/El empleado podrá cambiarla cuando se implemente el sistema de login/)).toBeInTheDocument()
   })
 
   it("incluye botón de cancelar que enlaza a empleados", () => {
@@ -239,11 +212,5 @@ describe("Formulario de Nuevo Empleado", () => {
     expect(screen.getByLabelText("Apellidos *")).toHaveAttribute("maxLength", "100")
     expect(screen.getByLabelText("Email *")).toHaveAttribute("maxLength", "100")
     expect(screen.getByLabelText("Móvil")).toHaveAttribute("maxLength", "20")
-  })
-
-  it("valida longitud mínima de contraseña", () => {
-    render(<NuevoEmpleadoPage />)
-
-    expect(screen.getByLabelText("Contraseña *")).toHaveAttribute("minLength", "6")
   })
 })
