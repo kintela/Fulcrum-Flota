@@ -361,13 +361,15 @@ export async function verificarDisponibilidad(matricula: string, fechaInicio: st
 export async function activarReservasPendientes(opciones?: { manual?: boolean }) {
   try {
     const ahora = new Date()
-    // Buscar reservas en estado pendiente con fecha_inicio <= ahora
+    const umbralAviso = new Date(ahora.getTime() + 30 * 60 * 1000) // 30 minutos adelante
+
+    // Buscar reservas en estado pendiente con fecha_inicio <= ahora + 30m
     // Nota: reducimos el SELECT para evitar fallar si ciertos campos no existen todavía (ej: whatsapp)
     const { data: pendientes, error } = await supabase
       .from('reservas')
       .select('id, fecha_inicio, fecha_fin, matricula, empleado_id, coches(marca,modelo), empleados(email,nombre,apellidos,movil)')
       .eq('estado', 'pendiente')
-      .lte('fecha_inicio', ahora.toISOString())
+      .lte('fecha_inicio', umbralAviso.toISOString())
 
     if (error) {
       console.error('Error consultando reservas pendientes para activar:', error)
@@ -380,10 +382,16 @@ export async function activarReservasPendientes(opciones?: { manual?: boolean })
 
     const ids: number[] = []
   let emailsEnviados = 0
+  let avisosPreviosEnviados = 0
   let whatsappsEnviados = 0
   let whatsappsErrores = 0
   for (const r of pendientes) {
       try {
+        const fechaInicio = new Date(r.fecha_inicio)
+        const fechaFin = new Date(r.fecha_fin)
+
+        // Activar si ya empezó o está dentro de los próximos 30 minutos
+        if (fechaInicio <= umbralAviso) {
         const { error: upErr } = await supabase.from('reservas').update({ estado: 'activa' }).eq('id', r.id)
         if (upErr) {
           console.error('Error activando reserva', r.id, upErr)
@@ -399,10 +407,16 @@ export async function activarReservasPendientes(opciones?: { manual?: boolean })
             email,
             nombre,
             { matricula: r.matricula, marca: coche.marca, modelo: coche.modelo },
-            new Date(r.fecha_inicio),
-            new Date(r.fecha_fin)
+            fechaInicio,
+            fechaFin
           )
-          if (resEmail.success) emailsEnviados++
+          if (resEmail.success) {
+            emailsEnviados++
+            await supabase.from('reservas').update({
+              notificacion_enviada: true,
+              fecha_notificacion: new Date().toISOString()
+            }).eq('id', r.id)
+          }
           // Envío de WhatsApp solo en ejecución manual (no cron) y si hay teléfono
           if (opciones?.manual) {
             // Obtener teléfono del empleado si existe
@@ -427,12 +441,15 @@ export async function activarReservasPendientes(opciones?: { manual?: boolean })
             }
           }
         }
+          continue
+        }
+
       } catch (e) {
         console.error('Error procesando activación individual', r.id, e)
       }
     }
 
-  return { success: true, activadas: ids.length, ids, emailsEnviados, whatsappsEnviados, whatsappsErrores }
+  return { success: true, activadas: ids.length, ids, emailsEnviados, avisosPreviosEnviados, whatsappsEnviados, whatsappsErrores }
   } catch (error) {
   console.error('Error en activarReservasPendientes:', error)
   return { success: false, error: 'Error inesperado activando reservas', details: error instanceof Error ? error.message : 'desconocido' }
