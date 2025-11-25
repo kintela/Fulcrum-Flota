@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 
 // Bypass authentication for debug endpoint
 export const runtime = 'edge'
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // Verificar qué variables de entorno están disponibles
     const envVars = {
