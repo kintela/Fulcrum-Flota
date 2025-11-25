@@ -11,6 +11,7 @@ import { format, addHours, isBefore, isAfter } from "date-fns"
 import { es } from "date-fns/locale"
 import { DayPicker } from "react-day-picker"
 import { crearReservaTemporal, verificarDisponibilidad } from "@/app/actions/reservas-temporales"
+import { supabase } from "@/lib/supabase"
 
 interface ReservaModalProps {
   isOpen: boolean
@@ -30,6 +31,7 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
   const [error, setError] = useState("")
   const [showCalendarInicio, setShowCalendarInicio] = useState(false)
   const [showCalendarFin, setShowCalendarFin] = useState(false)
+  const [bloqueos, setBloqueos] = useState<Array<{ desde: Date; hasta: Date }>>([])
 
   // Nueva lógica: calcular hora mínima permitida para inicio si la fecha seleccionada es hoy
   const minHoraInicioHoy = useMemo(() => {
@@ -208,6 +210,40 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
     return horas
   }
 
+  // Cargar ventanas de bloqueo (bloqueo_desde -> fecha_fin) para la matrícula seleccionada
+  useEffect(() => {
+    const cargarBloqueos = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("reservas")
+          .select("fecha_inicio, fecha_fin, bloqueo_desde")
+          .eq("matricula", matricula)
+          .in("estado", ["activa", "pendiente"])
+
+        if (error || !data) {
+          console.warn("No se pudieron cargar bloqueos de reservas:", error)
+          setBloqueos([])
+          return
+        }
+
+        const ventanas = data.map((r) => {
+          const desde = r.bloqueo_desde ? new Date(r.bloqueo_desde) : new Date(r.fecha_inicio)
+          const hasta = new Date(r.fecha_fin)
+          return { desde, hasta }
+        })
+
+        setBloqueos(ventanas)
+      } catch (e) {
+        console.warn("Error inesperado cargando bloqueos:", e)
+        setBloqueos([])
+      }
+    }
+
+    if (isOpen) {
+      cargarBloqueos()
+    }
+  }, [isOpen, matricula])
+
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
@@ -265,7 +301,17 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
                 className="w-full pl-10 pr-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {generarHoras().map((hora) => {
-                  const disabledOpt = !!minHoraInicioHoy && hora < minHoraInicioHoy
+                  const disabledPorHora = !!minHoraInicioHoy && hora < minHoraInicioHoy
+                  let disabledPorBloqueo = false
+
+                  if (fechaInicio) {
+                    const [h, m] = hora.split(":").map(Number)
+                    const slot = new Date(fechaInicio)
+                    slot.setHours(h, m, 0, 0)
+                    disabledPorBloqueo = bloqueos.some((b) => slot >= b.desde && slot < b.hasta)
+                  }
+
+                  const disabledOpt = disabledPorHora || disabledPorBloqueo
                   return (
                     <option key={hora} value={hora} disabled={disabledOpt}>
                       {hora}{disabledOpt ? ' (no disponible)' : ''}
@@ -327,6 +373,15 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
                     if (minHoraFin === "24:00") disabledOpt = true
                     else if (minHoraFin) disabledOpt = hora <= horaInicio || hora < minHoraFin
                   }
+
+                  if (fechaFin) {
+                    const [h, m] = hora.split(":").map(Number)
+                    const slot = new Date(fechaFin)
+                    slot.setHours(h, m, 0, 0)
+                    const bloqueado = bloqueos.some((b) => slot >= b.desde && slot < b.hasta)
+                    disabledOpt = disabledOpt || bloqueado
+                  }
+
                   return (
                     <option key={hora} value={hora} disabled={disabledOpt}>
                       {hora}{disabledOpt ? ' (no disponible)' : ''}

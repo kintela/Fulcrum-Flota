@@ -322,7 +322,7 @@ export async function verificarDisponibilidad(matricula: string, fechaInicio: st
     // Obtener reservas activas o pendientes del vehículo (pendiente = programada futura)
     const { data: reservasActivas, error } = await supabase
       .from('reservas')
-      .select('id, fecha_inicio, fecha_fin')
+      .select('id, fecha_inicio, fecha_fin, bloqueo_desde')
       .eq('matricula', matricula)
       .in('estado', ['activa','pendiente'])
 
@@ -338,10 +338,11 @@ export async function verificarDisponibilidad(matricula: string, fechaInicio: st
     const conflictos = (reservasActivas || []).filter(r => {
       const inicio = new Date(r.fecha_inicio)
       const fin = new Date(r.fecha_fin)
-      // Solape temporal con la solicitud
-      const solapa = inicio <= finSolicitado && fin >= inicioSolicitado
+      const inicioBloqueo = r.bloqueo_desde ? new Date(r.bloqueo_desde) : inicio
+      // Ventana de bloqueo: desde bloqueo_desde (o inicio) hasta fin
+      const solapa = inicioBloqueo <= finSolicitado && fin >= inicioSolicitado
       // Reserva activa ya vencida pero no marcada (fin < ahora) -> sigue bloqueando
-      const vencidaNoCompletada = fin < ahora && inicio <= ahora
+      const vencidaNoCompletada = fin < ahora && inicioBloqueo <= ahora
       return solapa || vencidaNoCompletada
     })
 
