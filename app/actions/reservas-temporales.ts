@@ -412,35 +412,32 @@ export async function activarReservasPendientes(opciones?: { manual?: boolean })
           )
           if (resEmail.success) {
             emailsEnviados++
-            await supabase.from('reservas').update({
-              notificacion_enviada: true,
-              fecha_notificacion: new Date().toISOString()
-            }).eq('id', r.id)
           }
-          // Envío de WhatsApp solo en ejecución manual (no cron) y si hay teléfono
-          if (opciones?.manual) {
-            // Obtener teléfono del empleado si existe
-            const telefono = (r as any).empleados?.movil || null
-            if (telefono) {
-              const telefonoTrim = String(telefono).trim()
-              // Validar formato básico: dígitos opcional + y longitud mínima 7
-              if (/^\+?\d{7,15}$/.test(telefonoTrim.replace(/\s|-/g,''))) {
-                const msg = `✅ Inicio de tu reserva (${r.matricula})\nInicio: ${new Date(r.fecha_inicio).toLocaleString('es-ES',{ hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit' })}\nFin previsto: ${new Date(r.fecha_fin).toLocaleString('es-ES',{ hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit' })}\nRecuerda marcarla completada al devolver el vehículo.`
-                console.log('[ActivarPendientes] Intentando WhatsApp a', telefonoTrim, 'reserva', r.id)
-                const wa = await enviarWhatsappInicioReserva(telefonoTrim, msg)
-                if ((wa as any).success) {
-                  whatsappsEnviados++
-                  console.log('[ActivarPendientes] WhatsApp OK reserva', r.id)
-                } else {
-                  whatsappsErrores++
-                  console.warn('[ActivarPendientes] WhatsApp fallo reserva', r.id, (wa as any).error)
-                }
+        }
+        // Envío de WhatsApp solo en ejecución manual (no cron) y si hay teléfono
+        if (opciones?.manual) {
+          // Obtener teléfono del empleado si existe
+          const telefono = (r as any).empleados?.movil || null
+          if (telefono) {
+            const telefonoTrim = String(telefono).trim()
+            // Validar formato básico: dígitos opcional + y longitud mínima 7
+            if (/^\+?\d{7,15}$/.test(telefonoTrim.replace(/\s|-/g,''))) {
+              const msg = `✅ Inicio de tu reserva (${r.matricula})\nInicio: ${new Date(r.fecha_inicio).toLocaleString('es-ES',{ hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit' })}\nFin previsto: ${new Date(r.fecha_fin).toLocaleString('es-ES',{ hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit' })}\nRecuerda marcarla completada al devolver el vehículo.`
+              console.log('[ActivarPendientes] Intentando WhatsApp a', telefonoTrim, 'reserva', r.id)
+              const wa = await enviarWhatsappInicioReserva(telefonoTrim, msg)
+              if ((wa as any).success) {
+                whatsappsEnviados++
+                console.log('[ActivarPendientes] WhatsApp OK reserva', r.id)
               } else {
-                console.log('ℹ️ Número móvil inválido/ausente para WhatsApp, se omite:', telefono)
+                whatsappsErrores++
+                console.warn('[ActivarPendientes] WhatsApp fallo reserva', r.id, (wa as any).error)
               }
+            } else {
+              console.log('ℹ️ Número móvil inválido/ausente para WhatsApp, se omite:', telefono)
             }
           }
         }
+
           continue
         }
 
