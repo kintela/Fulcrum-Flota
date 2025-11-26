@@ -180,6 +180,13 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
   const [isReserving, setIsReserving] = useState(false)
   const [reservationMessage, setReservationMessage] = useState<string>("")
   const [isReleasing, setIsReleasing] = useState(false)
+  const selectedMatriculaRef = useRef<string>("all")
+  const [contextMenu, setContextMenu] = useState<{ visible: boolean; x: number; y: number; matricula: string | null }>({
+    visible: false,
+    x: 0,
+    y: 0,
+    matricula: null,
+  })
   const [isLocationMode, setIsLocationMode] = useState(false)
   const [vehicleToLocate, setVehicleToLocate] = useState<string | null>(null)
   const [filterMode, setFilterMode] = useState<"all" | "available" | "assigned" | "reserved" | "with-location" | "no-location">("all")
@@ -435,7 +442,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
                   </p>
                   ${empleadoInfo ? `<p style="margin: 4px 0; color: #6b7280;"><strong>Asignado a:</strong> ${empleadoInfo.nombre} ${empleadoInfo.apellidos || ""}</p>` : ""}
                   ${coche.direccion_actual ? `<p style="margin: 4px 0; color: #6b7280;"><strong>Ubicación:</strong> ${coche.direccion_actual}</p>` : ""}
-                  ${canRelocate ? `<p style="margin: 6px 0; color: #10b981; font-size: 12px;"><strong>💡 Tip:</strong> Puedes arrastrar este marcador para reubicarlo</p>` : ""}
+                  ${canRelocate ? `<p style="margin: 6px 0; color: #10b981; font-size: 12px;"><strong>💡 Tip:</strong> Haz clic derecho en el marcador y luego pulsa en el mapa para fijar la nueva ubicación</p>` : ""}
                   ${isAdmin ? `
                     <div style="margin-top: 8px;">
                       <a href="/coches/detalle/${coche.matricula}" 
@@ -452,6 +459,34 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
 
           marker.addListener("click", () => {
             infoWindow.open(map, marker)
+          })
+
+          // Clic derecho en el marcador para iniciar reubicación
+          marker.addListener("rightclick", (event: any) => {
+            const empleadoInfoLocal = getEmpleadoInfo(coche)
+            const isUserVehicleLocal = userEmail && empleadoInfoLocal && empleadoInfoLocal.email === userEmail
+            const tieneReservaActivaLocal = misReservas?.some(
+              (reserva) => reserva.matricula === coche.matricula && reserva.estado === "activa"
+            )
+            const esMiCocheLocal = isUserVehicleLocal || !!tieneReservaActivaLocal
+            const canRelocateLocal = userRole === "administrador" || esMiCocheLocal
+
+            if (!canRelocateLocal) {
+              setVehicleMessage("❌ No tienes permisos para reubicar este vehículo")
+              return
+            }
+
+            if (event?.domEvent?.preventDefault) {
+              event.domEvent.preventDefault()
+            }
+            const domEvt = event?.domEvent as MouseEvent
+            setContextMenu({
+              visible: true,
+              x: domEvt?.clientX || 0,
+              y: domEvt?.clientY || 0,
+              matricula: coche.matricula,
+            })
+            infoWindow.close()
           })
 
           // Agregar listeners para reubicación si el marcador es arrastrable
@@ -490,12 +525,9 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
                 const resultado = await actualizarUbicacionCoche(coche.matricula, newLat, newLng)
                 
                 if (resultado.success) {
-                  setVehicleMessage(`✅ ${resultado.message}`)
-                  
-                  // Refresh para mostrar la nueva ubicación
-                  setTimeout(() => {
-                    window.location.reload()
-                  }, 2000)
+                  setVehicleMessage(`✅ ${resultado.message || 'Ubicación actualizada'}`)
+                  // Mantener el marcador en la nueva posición sin recargar
+                  marker.setPosition({ lat: newLat, lng: newLng })
                 } else {
                   setVehicleMessage(`❌ ${resultado.error}`)
                   // Volver a la posición original si hay error
@@ -712,6 +744,61 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
       addMarkers(mapInstance.current)
     }
   }, [coches, empleados, addMarkers, isLoaded, isGoogleMapsReady])
+
+  // Clic en el mapa para fijar nueva ubicación cuando está en modo reubicación
+  useEffect(() => {
+    if (!mapInstance.current || !isGoogleMapsReady()) return
+
+    const listener = mapInstance.current.addListener("click", async (event: any) => {
+      if (!isLocationModeRef.current || !vehicleToLocateRef.current) return
+
+      const matricula = vehicleToLocateRef.current
+      const newLat = event.latLng.lat()
+      const newLng = event.latLng.lng()
+
+      setVehicleMessage(`💾 Guardando nueva ubicación de ${matricula}...`)
+
+      const resultado = await actualizarUbicacionCoche(matricula, newLat, newLng)
+      if (!resultado.success) {
+        setVehicleMessage(`❌ ${resultado.error}`)
+        isLocationModeRef.current = false
+        vehicleToLocateRef.current = null
+        return
+      }
+
+      // Mover el marcador correspondiente sin recargar
+      const targetMarkerObj = markers.current.find((m) => m.matricula === matricula)
+      if (targetMarkerObj?.marker) {
+        targetMarkerObj.marker.setPosition({ lat: newLat, lng: newLng })
+      }
+
+      setVehicleMessage(`✅ ${resultado.message || "Ubicación actualizada"}`)
+      isLocationModeRef.current = false
+      vehicleToLocateRef.current = null
+      setContextMenu({ visible: false, x: 0, y: 0, matricula: null })
+    })
+
+    return () => {
+      if (listener) {
+        window.google.maps.event.removeListener(listener)
+      }
+    }
+  }, [isGoogleMapsReady])
+
+  const handleContextRelocate = useCallback(() => {
+    if (!contextMenu.matricula) return
+    isLocationModeRef.current = true
+    vehicleToLocateRef.current = contextMenu.matricula
+    setVehicleMessage(`📍 Reubicando ${contextMenu.matricula}: haz clic en el mapa para fijar la nueva ubicación`)
+    setContextMenu({ visible: false, x: 0, y: 0, matricula: null })
+  }, [contextMenu.matricula])
+
+  const handleContextCancel = useCallback(() => {
+    setContextMenu({ visible: false, x: 0, y: 0, matricula: null })
+    isLocationModeRef.current = false
+    vehicleToLocateRef.current = null
+    setVehicleMessage("")
+  }, [])
 
   // Cleanup al desmontar
   useEffect(() => {
@@ -972,6 +1059,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
   const handleVehicleSelectChange = useCallback(
     (event: React.ChangeEvent<HTMLSelectElement>) => {
       const matricula = event.target.value
+      selectedMatriculaRef.current = matricula
       setSelectedMatricula(matricula)
       setVehicleMessage("")
 
@@ -1600,7 +1688,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
                   <span className="text-green-600">
                     {userRole === 'administrador' 
                       ? 'Puedes reubicar cualquier vehículo arrastrándolo' 
-                      : 'Puedes reubicar tus vehículos arrastrándolos'}
+                      : 'Puedes reubicar tus vehículos asignados o con reservas activas'}
                   </span>
                 </div>
               )}
@@ -1676,6 +1764,60 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
                       Reintentar
                     </Button>
                   </div>
+                </div>
+              )}
+
+              {/* Menú contextual para reubicar */}
+              {contextMenu.visible && (
+                <div
+                  style={{
+                    position: "fixed",
+                    top: contextMenu.y,
+                    left: contextMenu.x,
+                    background: "white",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "6px",
+                    boxShadow: "0 10px 25px rgba(0,0,0,0.15)",
+                    zIndex: 9999,
+                    minWidth: "180px",
+                  }}
+                >
+                  <div style={{ padding: "10px", borderBottom: "1px solid #f3f4f6" }}>
+                    <div style={{ fontWeight: 600, fontSize: "14px", color: "#111827" }}>
+                      {contextMenu.matricula}
+                    </div>
+                    <div style={{ fontSize: "12px", color: "#6b7280" }}>
+                      Selecciona "Reubicar" y luego haz clic en el mapa
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleContextRelocate}
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      border: "none",
+                      background: "#10b981",
+                      color: "white",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      borderBottom: "1px solid #0ea472",
+                    }}
+                  >
+                    Reubicar
+                  </button>
+                  <button
+                    onClick={handleContextCancel}
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      border: "none",
+                      background: "white",
+                      color: "#6b7280",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Cancelar
+                  </button>
                 </div>
               )}
             </div>

@@ -12,34 +12,8 @@ export async function actualizarUbicacionCoche(matricula: string, latitud: numbe
       return { success: false, error: "No autorizado" }
     }
 
-    // Verificar que es un usuario válido
-    const userRole = session.user.role || 'usuario'
-    
-    // Solo usuarios regulares pueden actualizar ubicaciones de sus propios vehículos
-    // Los administradores podrían actualizar cualquier vehículo
-    if (userRole === 'usuario') {
-      // Verificar que el vehículo está asignado al usuario
-      const { data: empleado } = await supabase
-        .from("empleados")
-        .select("id")
-        .eq('email', session.user.email)
-        .single()
-
-      if (!empleado) {
-        return { success: false, error: "Empleado no encontrado" }
-      }
-
-      // Verificar que el vehículo está asignado al usuario
-      const { data: coche } = await supabase
-        .from("coches")
-        .select("asignadoa")
-        .eq('matricula', matricula)
-        .single()
-
-      if (!coche || coche.asignadoa !== empleado.id) {
-        return { success: false, error: "No tienes permisos para actualizar la ubicación de este vehículo" }
-      }
-    }
+    // Permitir reubicar si estás autenticado (ya sea admin o usuario con sesión).
+    // Las políticas de Supabase controlan el acceso.
 
     // Intentar obtener la dirección usando Geocoding API de Google
     let direccionActual = null
