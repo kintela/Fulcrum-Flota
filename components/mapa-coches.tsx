@@ -416,26 +416,36 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
           // Crear ventana de información
           const infoWindow = new window.google.maps.InfoWindow({
             content: `
-            <div style="padding: 10px; font-family: Arial, sans-serif;">
-              ${coche.primeraFoto ? `<div style="margin-bottom:8px;"><img src="${coche.primeraFoto}" alt="Foto ${coche.matricula}" style="width:100%; max-width:240px; border-radius:6px; object-fit:cover;" /></div>` : ''}
-              <h3 style="margin: 0 0 8px 0; color: #1f2937;">${coche.matricula}</h3>
-              <p style="margin: 4px 0; color: #6b7280;"><strong>Vehículo:</strong> ${coche.marca} ${coche.modelo}</p>
-              <p style="margin: 4px 0; color: #6b7280;"><strong>Estado:</strong> 
-                <span style="color: ${isAssigned ? "#059669" : "#2563eb"};">
-                  ${isAssigned ? "Asignado" : "Disponible"}
-                </span>
-              </p>
-              ${empleadoInfo ? `<p style="margin: 4px 0; color: #6b7280;"><strong>Asignado a:</strong> ${empleadoInfo.nombre} ${empleadoInfo.apellidos || ""}</p>` : ""}
-              ${coche.direccion_actual ? `<p style="margin: 4px 0; color: #6b7280;"><strong>Ubicación:</strong> ${coche.direccion_actual}</p>` : ""}
-              ${canRelocate ? `<p style="margin: 4px 0; color: #10b981; font-size: 12px;"><strong>💡 Tip:</strong> Puedes arrastrar este marcador para reubicarlo</p>` : ""}
-              ${isAdmin ? `
-                <div style="margin-top: 8px;">
-                  <a href="/coches/detalle/${coche.matricula}" 
-                     style="background-color: #3b82f6; color: white; padding: 4px 8px; border-radius: 4px; text-decoration: none; font-size: 12px;">
-                    Ver detalles
-                  </a>
+            <div style="padding: 12px; font-family: Arial, sans-serif; max-width: 520px;">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start;">
+                <div>
+                  ${
+                    coche.primeraFoto
+                      ? `<img src="${coche.primeraFoto}" alt="Foto ${coche.matricula}" style="width:100%; border-radius:8px; object-fit:cover; max-height:140px;" />`
+                      : `<div style="width:100%; height:140px; border-radius:8px; background:#f3f4f6; display:flex; align-items:center; justify-content:center; color:#9ca3af; font-size:32px;">🚗</div>`
+                  }
                 </div>
-              ` : ''}
+                <div>
+                  <h3 style="margin: 0 0 8px 0; color: #1f2937;">${coche.matricula}</h3>
+                  <p style="margin: 4px 0; color: #6b7280;"><strong>Vehículo:</strong> ${coche.marca} ${coche.modelo}</p>
+                  <p style="margin: 4px 0; color: #6b7280;"><strong>Estado:</strong> 
+                    <span style="color: ${isAssigned ? "#059669" : "#2563eb"};">
+                      ${isAssigned ? "Asignado" : "Disponible"}
+                    </span>
+                  </p>
+                  ${empleadoInfo ? `<p style="margin: 4px 0; color: #6b7280;"><strong>Asignado a:</strong> ${empleadoInfo.nombre} ${empleadoInfo.apellidos || ""}</p>` : ""}
+                  ${coche.direccion_actual ? `<p style="margin: 4px 0; color: #6b7280;"><strong>Ubicación:</strong> ${coche.direccion_actual}</p>` : ""}
+                  ${canRelocate ? `<p style="margin: 6px 0; color: #10b981; font-size: 12px;"><strong>💡 Tip:</strong> Puedes arrastrar este marcador para reubicarlo</p>` : ""}
+                  ${isAdmin ? `
+                    <div style="margin-top: 8px;">
+                      <a href="/coches/detalle/${coche.matricula}" 
+                         style="background-color: #3b82f6; color: white; padding: 4px 8px; border-radius: 4px; text-decoration: none; font-size: 12px;">
+                        Ver detalles
+                      </a>
+                    </div>
+                  ` : ''}
+                </div>
+              </div>
             </div>
           `,
           })
