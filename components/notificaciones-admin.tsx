@@ -253,9 +253,9 @@ export default function NotificacionesAdmin() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Ejecutar Manualmente</CardTitle>
+            <CardTitle>Reservas Vencidas</CardTitle>
             <CardDescription>
-              Ejecuta la verificación de reservas vencidas ahora
+              Ejecuta ahora la verificación de reservas vencidas
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -290,76 +290,72 @@ export default function NotificacionesAdmin() {
         </Card>
       </div>
 
-      {/* Resultados */}
-      {resultado && (
+      {/* Resultados combinados */}
+      {(resultado || resultadoActivacion) && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              {resultado.success ? (
-                <CheckCircle className="h-5 w-5 text-green-500" />
-              ) : (
-                <AlertCircle className="h-5 w-5 text-red-500" />
-              )}
-              Resultado de la Operación
+              <CheckCircle className="h-5 w-5 text-green-500" />
+              Resultados de Notificaciones
             </CardTitle>
-            <CardDescription>
-              Ejecutado el {new Date(resultado.timestamp).toLocaleString('es-ES')}
-            </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <p className={resultado.success ? 'text-green-600' : 'text-red-600'}>
-                {resultado.message}
-              </p>
-              
-              {resultado.data && (
-                <div className="grid gap-2 text-sm text-muted-foreground">
-                  <div>Reservas encontradas: {resultado.data.reservasEncontradas}</div>
-                  <div>Notificaciones enviadas: {resultado.data.reservasNotificadas}</div>
-                  {resultado.data.erroresEnvio > 0 && (
-                    <div className="text-red-600">
-                      Errores de envío: {resultado.data.erroresEnvio}
-                    </div>
-                  )}
+          <CardContent className="space-y-6">
+            {resultado && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="font-semibold">Reservas Vencidas</div>
+                  <div className="text-xs text-muted-foreground">
+                    Ejecutado el {new Date(resultado.timestamp).toLocaleString('es-ES')}
+                  </div>
                 </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+                <p className={resultado.success ? 'text-green-600' : 'text-red-600'}>{resultado.message}</p>
+                {resultado.data && (
+                  <div className="grid gap-2 text-sm text-muted-foreground">
+                    <div>Reservas encontradas: {resultado.data.reservasEncontradas}</div>
+                    <div>Notificaciones enviadas: {resultado.data.reservasNotificadas}</div>
+                    {resultado.data.erroresEnvio > 0 && <div className="text-red-600">Errores de envío: {resultado.data.erroresEnvio}</div>}
+                    {Array.isArray(resultado.data.detalleNotificaciones) && resultado.data.detalleNotificaciones.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        <div className="font-semibold text-gray-700">Detalle:</div>
+                        {resultado.data.detalleNotificaciones.map((item: any) => {
+                          const canales: string[] = []
+                          if (item.emailEnviado) canales.push('Email')
+                          if (item.whatsappEnviado) canales.push('WhatsApp')
+                          return (
+                            <div key={item.id} className="text-xs text-gray-600">
+                              • Reserva {item.id} · {item.matricula} {item.marca} {item.modelo} · {item.empleadoNombre} ({item.empleadoEmail}){canales.length ? ` · Enviado: ${canales.join(' y ')}` : ''}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
-      {resultadoActivacion && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              {resultadoActivacion.success ? (
-                <CheckCircle className="h-5 w-5 text-green-500" />
-              ) : (
-                <AlertCircle className="h-5 w-5 text-red-500" />
-              )}
-              Resultado Activación Pendientes
-            </CardTitle>
-            <CardDescription>
-              Ejecutado el {new Date(resultadoActivacion.timestamp || Date.now()).toLocaleString('es-ES')}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2 text-sm">
-              <p className={resultadoActivacion.success ? 'text-green-600' : 'text-red-600'}>
-                {resultadoActivacion.success ? `Reservas activadas: ${resultadoActivacion.activadas || 0}` : (resultadoActivacion.error || 'Error')}
-              </p>
-              {resultadoActivacion.ids && (
-                <div className="text-muted-foreground text-xs">
-                  IDs: {resultadoActivacion.ids.join(', ')}
+            {resultadoActivacion && (
+              <div className="space-y-2 border-t pt-4">
+                <div className="flex items-center justify-between">
+                  <div className="font-semibold">Activación de Reservas Pendientes</div>
+                  <div className="text-xs text-muted-foreground">
+                    Ejecutado el {new Date(resultadoActivacion.timestamp || Date.now()).toLocaleString('es-ES')}
+                  </div>
                 </div>
-              )}
-              {(resultadoActivacion.emailsEnviados !== undefined || resultadoActivacion.whatsappsEnviados !== undefined) && (
-                <div className="text-muted-foreground text-xs flex gap-4 mt-1">
-                  {resultadoActivacion.emailsEnviados !== undefined && <span>Emails: {resultadoActivacion.emailsEnviados}</span>}
-                  {resultadoActivacion.whatsappsEnviados !== undefined && <span>WhatsApps: {resultadoActivacion.whatsappsEnviados}</span>}
-                </div>
-              )}
-            </div>
+                <p className={resultadoActivacion.success ? 'text-green-600' : 'text-red-600'}>
+                  {resultadoActivacion.success ? `Reservas activadas: ${resultadoActivacion.activadas || 0}` : (resultadoActivacion.error || 'Error')}
+                </p>
+                {resultadoActivacion.ids && (
+                  <div className="text-muted-foreground text-xs">IDs: {resultadoActivacion.ids.join(', ')}</div>
+                )}
+                {(resultadoActivacion.emailsEnviados !== undefined || resultadoActivacion.whatsappsEnviados !== undefined) && (
+                  <div className="text-muted-foreground text-xs flex gap-4 mt-1">
+                    {resultadoActivacion.emailsEnviados !== undefined && <span>Emails: {resultadoActivacion.emailsEnviados}</span>}
+                    {resultadoActivacion.whatsappsEnviados !== undefined && <span>WhatsApps: {resultadoActivacion.whatsappsEnviados}</span>}
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

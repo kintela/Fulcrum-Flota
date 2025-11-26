@@ -63,7 +63,7 @@ export async function verificarReservasVencidas() {
     // Obtener la fecha actual en UTC
     const ahora = new Date()
     
-    // Calcular la fecha de hace 1 hora en UTC (reservas que vencieron hace al menos 1 hora)
+    // Considerar vencida si fecha_fin <= hace 1 hora (damos margen antes de avisar)
     const haceUnaHora = new Date(ahora.getTime() - (60 * 60 * 1000))
     
     console.log(`🕒 Hora actual UTC: ${ahora.toISOString()}`)
@@ -265,9 +265,9 @@ export async function verificarReservasVencidas() {
             )
 
             if (resultadoWhatsApp.success) {
-              whatsappEnviado = true
-              intentosEnvio.push('✅ WhatsApp enviado exitosamente')
-              console.log(`✅ WhatsApp enviado exitosamente a ${telefonoFormateado}`)
+            whatsappEnviado = true
+            intentosEnvio.push('✅ WhatsApp enviado exitosamente')
+            console.log(`✅ WhatsApp enviado exitosamente a ${telefonoFormateado}`)
             } else {
               intentosEnvio.push(`❌ Error WhatsApp: ${resultadoWhatsApp.error}`)
               console.error(`❌ Error enviando WhatsApp: ${resultadoWhatsApp.error}`)
@@ -317,12 +317,23 @@ export async function verificarReservasVencidas() {
     const mensaje = `Procesadas ${reservasVencidas.length} reservas. Notificadas: ${reservasNotificadas}, Errores: ${erroresEnvio}`
     console.log(`📊 ${mensaje}`)
 
+    const detalleNotificaciones = reservasVencidas.map((reserva, idx) => ({
+      id: reserva.id,
+      matricula: reserva.coche?.matricula,
+      marca: reserva.coche?.marca,
+      modelo: reserva.coche?.modelo,
+      empleadoEmail: reserva.empleado?.email,
+      empleadoNombre: `${reserva.empleado?.nombre} ${reserva.empleado?.apellidos}`,
+      emailEnviado: !!reserva?.empleado?.email, // marca que se intentó email
+    }))
+
     return {
       success: true,
       message: mensaje,
       reservasEncontradas: reservasVencidas.length,
       reservasNotificadas,
-      erroresEnvio
+      erroresEnvio,
+      detalleNotificaciones
     }
 
   } catch (error) {

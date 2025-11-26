@@ -322,7 +322,7 @@ export async function verificarDisponibilidad(matricula: string, fechaInicio: st
     // Obtener reservas activas o pendientes del vehículo (pendiente = programada futura)
     const { data: reservasActivas, error } = await supabase
       .from('reservas')
-      .select('id, fecha_inicio, fecha_fin')
+      .select('id, fecha_inicio, fecha_fin, bloqueo_desde')
       .eq('matricula', matricula)
       .in('estado', ['activa','pendiente'])
 
@@ -338,10 +338,11 @@ export async function verificarDisponibilidad(matricula: string, fechaInicio: st
     const conflictos = (reservasActivas || []).filter(r => {
       const inicio = new Date(r.fecha_inicio)
       const fin = new Date(r.fecha_fin)
-      // Solape temporal con la solicitud
-      const solapa = inicio <= finSolicitado && fin >= inicioSolicitado
+      const inicioBloqueo = r.bloqueo_desde ? new Date(r.bloqueo_desde) : inicio
+      // Ventana de bloqueo: desde bloqueo_desde (o inicio) hasta fin
+      const solapa = inicioBloqueo <= finSolicitado && fin >= inicioSolicitado
       // Reserva activa ya vencida pero no marcada (fin < ahora) -> sigue bloqueando
-      const vencidaNoCompletada = fin < ahora && inicio <= ahora
+      const vencidaNoCompletada = fin < ahora && inicioBloqueo <= ahora
       return solapa || vencidaNoCompletada
     })
 
@@ -360,13 +361,15 @@ export async function verificarDisponibilidad(matricula: string, fechaInicio: st
 export async function activarReservasPendientes(opciones?: { manual?: boolean }) {
   try {
     const ahora = new Date()
-    // Buscar reservas en estado pendiente con fecha_inicio <= ahora
+    const umbralAviso = new Date(ahora.getTime() + 30 * 60 * 1000) // 30 minutos adelante
+
+    // Buscar reservas en estado pendiente con fecha_inicio <= ahora + 30m
     // Nota: reducimos el SELECT para evitar fallar si ciertos campos no existen todavía (ej: whatsapp)
     const { data: pendientes, error } = await supabase
       .from('reservas')
       .select('id, fecha_inicio, fecha_fin, matricula, empleado_id, coches(marca,modelo), empleados(email,nombre,apellidos,movil)')
       .eq('estado', 'pendiente')
-      .lte('fecha_inicio', ahora.toISOString())
+      .lte('fecha_inicio', umbralAviso.toISOString())
 
     if (error) {
       console.error('Error consultando reservas pendientes para activar:', error)
@@ -379,10 +382,16 @@ export async function activarReservasPendientes(opciones?: { manual?: boolean })
 
     const ids: number[] = []
   let emailsEnviados = 0
+  let avisosPreviosEnviados = 0
   let whatsappsEnviados = 0
   let whatsappsErrores = 0
   for (const r of pendientes) {
       try {
+        const fechaInicio = new Date(r.fecha_inicio)
+        const fechaFin = new Date(r.fecha_fin)
+
+        // Activar si ya empezó o está dentro de los próximos 30 minutos
+        if (fechaInicio <= umbralAviso) {
         const { error: upErr } = await supabase.from('reservas').update({ estado: 'activa' }).eq('id', r.id)
         if (upErr) {
           console.error('Error activando reserva', r.id, upErr)
@@ -398,40 +407,46 @@ export async function activarReservasPendientes(opciones?: { manual?: boolean })
             email,
             nombre,
             { matricula: r.matricula, marca: coche.marca, modelo: coche.modelo },
-            new Date(r.fecha_inicio),
-            new Date(r.fecha_fin)
+            fechaInicio,
+            fechaFin
           )
-          if (resEmail.success) emailsEnviados++
-          // Envío de WhatsApp solo en ejecución manual (no cron) y si hay teléfono
-          if (opciones?.manual) {
-            // Obtener teléfono del empleado si existe
-            const telefono = (r as any).empleados?.movil || null
-            if (telefono) {
-              const telefonoTrim = String(telefono).trim()
-              // Validar formato básico: dígitos opcional + y longitud mínima 7
-              if (/^\+?\d{7,15}$/.test(telefonoTrim.replace(/\s|-/g,''))) {
-                const msg = `✅ Inicio de tu reserva (${r.matricula})\nInicio: ${new Date(r.fecha_inicio).toLocaleString('es-ES',{ hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit' })}\nFin previsto: ${new Date(r.fecha_fin).toLocaleString('es-ES',{ hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit' })}\nRecuerda marcarla completada al devolver el vehículo.`
-                console.log('[ActivarPendientes] Intentando WhatsApp a', telefonoTrim, 'reserva', r.id)
-                const wa = await enviarWhatsappInicioReserva(telefonoTrim, msg)
-                if ((wa as any).success) {
-                  whatsappsEnviados++
-                  console.log('[ActivarPendientes] WhatsApp OK reserva', r.id)
-                } else {
-                  whatsappsErrores++
-                  console.warn('[ActivarPendientes] WhatsApp fallo reserva', r.id, (wa as any).error)
-                }
+          if (resEmail.success) {
+            emailsEnviados++
+          }
+        }
+        // Envío de WhatsApp solo en ejecución manual (no cron) y si hay teléfono
+        if (opciones?.manual) {
+          // Obtener teléfono del empleado si existe
+          const telefono = (r as any).empleados?.movil || null
+          if (telefono) {
+            const telefonoTrim = String(telefono).trim()
+            // Validar formato básico: dígitos opcional + y longitud mínima 7
+            if (/^\+?\d{7,15}$/.test(telefonoTrim.replace(/\s|-/g,''))) {
+              const msg = `✅ Inicio de tu reserva (${r.matricula})\nInicio: ${new Date(r.fecha_inicio).toLocaleString('es-ES',{ hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit' })}\nFin previsto: ${new Date(r.fecha_fin).toLocaleString('es-ES',{ hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit' })}\nRecuerda marcarla completada al devolver el vehículo.`
+              console.log('[ActivarPendientes] Intentando WhatsApp a', telefonoTrim, 'reserva', r.id)
+              const wa = await enviarWhatsappInicioReserva(telefonoTrim, msg)
+              if ((wa as any).success) {
+                whatsappsEnviados++
+                console.log('[ActivarPendientes] WhatsApp OK reserva', r.id)
               } else {
-                console.log('ℹ️ Número móvil inválido/ausente para WhatsApp, se omite:', telefono)
+                whatsappsErrores++
+                console.warn('[ActivarPendientes] WhatsApp fallo reserva', r.id, (wa as any).error)
               }
+            } else {
+              console.log('ℹ️ Número móvil inválido/ausente para WhatsApp, se omite:', telefono)
             }
           }
         }
+
+          continue
+        }
+
       } catch (e) {
         console.error('Error procesando activación individual', r.id, e)
       }
     }
 
-  return { success: true, activadas: ids.length, ids, emailsEnviados, whatsappsEnviados, whatsappsErrores }
+  return { success: true, activadas: ids.length, ids, emailsEnviados, avisosPreviosEnviados, whatsappsEnviados, whatsappsErrores }
   } catch (error) {
   console.error('Error en activarReservasPendientes:', error)
   return { success: false, error: 'Error inesperado activando reservas', details: error instanceof Error ? error.message : 'desconocido' }

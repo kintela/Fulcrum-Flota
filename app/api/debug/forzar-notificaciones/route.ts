@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { verificarReservasVencidas } from '@/app/actions/notificaciones'
 
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     console.log('🚀 FORZANDO ejecución de verificarReservasVencidas')
     console.log('🔍 Esta ejecución es MANUAL, no desde cron')

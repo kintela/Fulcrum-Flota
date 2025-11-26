@@ -201,7 +201,7 @@ export async function enviarEmailReservaVencida(
           
           
           <div class="footer">
-            <p><strong>Fulcrum Fleet Management</strong></p>
+            <p><strong>Fulcrum Flota</strong></p>
           </div>
         </div>
       </body>
@@ -237,7 +237,7 @@ Para consultas, contacte con Roberto Quintela.
 
     const mailOptions = {
       from: {
-        name: 'Fulcrum Fleet Management',
+        name: 'Fulcrum Flota',
         address: emailConfig.auth.user
       },
       to: emailDestino,
@@ -283,7 +283,7 @@ export async function enviarEmailPrueba() {
 
     const mailOptions = {
       from: {
-        name: 'Fulcrum Fleet Management',
+        name: 'Fulcrum Flota',
         address: emailConfig.auth.user
       },
       to: emailConfig.auth.user, // Enviar a nosotros mismos
@@ -305,7 +305,7 @@ Detalles técnicos:
 - Fecha de prueba: ${new Date().toLocaleString('es-ES')}
 
 ---
-Fulcrum Fleet Management
+Fulcrum Flota
 Sistema de Notificaciones Automáticas
       `,
       html: `
@@ -326,7 +326,7 @@ Sistema de Notificaciones Automáticas
 <body>
     <div class="header">
         <h1>🧪 Prueba del Sistema de Notificaciones</h1>
-        <p>Fulcrum Fleet Management</p>
+        <p>Fulcrum Flota</p>
     </div>
     
     <div class="content">
@@ -357,7 +357,7 @@ Sistema de Notificaciones Automáticas
     </div>
     
     <div class="footer">
-        <p>Fulcrum Fleet Management - Sistema de Notificaciones Automáticas</p>
+        <p>Fulcrum Flota - Sistema de Notificaciones Automáticas</p>
         <p>Este es un mensaje de prueba generado automáticamente.</p>
     </div>
 </body>
@@ -415,14 +415,14 @@ Fin previsto: ${finFmt}
 Recuerda marcarla como completada cuando devuelvas el vehículo
 
 ---
-Fulcrum Fleet Management
+Fulcrum Flota
 Este es un mensaje automático.
     `
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /><title>Inicio de Reserva</title><style>body{font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#333;max-width:620px;margin:0 auto;padding:24px;background:#f5f7fa} .card{background:#fff;border-radius:10px;padding:28px;box-shadow:0 2px 8px rgba(0,0,0,0.06)} h1{margin:0 0 12px;font-size:22px;color:#16a34a} .veh{background:#f0fdf4;border:1px solid #bbf7d0;padding:16px;border-radius:8px;margin:16px 0} .footer{margin-top:32px;font-size:12px;color:#666;text-align:center} .pill{display:inline-block;background:#16a34a;color:#fff;padding:4px 10px;border-radius:999px;font-size:12px;margin-bottom:8px}</style></head><body><div class="card"><span class="pill">Reserva activada</span><h1>Comienza tu reserva</h1><p>Hola <strong>${nombreEmpleado}</strong>,</p><p>Tu reserva ha pasado automáticamente de <strong>pendiente</strong> a <strong>activa</strong>.</p><div class="veh"><strong>Vehículo:</strong> ${vehiculo.marca} ${vehiculo.modelo} (${vehiculo.matricula})<br/><strong>Inicio:</strong> ${inicioFmt}<br/><strong>Fin previsto:</strong> ${finFmt}</div><p>Recuerda marcarla como <em>completada</em> cuando devuelvas el vehículo.</p><div class="footer">Fulcrum Fleet Management · Aviso automático</div></div></body></html>`
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /><title>Inicio de Reserva</title><style>body{font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#333;max-width:620px;margin:0 auto;padding:24px;background:#f5f7fa} .card{background:#fff;border-radius:10px;padding:28px;box-shadow:0 2px 8px rgba(0,0,0,0.06)} h1{margin:0 0 12px;font-size:22px;color:#16a34a} .veh{background:#f0fdf4;border:1px solid #bbf7d0;padding:16px;border-radius:8px;margin:16px 0} .footer{margin-top:32px;font-size:12px;color:#666;text-align:center} .pill{display:inline-block;background:#16a34a;color:#fff;padding:4px 10px;border-radius:999px;font-size:12px;margin-bottom:8px}</style></head><body><div class="card"><span class="pill">Reserva activada</span><h1>Comienza tu reserva</h1><p>Hola <strong>${nombreEmpleado}</strong>,</p><p>Tu reserva ha pasado automáticamente de <strong>pendiente</strong> a <strong>activa</strong>.</p><div class="veh"><strong>Vehículo:</strong> ${vehiculo.marca} ${vehiculo.modelo} (${vehiculo.matricula})<br/><strong>Inicio:</strong> ${inicioFmt}<br/><strong>Fin previsto:</strong> ${finFmt}</div><p>Recuerda marcarla como <em>completada</em> cuando devuelvas el vehículo.</p><div class="footer">Fulcrum Flota · Aviso automático</div></div></body></html>`
 
     const mailOptions = {
-      from: { name: 'Fulcrum Fleet Management', address: emailConfig.auth.user },
+      from: { name: 'Fulcrum Flota', address: emailConfig.auth.user },
       to: emailDestino,
       subject: asunto,
       text: texto,
