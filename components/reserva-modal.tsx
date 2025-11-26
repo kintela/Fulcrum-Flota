@@ -22,10 +22,17 @@ interface ReservaModalProps {
 }
 
 export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReservaCreada }: ReservaModalProps) {
-  const [fechaInicio, setFechaInicio] = useState<Date>()
-  const [fechaFin, setFechaFin] = useState<Date>()
-  const [horaInicio, setHoraInicio] = useState("09:00")
-  const [horaFin, setHoraFin] = useState("17:00")
+  const ahora = new Date()
+  const cuatroHorasDespues = new Date(ahora.getTime() + 4 * 60 * 60 * 1000)
+
+  const [fechaInicio, setFechaInicio] = useState<Date>(ahora)
+  const [fechaFin, setFechaFin] = useState<Date>(cuatroHorasDespues)
+  const [horaInicio, setHoraInicio] = useState(
+    `${ahora.getHours().toString().padStart(2, "0")}:${ahora.getMinutes().toString().padStart(2, "0")}`
+  )
+  const [horaFin, setHoraFin] = useState(
+    `${cuatroHorasDespues.getHours().toString().padStart(2, "0")}:${cuatroHorasDespues.getMinutes().toString().padStart(2, "0")}`
+  )
   const [observaciones, setObservaciones] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
@@ -72,6 +79,17 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
       setHoraInicio(minHoraInicioHoy)
     }
   }, [minHoraInicioHoy, horaInicio])
+
+  // Ajustar hora/fecha fin a inicio + 4h cuando cambie la hora de inicio
+  useEffect(() => {
+    if (!fechaInicio) return
+    const [h, m] = horaInicio.split(":").map(Number)
+    const inicioDate = new Date(fechaInicio)
+    inicioDate.setHours(h, m, 0, 0)
+    const finDate = new Date(inicioDate.getTime() + 4 * 60 * 60 * 1000)
+    setFechaFin(finDate)
+    setHoraFin(`${finDate.getHours().toString().padStart(2, "0")}:${finDate.getMinutes().toString().padStart(2, "0")}`)
+  }, [horaInicio, fechaInicio])
 
   // Ajustar hora fin si es inválida respecto a inicio (mismo día)
   useEffect(() => {
@@ -173,10 +191,12 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
 
   const handleClose = () => {
     // Limpiar el formulario
-    setFechaInicio(undefined)
-    setFechaFin(undefined)
-    setHoraInicio("09:00")
-    setHoraFin("17:00")
+    const now = new Date()
+    const plus4 = new Date(now.getTime() + 4 * 60 * 60 * 1000)
+    setFechaInicio(now)
+    setFechaFin(plus4)
+    setHoraInicio(`${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`)
+    setHoraFin(`${plus4.getHours().toString().padStart(2, "0")}:${plus4.getMinutes().toString().padStart(2, "0")}`)
     setObservaciones("")
     setError("")
     setShowCalendarInicio(false)

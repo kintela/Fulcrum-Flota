@@ -361,18 +361,6 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
           const empleadoInfo = getEmpleadoInfo(coche)
           const isAssigned = !!empleadoInfo || !!coche.asignadoa
           
-          // Debug: información del vehículo y usuario
-          if (coche.matricula === '1234-AAA') {
-            console.log(`🚗 DEBUG ${coche.matricula}:`, {
-              asignadoa: coche.asignadoa,
-              empleadoInfo: empleadoInfo,
-              userEmail: userEmail,
-              userRole: userRole,
-              empleadoEmail: empleadoInfo?.email,
-              isUserVehicle: userEmail && empleadoInfo && empleadoInfo.email === userEmail
-            })
-          }
-          
           // Determinar si es un vehículo del usuario actual
           // 1. Por asignación permanente: verificar si está asignado a su email
           // 2. Por reserva temporal: verificar si tiene una reserva activa de este coche
@@ -968,8 +956,6 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
   const handleVehicleSelectChange = useCallback(
     (event: React.ChangeEvent<HTMLSelectElement>) => {
       const matricula = event.target.value
-      console.log("🚗 Seleccionando vehículo:", matricula)
-
       setSelectedMatricula(matricula)
       setVehicleMessage("")
 
@@ -1057,10 +1043,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
               }
             })
             if (targetMarkerObj) {
-              console.log("🎯 Activando marcador para:", matricula)
               ;(window as any).google.maps.event.trigger(targetMarkerObj.marker, "click")
-            } else {
-              console.log("⚠️ No se encontró marcador para:", matricula)
             }
           }, 500)
 
