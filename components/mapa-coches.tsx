@@ -1217,6 +1217,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
                     const isDisponible = coche ? isCocheDisponible(coche) : false
                     const color = getMatriculaColor(matricula)
                     const estadoReserva = reservasActivas.get(matricula)
+                    const empleadoInfo = getEmpleadoInfo(coche || { asignadoa: undefined } as any)
                     
                     // Lógica para el icono diferenciando estados
                     let icono = ""
@@ -1226,7 +1227,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
                     } else if (estadoReserva?.enCurso) {
                       icono = "⏳" // en curso
                     } else if (!isDisponible) {
-                      icono = "🚫" // asignado permanente u otra causa
+                      icono = "👤" // asignado permanente u otra causa
                     } else if (estadoReserva?.programada) {
                       icono = "⏰" // próxima reserva programada (emoji más compatible)
                       if (estadoReserva.proximaInicio && estadoReserva.proximaFin) {
@@ -1251,7 +1252,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
                         value={matricula}
                         style={{ color: color }}
                       >
-                        {matricula} {icono || '[Prog]'}{estadoReserva?.vencida ? ' (vencida)' : estadoReserva?.enCurso ? ' (reservada)' : estadoReserva?.programada ? `${extra}` : ''}
+                        {matricula} {icono || '[Prog]'}{estadoReserva?.vencida ? ' (vencida)' : estadoReserva?.enCurso ? ' (reservada)' : estadoReserva?.programada ? `${extra}` : ''}{!isDisponible && empleadoInfo ? ` · ${empleadoInfo.nombre} ${empleadoInfo.apellidos || ''}` : ''}
                       </option>
                     )
                   })}
