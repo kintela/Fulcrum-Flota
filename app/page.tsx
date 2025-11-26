@@ -2,6 +2,7 @@ import { supabase } from "@/lib/supabase"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
 import DashboardClient from "./dashboard-client"
+import { obtenerFotosCoche } from "@/lib/storage"
 
 async function getDashboardData(userRole: string, userEmail?: string) {
   try {
@@ -46,6 +47,19 @@ async function getDashboardData(userRole: string, userEmail?: string) {
     if (empleadosError) {
       console.error("Error fetching empleados:", empleadosError)
     }
+
+    // Añadir primera foto a todos los coches
+    const cochesConFotos = await Promise.all(
+      (todosLosCoches || []).map(async (coche) => {
+        try {
+          const fotos = await obtenerFotosCoche(coche.matricula)
+          const primeraFoto = fotos.success && fotos.fotos && fotos.fotos.length > 0 ? fotos.fotos[0] : null
+          return { ...coche, primeraFoto }
+        } catch {
+          return { ...coche, primeraFoto: null }
+        }
+      })
+    )
 
 
     // Obtener TODOS los registros de ITVs con información del vehículo
@@ -236,8 +250,8 @@ async function getDashboardData(userRole: string, userEmail?: string) {
     })
 
     return {
-      coches: userRole === 'usuario' ? cochesFiltrados : (todosLosCoches || []),
-      todosLosCoches: todosLosCoches || [], // Para el mapa
+      coches: userRole === 'usuario' ? cochesFiltrados : cochesConFotos,
+      todosLosCoches: cochesConFotos, // Para el mapa
       empleados: empleados || [],
       itvAlerts: {
         total: itvAlerts.length,

@@ -16,6 +16,7 @@ interface Coche {
   matricula: string
   marca: string
   modelo: string
+  primeraFoto?: string | null
   latitud?: number
   longitud?: number
   ultima_ubicacion?: string
@@ -410,10 +411,13 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
             },
           })
 
+          const isAdmin = userRole === 'administrador'
+
           // Crear ventana de información
           const infoWindow = new window.google.maps.InfoWindow({
             content: `
             <div style="padding: 10px; font-family: Arial, sans-serif;">
+              ${coche.primeraFoto ? `<div style="margin-bottom:8px;"><img src="${coche.primeraFoto}" alt="Foto ${coche.matricula}" style="width:100%; max-width:240px; border-radius:6px; object-fit:cover;" /></div>` : ''}
               <h3 style="margin: 0 0 8px 0; color: #1f2937;">${coche.matricula}</h3>
               <p style="margin: 4px 0; color: #6b7280;"><strong>Vehículo:</strong> ${coche.marca} ${coche.modelo}</p>
               <p style="margin: 4px 0; color: #6b7280;"><strong>Estado:</strong> 
@@ -424,12 +428,14 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
               ${empleadoInfo ? `<p style="margin: 4px 0; color: #6b7280;"><strong>Asignado a:</strong> ${empleadoInfo.nombre} ${empleadoInfo.apellidos || ""}</p>` : ""}
               ${coche.direccion_actual ? `<p style="margin: 4px 0; color: #6b7280;"><strong>Ubicación:</strong> ${coche.direccion_actual}</p>` : ""}
               ${canRelocate ? `<p style="margin: 4px 0; color: #10b981; font-size: 12px;"><strong>💡 Tip:</strong> Puedes arrastrar este marcador para reubicarlo</p>` : ""}
-              <div style="margin-top: 8px;">
-                <a href="/coches/detalle/${coche.matricula}" 
-                   style="background-color: #3b82f6; color: white; padding: 4px 8px; border-radius: 4px; text-decoration: none; font-size: 12px;">
-                  Ver detalles
-                </a>
-              </div>
+              ${isAdmin ? `
+                <div style="margin-top: 8px;">
+                  <a href="/coches/detalle/${coche.matricula}" 
+                     style="background-color: #3b82f6; color: white; padding: 4px 8px; border-radius: 4px; text-decoration: none; font-size: 12px;">
+                    Ver detalles
+                  </a>
+                </div>
+              ` : ''}
             </div>
           `,
           })
