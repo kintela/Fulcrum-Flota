@@ -12,6 +12,7 @@ import { es } from "date-fns/locale"
 import { DayPicker } from "react-day-picker"
 import { crearReservaTemporal, verificarDisponibilidad } from "@/app/actions/reservas-temporales"
 import { supabase } from "@/lib/supabase"
+import { DialogDescription } from "@radix-ui/react-dialog"
 
 interface ReservaModalProps {
   isOpen: boolean
@@ -22,13 +23,26 @@ interface ReservaModalProps {
 }
 
 export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReservaCreada }: ReservaModalProps) {
-  const ahora = new Date()
-  const cuatroHorasDespues = new Date(ahora.getTime() + 4 * 60 * 60 * 1000)
+  const roundToNext30 = (date: Date) => {
+    const d = new Date(date)
+    const minutes = d.getMinutes()
+    if (minutes === 0 || minutes === 30) return d
+    if (minutes < 30) {
+      d.setMinutes(30, 0, 0)
+    } else {
+      d.setHours(d.getHours() + 1, 0, 0, 0)
+    }
+    return d
+  }
 
-  const [fechaInicio, setFechaInicio] = useState<Date>(ahora)
+  const ahora = new Date()
+  const inicioBase = roundToNext30(ahora)
+  const cuatroHorasDespues = new Date(inicioBase.getTime() + 4 * 60 * 60 * 1000)
+
+  const [fechaInicio, setFechaInicio] = useState<Date>(inicioBase)
   const [fechaFin, setFechaFin] = useState<Date>(cuatroHorasDespues)
   const [horaInicio, setHoraInicio] = useState(
-    `${ahora.getHours().toString().padStart(2, "0")}:${ahora.getMinutes().toString().padStart(2, "0")}`
+    `${inicioBase.getHours().toString().padStart(2, "0")}:${inicioBase.getMinutes().toString().padStart(2, "0")}`
   )
   const [horaFin, setHoraFin] = useState(
     `${cuatroHorasDespues.getHours().toString().padStart(2, "0")}:${cuatroHorasDespues.getMinutes().toString().padStart(2, "0")}`
@@ -192,10 +206,11 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
   const handleClose = () => {
     // Limpiar el formulario
     const now = new Date()
-    const plus4 = new Date(now.getTime() + 4 * 60 * 60 * 1000)
-    setFechaInicio(now)
+    const inicio = roundToNext30(now)
+    const plus4 = new Date(inicio.getTime() + 4 * 60 * 60 * 1000)
+    setFechaInicio(inicio)
     setFechaFin(plus4)
-    setHoraInicio(`${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`)
+    setHoraInicio(`${inicio.getHours().toString().padStart(2, "0")}:${inicio.getMinutes().toString().padStart(2, "0")}`)
     setHoraFin(`${plus4.getHours().toString().padStart(2, "0")}:${plus4.getMinutes().toString().padStart(2, "0")}`)
     setObservaciones("")
     setError("")
@@ -266,12 +281,15 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" aria-describedby="reserva-modal-description">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5 text-blue-600" />
             Reservar Vehículo
           </DialogTitle>
+          <DialogDescription id="reserva-modal-description" className="sr-only">
+            Formulario para crear una reserva temporal de vehículo
+          </DialogDescription>
           <p className="text-sm text-gray-600">
             {matricula} - {marcaModelo}
           </p>

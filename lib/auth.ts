@@ -18,10 +18,6 @@ export const authOptions: AuthOptions = {
   },
   callbacks: {
     async jwt({ token, account, profile }: any) {
-      console.log("JWT Callback - Account:", account)
-      console.log("JWT Callback - Profile:", profile)
-      console.log("JWT Callback - Token before:", token)
-      
       if (account) {
         token.accessToken = account.access_token
         token.idToken = account.id_token
@@ -70,13 +66,9 @@ export const authOptions: AuthOptions = {
         token.family_name = profile.family_name || profile.surname
       }
       
-      console.log("JWT Callback - Token after:", token)
       return token
     },
     async session({ session, token }: any) {
-      console.log("🔥 Session Callback INICIADO - Token:", token)
-      console.log("🔥 Session Callback INICIADO - Session before:", session)
-      
       session.accessToken = token.accessToken
       session.idToken = token.idToken
       
@@ -99,10 +91,8 @@ export const authOptions: AuthOptions = {
 
       // Obtener rol del usuario desde la base de datos
       if (session.user.email) {
-        console.log("🔥 VERIFICANDO USUARIO EN BD:", session.user.email)
         try {
           let empleado = await obtenerEmpleadoPorEmail(session.user.email)
-          console.log("🔥 RESULTADO BUSQUEDA EMPLEADO:", empleado)
           
           // Si el empleado no existe, registrarlo automáticamente
           if (!empleado) {
@@ -111,13 +101,6 @@ export const authOptions: AuthOptions = {
             // Intentar extraer nombre y apellidos del token o session
             let nombre = session.user.name || ""
             let apellidos = ""
-            
-            console.log("🔥 DATOS PARA REGISTRO:", {
-              tokenGivenName: token.given_name,
-              tokenFamilyName: token.family_name,
-              sessionUserName: session.user.name,
-              sessionUserEmail: session.user.email
-            })
             
             // Si tenemos los campos separados del token, usarlos
             if (token.given_name || token.family_name) {
@@ -147,35 +130,29 @@ export const authOptions: AuthOptions = {
               apellidos
             )
             
-            console.log("🔥 RESULTADO REGISTRO AUTOMATICO:", resultado)
-            
             if (resultado.success) {
               empleado = resultado.user
-              console.log(`🔥 USUARIO REGISTRADO EXITOSAMENTE: ${session.user.email}`)
             } else {
               console.error(`🔥 ERROR REGISTRANDO USUARIO: ${resultado.error}`)
             }
           } else {
-            console.log("🔥 USUARIO YA EXISTE EN BD")
+            // Empleado ya existe
           }
           
           if (empleado) {
             session.user.role = empleado.role
             session.user.empleadoId = empleado.id
-            console.log("🔥 ROL ASIGNADO:", empleado.role)
           } else {
             session.user.role = null // Usuario no encontrado y no se pudo registrar
-            console.log("🔥 NO SE PUDO OBTENER/REGISTRAR USUARIO")
           }
         } catch (error) {
           console.error("🔥 ERROR GENERAL EN SESSION CALLBACK:", error)
           session.user.role = null
         }
       } else {
-        console.log("🔥 NO HAY EMAIL EN SESSION")
+        // No hay email en session
       }
       
-      console.log("Session Callback - Session after:", session)
       return session
     },
   },
