@@ -1243,7 +1243,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
                     } else if (hasLocation) {
                       icono = "📍"
                     } else {
-                      icono = "❌"
+                      icono = "🌐" // disponible pero sin ubicación
                     }
                     
                     return (
