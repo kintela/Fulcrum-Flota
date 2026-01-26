@@ -208,6 +208,7 @@ const selectedMatriculaRef = useRef<string>("all")
         bloqueoDesde?: string
         proximaInicio?: string
         proximaFin?: string
+        empleadoId?: number | null
       }
     >
   >(new Map())
@@ -245,6 +246,7 @@ const selectedMatriculaRef = useRef<string>("all")
         bloqueoDesde?: string
         proximaInicio?: string
         proximaFin?: string
+        empleadoId?: number | null
       }
     >()
 
@@ -252,13 +254,13 @@ const selectedMatriculaRef = useRef<string>("all")
       try {
         const { data: reservas, error } = await supabase
           .from("reservas")
-          .select("id, estado, fecha_inicio, fecha_fin, bloqueo_desde, margen_bloqueo")
+          .select("id, estado, fecha_inicio, fecha_fin, bloqueo_desde, margen_bloqueo, empleado_id")
           .eq("matricula", matricula)
           .in("estado", ["activa", "pendiente"])
 
         if (error) {
           console.warn(`Error verificando reservas para ${matricula}:`, error)
-          nuevasReservas.set(matricula, { enCurso: false, vencida: false, programada: false, bloquea: false })
+          nuevasReservas.set(matricula, { enCurso: false, vencida: false, programada: false, bloquea: false, empleadoId: null })
           return
         }
 
@@ -270,6 +272,8 @@ const selectedMatriculaRef = useRef<string>("all")
         let proximaInicio: string | undefined
         let proximaFin: string | undefined
         let bloqueoDesde: string | undefined
+        let empleadoId: number | null | undefined
+        let empleadoPrioridad = -1
 
         reservas?.forEach((r) => {
           const inicio = new Date(r.fecha_inicio)
@@ -281,11 +285,27 @@ const selectedMatriculaRef = useRef<string>("all")
           const bloqueadoPorMargen = bloqueo ? ahora >= bloqueo && ahora <= fin : false
           const esProgramada = !enVentana && !vencidaLocal && inicio > ahora
 
-          if (enVentana) enCurso = true
-          if (vencidaLocal) vencida = true
+          if (enVentana) {
+            enCurso = true
+            if (r.empleado_id && empleadoPrioridad < 3) {
+              empleadoId = r.empleado_id
+              empleadoPrioridad = 3
+            }
+          }
+          if (vencidaLocal) {
+            vencida = true
+            if (r.empleado_id && empleadoPrioridad < 2) {
+              empleadoId = r.empleado_id
+              empleadoPrioridad = 2
+            }
+          }
           if (bloqueadoPorMargen) {
             bloquea = true
             bloqueoDesde = r.bloqueo_desde
+            if (r.empleado_id && empleadoPrioridad < 1) {
+              empleadoId = r.empleado_id
+              empleadoPrioridad = 1
+            }
           }
           if (esProgramada) {
             if (!proximaInicio || new Date(proximaInicio) > inicio) {
@@ -298,10 +318,10 @@ const selectedMatriculaRef = useRef<string>("all")
         if (!enCurso && !vencida && proximaInicio) programada = true
         if (enCurso) bloquea = true
 
-        nuevasReservas.set(matricula, { enCurso, vencida, programada, bloquea, bloqueoDesde, proximaInicio, proximaFin })
+        nuevasReservas.set(matricula, { enCurso, vencida, programada, bloquea, bloqueoDesde, proximaInicio, proximaFin, empleadoId })
       } catch (error) {
         console.warn(`Error verificando reservas para ${matricula}:`, error)
-        nuevasReservas.set(matricula, { enCurso: false, vencida: false, programada: false, bloquea: false })
+        nuevasReservas.set(matricula, { enCurso: false, vencida: false, programada: false, bloquea: false, empleadoId: null })
       }
     })
 
@@ -1177,6 +1197,15 @@ const selectedMatriculaRef = useRef<string>("all")
                     const color = getMatriculaColor(matricula)
                     const estadoReserva = reservasActivas.get(matricula)
                     const empleadoInfo = getEmpleadoInfo(coche || { asignadoa: undefined } as any)
+                    const reservaEmpleadoInfo = estadoReserva?.empleadoId ? empleadosMap.get(estadoReserva.empleadoId) : null
+                    const empleadoNombre = empleadoInfo ? `${empleadoInfo.nombre} ${empleadoInfo.apellidos || ""}`.trim() : ""
+                    const reservaEmpleadoNombre = reservaEmpleadoInfo
+                      ? `${reservaEmpleadoInfo.nombre} ${reservaEmpleadoInfo.apellidos || ""}`.trim()
+                      : estadoReserva?.empleadoId
+                        ? `ID: ${estadoReserva.empleadoId}`
+                        : ""
+                    const reservaActiva = !!(estadoReserva?.enCurso || estadoReserva?.vencida || estadoReserva?.bloquea)
+                    const personaEtiqueta = (!isDisponible && empleadoNombre) ? empleadoNombre : reservaActiva ? reservaEmpleadoNombre : ""
                     
                     // Lógica para el icono diferenciando estados
                     let icono = ""
@@ -1211,7 +1240,7 @@ const selectedMatriculaRef = useRef<string>("all")
                         value={matricula}
                         style={{ color: color }}
                       >
-                        {matricula} {icono || '[Prog]'}{estadoReserva?.vencida ? ' (vencida)' : estadoReserva?.enCurso ? ' (reservada)' : estadoReserva?.programada ? `${extra}` : ''}{!isDisponible && empleadoInfo ? ` · ${empleadoInfo.nombre} ${empleadoInfo.apellidos || ''}` : ''}
+                        {matricula} {icono || '[Prog]'}{estadoReserva?.vencida ? ' (vencida)' : estadoReserva?.enCurso ? ' (reservada)' : estadoReserva?.programada ? `${extra}` : ''}{personaEtiqueta ? ` · ${personaEtiqueta}` : ''}
                       </option>
                     )
                   })}
