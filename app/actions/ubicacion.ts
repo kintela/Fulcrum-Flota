@@ -1,8 +1,14 @@
 "use server"
 
 import { supabase } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
+
+const supabaseAdmin =
+  process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.NEXT_PUBLIC_SUPABASE_URL
+    ? createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+    : null
 
 export async function actualizarUbicacionCoche(matricula: string, latitud: number, longitud: number) {
   try {
@@ -46,7 +52,8 @@ export async function actualizarUbicacionCoche(matricula: string, latitud: numbe
       updateData.direccion_actual = direccionActual
     }
 
-    const { error: updateError } = await supabase
+    const client = supabaseAdmin ?? supabase
+    const { error: updateError } = await client
       .from("coches")
       .update(updateData)
       .eq('matricula', matricula)

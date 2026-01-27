@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useEffect, useRef, useState, useCallback } from "react"
+import { useEffect, useRef, useState, useCallback, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { MapPin, RefreshCw, Navigation, AlertCircle, Car, UserCheck, UserX, Calendar, Ban } from "lucide-react"
@@ -213,11 +213,14 @@ const selectedMatriculaRef = useRef<string>("all")
     >
   >(new Map())
 
-  // Crear mapa de empleados
-  const empleadosMap = new Map()
-  empleados.forEach((empleado) => {
-    empleadosMap.set(empleado.id, empleado)
-  })
+  // Crear mapa de empleados (memoizado para evitar recrear marcadores en cada render)
+  const empleadosMap = useMemo(() => {
+    const map = new Map()
+    empleados.forEach((empleado) => {
+      map.set(empleado.id, empleado)
+    })
+    return map
+  }, [empleados])
 
   const getEmpleadoInfo = useCallback(
     (coche: Coche) => {
@@ -417,8 +420,8 @@ const selectedMatriculaRef = useRef<string>("all")
           // Determinar si el usuario puede reubicar este vehículo
           // Administradores: pueden reubicar cualquier vehículo
           // Usuarios: solo pueden reubicar sus vehículos asignados
-          const canRelocate = userRole === 'administrador' || 
-            (userRole === 'usuario' && esMiCoche)
+          const isAdmin = userRole === 'administrador' || userRole === 'admin'
+          const canRelocate = isAdmin || (userRole === 'usuario' && esMiCoche)
 
           // Crear marcador con tamaño especial para "mis coches"
           const markerSize = esMiCoche || (miCocheMatricula && coche.matricula === miCocheMatricula) ? 14 : 10
@@ -437,8 +440,6 @@ const selectedMatriculaRef = useRef<string>("all")
               strokeWeight: 2,
             },
           })
-
-          const isAdmin = userRole === 'administrador'
 
           // Crear ventana de información
           const infoWindow = new window.google.maps.InfoWindow({
@@ -491,7 +492,6 @@ const selectedMatriculaRef = useRef<string>("all")
               isDragging = true
               originalPosition = marker.getPosition()?.toJSON() || position
               console.log(`🎯 Iniciando reubicación de ${coche.matricula}`)
-              setVehicleMessage(`📍 Reubicando ${coche.matricula}... Suelta para guardar la nueva ubicación`)
             })
 
             // Durante el arrastre
@@ -505,19 +505,26 @@ const selectedMatriculaRef = useRef<string>("all")
             // Cuando termina de arrastrar
             marker.addListener("dragend", async (event: any) => {
               isDragging = false
-              const newLat = event.latLng.lat()
-              const newLng = event.latLng.lng()
+              const pos = event?.latLng || marker.getPosition()
+              if (!pos) {
+                setVehicleMessage(`❌ No se pudo leer la nueva posición de ${coche.matricula}`)
+                marker.setPosition(originalPosition)
+                return
+              }
+              const newLat = pos.lat()
+              const newLng = pos.lng()
+              if (!Number.isFinite(newLat) || !Number.isFinite(newLng)) {
+                setVehicleMessage(`❌ Coordenadas inválidas para ${coche.matricula}`)
+                marker.setPosition(originalPosition)
+                return
+              }
               
               console.log(`🎯 Finalizando reubicación de ${coche.matricula} en:`, { lat: newLat, lng: newLng })
-              
-              // Mostrar mensaje de guardando
-              setVehicleMessage(`💾 Guardando nueva ubicación de ${coche.matricula}...`)
               
               try {
                 const resultado = await actualizarUbicacionCoche(coche.matricula, newLat, newLng)
                 
                 if (resultado.success) {
-                  setVehicleMessage(`✅ ${resultado.message || 'Ubicación actualizada'}`)
                   // Mantener el marcador en la nueva posición sin recargar
                   marker.setPosition({ lat: newLat, lng: newLng })
                 } else {
@@ -581,7 +588,7 @@ const selectedMatriculaRef = useRef<string>("all")
         }
       }
     },
-    [coches, getEmpleadoInfo, clearMarkers, isGoogleMapsReady],
+    [coches, getEmpleadoInfo, clearMarkers, isGoogleMapsReady, userRole, userEmail, miCocheMatricula, misReservas],
   )
 
   // Función para actualizar la ubicación de un vehículo
