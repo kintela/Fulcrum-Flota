@@ -188,7 +188,10 @@ export async function cancelarReservaTemporal(reservaId: number) {
       .eq('email', session.user.email)
       .single()
     
-    if (empleadoError || !empleado || empleado.role !== 'admin') {
+    const roleValue = String(empleado?.role || '').toLowerCase()
+    const isAdmin = roleValue === 'admin' || roleValue === 'administrador'
+
+    if (empleadoError || !empleado || !isAdmin) {
       return {
         success: false,
         error: "Acceso no autorizado - Solo administradores pueden cancelar reservas"
@@ -241,6 +244,98 @@ export async function cancelarReservaTemporal(reservaId: number) {
     return {
       success: false,
       error: "Error inesperado al cancelar la reserva temporal"
+    }
+  }
+}
+
+export async function completarReservaTemporalAdmin(reservaId: number) {
+  try {
+    const session = await getServerSession(authOptions)
+
+    if (!session?.user?.email) {
+      return {
+        success: false,
+        error: "Usuario no autenticado"
+      }
+    }
+
+    // Verificar que el usuario es administrador
+    const { data: empleado, error: empleadoError } = await supabase
+      .from("empleados")
+      .select("role")
+      .eq('email', session.user.email)
+      .single()
+
+    const roleValue = String(empleado?.role || '').toLowerCase()
+    const isAdmin = roleValue === 'admin' || roleValue === 'administrador'
+
+    if (empleadoError || !empleado || !isAdmin) {
+      return {
+        success: false,
+        error: "Acceso no autorizado - Solo administradores pueden completar reservas"
+      }
+    }
+
+    // Verificar que la reserva existe
+    const { data: reserva, error: reservaError } = await supabase
+      .from("reservas")
+      .select("id, estado, fecha_fin")
+      .eq('id', reservaId)
+      .single()
+
+    if (reservaError || !reserva) {
+      return {
+        success: false,
+        error: "Reserva no encontrada"
+      }
+    }
+
+    // Solo permitir completar reservas activas vencidas
+    if (reserva.estado !== 'activa') {
+      return {
+        success: false,
+        error: "Solo se pueden completar reservas activas"
+      }
+    }
+
+    const fechaFin = new Date(reserva.fecha_fin)
+    if (isNaN(fechaFin.getTime())) {
+      return {
+        success: false,
+        error: "La reserva tiene una fecha de fin inválida"
+      }
+    }
+
+    if (fechaFin > new Date()) {
+      return {
+        success: false,
+        error: "Solo se pueden completar reservas vencidas"
+      }
+    }
+
+    const { error: updateError } = await supabase
+      .from("reservas")
+      .update({ estado: 'completada' })
+      .eq('id', reservaId)
+
+    if (updateError) {
+      console.error("Error completando reserva temporal:", updateError)
+      return {
+        success: false,
+        error: "Error al completar la reserva temporal"
+      }
+    }
+
+    return {
+      success: true,
+      message: "Reserva temporal marcada como completada"
+    }
+
+  } catch (error) {
+    console.error("Error en completarReservaTemporalAdmin:", error)
+    return {
+      success: false,
+      error: "Error inesperado al completar la reserva temporal"
     }
   }
 }

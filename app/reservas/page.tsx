@@ -9,6 +9,7 @@ import {
   obtenerReservasTemporales, 
   obtenerAsignacionesPermanentes,
   cancelarReservaTemporal,
+  completarReservaTemporalAdmin,
   type ReservaTemporal,
   type AsignacionPermanente 
 } from "@/app/actions/reservas-admin"
@@ -24,6 +25,7 @@ export default function ReservasPage() {
   const [error, setError] = useState<string>("")
   const [searchText, setSearchText] = useState<string>("")
   const [cancelandoReserva, setCancelandoReserva] = useState<number | null>(null)
+  const [completandoReserva, setCompletandoReserva] = useState<number | null>(null)
   const [liberandoCoche, setLiberandoCoche] = useState<string | null>(null)
   const [mensaje, setMensaje] = useState<string>("")
 
@@ -92,6 +94,27 @@ export default function ReservasPage() {
     }
   }
 
+  const handleCompletarReserva = async (reservaId: number) => {
+    setCompletandoReserva(reservaId)
+    setMensaje("")
+
+    try {
+      const resultado = await completarReservaTemporalAdmin(reservaId)
+
+      if (resultado.success) {
+        setMensaje(`✅ ${resultado.message}`)
+        await loadData()
+      } else {
+        setMensaje(`❌ ${resultado.error}`)
+      }
+    } catch (error) {
+      console.error("Error completando reserva:", error)
+      setMensaje("❌ Error inesperado al completar la reserva")
+    } finally {
+      setCompletandoReserva(null)
+    }
+  }
+
   const handleLiberarCoche = async (matricula: string) => {
     setLiberandoCoche(matricula)
     setMensaje("")
@@ -141,6 +164,8 @@ export default function ReservasPage() {
       </div>
     )
   }
+
+  const isAdmin = session?.user?.role === 'administrador' || session?.user?.role === 'admin'
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
@@ -216,6 +241,9 @@ export default function ReservasPage() {
             reservas={reservasTemporales}
             onCancelarReserva={handleCancelarReserva}
             cancelandoReserva={cancelandoReserva}
+            onCompletarReserva={handleCompletarReserva}
+            completandoReserva={completandoReserva}
+            isAdmin={isAdmin}
             searchText={searchText}
           />
         </div>

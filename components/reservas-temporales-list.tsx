@@ -23,12 +23,19 @@ interface ReservasTemporalesListProps {
   reservas: ReservaTemporal[]
   onCancelarReserva: (reservaId: number) => Promise<void>
   cancelandoReserva: number | null
+  onCompletarReserva: (reservaId: number) => Promise<void>
+  completandoReserva: number | null
+  isAdmin: boolean
   searchText: string
 }
 
 function getEstadoReserva(reserva: ReservaTemporal): { estado: string; color: string; descripcion: string } {
   if (reserva.estado === 'cancelada') {
     return { estado: 'Cancelada', color: 'destructive', descripcion: 'Reserva cancelada' }
+  }
+
+  if (reserva.estado === 'completada') {
+    return { estado: 'Completada', color: 'secondary', descripcion: 'Reserva completada' }
   }
 
   const ahora = new Date()
@@ -55,10 +62,22 @@ function puedeSerCancelada(reserva: ReservaTemporal): boolean {
   return isBefore(ahora, fechaFin)
 }
 
+function puedeSerCompletada(reserva: ReservaTemporal): boolean {
+  if (reserva.estado !== 'activa') return false
+
+  const ahora = new Date()
+  const fechaFin = parseISO(reserva.fecha_fin)
+
+  return isAfter(ahora, fechaFin)
+}
+
 export default function ReservasTemporalesList({ 
   reservas, 
   onCancelarReserva, 
   cancelandoReserva, 
+  onCompletarReserva,
+  completandoReserva,
+  isAdmin,
   searchText 
 }: ReservasTemporalesListProps) {
   const [capturandoUbicacion, setCapturandoUbicacion] = useState<number | null>(null)
@@ -184,6 +203,10 @@ export default function ReservasTemporalesList({
                 {reservasCoche.map((reserva, index) => {
                   const estadoInfo = getEstadoReserva(reserva)
                   const puedeCancelarse = puedeSerCancelada(reserva)
+                  const puedeCompletar = isAdmin && puedeSerCompletada(reserva)
+                  const badgeClassName = (estadoInfo.estado === 'Vencida' || estadoInfo.estado === 'Completada')
+                    ? 'bg-orange-100 text-orange-800 hover:bg-orange-100'
+                    : undefined
                   
                   // Debug log
                   console.log(`🔍 Reserva ${reserva.id} (${matricula}):`, {
@@ -201,7 +224,7 @@ export default function ReservasTemporalesList({
                             <span className="text-sm font-medium text-gray-600">
                               Reserva #{index + 1}
                             </span>
-                            <Badge variant={estadoInfo.color as any}>
+                            <Badge variant={estadoInfo.color as any} className={badgeClassName}>
                               {estadoInfo.estado}
                             </Badge>
                           </div>
@@ -245,6 +268,28 @@ export default function ReservasTemporalesList({
 
                         {/* Solo botón de cancelar - la ubicación estará dentro del dialog */}
                         <div className="flex items-center gap-2 ml-4">
+                          {/* Botón de completar (solo admin y vencidas) */}
+                          {puedeCompletar && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                              disabled={completandoReserva === reserva.id || cancelandoReserva === reserva.id}
+                              onClick={() => onCompletarReserva(reserva.id)}
+                            >
+                              {completandoReserva === reserva.id ? (
+                                <div className="flex items-center gap-2">
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  Completando...
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <AlertTriangle className="h-4 w-4" />
+                                  Marcar completada
+                                </div>
+                              )}
+                            </Button>
+                          )}
                           {/* Botón de cancelar */}
                           {puedeCancelarse && (
                             <AlertDialog>
