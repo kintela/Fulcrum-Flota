@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useEffect, useRef, useState, useCallback } from "react"
+import { useEffect, useRef, useState, useCallback, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { MapPin, RefreshCw, Navigation, AlertCircle, Car, UserCheck, UserX, Calendar, Ban } from "lucide-react"
@@ -16,6 +16,7 @@ interface Coche {
   matricula: string
   marca: string
   modelo: string
+  primeraFoto?: string | null
   latitud?: number
   longitud?: number
   ultima_ubicacion?: string
@@ -176,9 +177,16 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
   const [mapError, setMapError] = useState<string | null>(null)
   const [selectedMatricula, setSelectedMatricula] = useState<string>("all")
   const [vehicleMessage, setVehicleMessage] = useState<string>("")
-  const [isReserving, setIsReserving] = useState(false)
-  const [reservationMessage, setReservationMessage] = useState<string>("")
-  const [isReleasing, setIsReleasing] = useState(false)
+const [isReserving, setIsReserving] = useState(false)
+const [reservationMessage, setReservationMessage] = useState<string>("")
+const [isReleasing, setIsReleasing] = useState(false)
+const selectedMatriculaRef = useRef<string>("all")
+  const [contextMenu, setContextMenu] = useState<{ visible: boolean; x: number; y: number; matricula: string | null }>({
+    visible: false,
+    x: 0,
+    y: 0,
+    matricula: null,
+  })
   const [isLocationMode, setIsLocationMode] = useState(false)
   const [vehicleToLocate, setVehicleToLocate] = useState<string | null>(null)
   const [filterMode, setFilterMode] = useState<"all" | "available" | "assigned" | "reserved" | "with-location" | "no-location">("all")
@@ -200,15 +208,19 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
         bloqueoDesde?: string
         proximaInicio?: string
         proximaFin?: string
+        empleadoId?: number | null
       }
     >
   >(new Map())
 
-  // Crear mapa de empleados
-  const empleadosMap = new Map()
-  empleados.forEach((empleado) => {
-    empleadosMap.set(empleado.id, empleado)
-  })
+  // Crear mapa de empleados (memoizado para evitar recrear marcadores en cada render)
+  const empleadosMap = useMemo(() => {
+    const map = new Map()
+    empleados.forEach((empleado) => {
+      map.set(empleado.id, empleado)
+    })
+    return map
+  }, [empleados])
 
   const getEmpleadoInfo = useCallback(
     (coche: Coche) => {
@@ -237,6 +249,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
         bloqueoDesde?: string
         proximaInicio?: string
         proximaFin?: string
+        empleadoId?: number | null
       }
     >()
 
@@ -244,13 +257,13 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
       try {
         const { data: reservas, error } = await supabase
           .from("reservas")
-          .select("id, estado, fecha_inicio, fecha_fin, bloqueo_desde, margen_bloqueo")
+          .select("id, estado, fecha_inicio, fecha_fin, bloqueo_desde, margen_bloqueo, empleado_id")
           .eq("matricula", matricula)
           .in("estado", ["activa", "pendiente"])
 
         if (error) {
           console.warn(`Error verificando reservas para ${matricula}:`, error)
-          nuevasReservas.set(matricula, { enCurso: false, vencida: false, programada: false, bloquea: false })
+          nuevasReservas.set(matricula, { enCurso: false, vencida: false, programada: false, bloquea: false, empleadoId: null })
           return
         }
 
@@ -262,6 +275,8 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
         let proximaInicio: string | undefined
         let proximaFin: string | undefined
         let bloqueoDesde: string | undefined
+        let empleadoId: number | null | undefined
+        let empleadoPrioridad = -1
 
         reservas?.forEach((r) => {
           const inicio = new Date(r.fecha_inicio)
@@ -273,11 +288,27 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
           const bloqueadoPorMargen = bloqueo ? ahora >= bloqueo && ahora <= fin : false
           const esProgramada = !enVentana && !vencidaLocal && inicio > ahora
 
-          if (enVentana) enCurso = true
-          if (vencidaLocal) vencida = true
+          if (enVentana) {
+            enCurso = true
+            if (r.empleado_id && empleadoPrioridad < 3) {
+              empleadoId = r.empleado_id
+              empleadoPrioridad = 3
+            }
+          }
+          if (vencidaLocal) {
+            vencida = true
+            if (r.empleado_id && empleadoPrioridad < 2) {
+              empleadoId = r.empleado_id
+              empleadoPrioridad = 2
+            }
+          }
           if (bloqueadoPorMargen) {
             bloquea = true
             bloqueoDesde = r.bloqueo_desde
+            if (r.empleado_id && empleadoPrioridad < 1) {
+              empleadoId = r.empleado_id
+              empleadoPrioridad = 1
+            }
           }
           if (esProgramada) {
             if (!proximaInicio || new Date(proximaInicio) > inicio) {
@@ -290,10 +321,10 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
         if (!enCurso && !vencida && proximaInicio) programada = true
         if (enCurso) bloquea = true
 
-        nuevasReservas.set(matricula, { enCurso, vencida, programada, bloquea, bloqueoDesde, proximaInicio, proximaFin })
+        nuevasReservas.set(matricula, { enCurso, vencida, programada, bloquea, bloqueoDesde, proximaInicio, proximaFin, empleadoId })
       } catch (error) {
         console.warn(`Error verificando reservas para ${matricula}:`, error)
-        nuevasReservas.set(matricula, { enCurso: false, vencida: false, programada: false, bloquea: false })
+        nuevasReservas.set(matricula, { enCurso: false, vencida: false, programada: false, bloquea: false, empleadoId: null })
       }
     })
 
@@ -389,8 +420,8 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
           // Determinar si el usuario puede reubicar este vehículo
           // Administradores: pueden reubicar cualquier vehículo
           // Usuarios: solo pueden reubicar sus vehículos asignados
-          const canRelocate = userRole === 'administrador' || 
-            (userRole === 'usuario' && esMiCoche)
+          const isAdmin = userRole === 'administrador' || userRole === 'admin'
+          const canRelocate = isAdmin || (userRole === 'usuario' && esMiCoche)
 
           // Crear marcador con tamaño especial para "mis coches"
           const markerSize = esMiCoche || (miCocheMatricula && coche.matricula === miCocheMatricula) ? 14 : 10
@@ -413,22 +444,35 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
           // Crear ventana de información
           const infoWindow = new window.google.maps.InfoWindow({
             content: `
-            <div style="padding: 10px; font-family: Arial, sans-serif;">
-              <h3 style="margin: 0 0 8px 0; color: #1f2937;">${coche.matricula}</h3>
-              <p style="margin: 4px 0; color: #6b7280;"><strong>Vehículo:</strong> ${coche.marca} ${coche.modelo}</p>
-              <p style="margin: 4px 0; color: #6b7280;"><strong>Estado:</strong> 
-                <span style="color: ${isAssigned ? "#059669" : "#2563eb"};">
-                  ${isAssigned ? "Asignado" : "Disponible"}
-                </span>
-              </p>
-              ${empleadoInfo ? `<p style="margin: 4px 0; color: #6b7280;"><strong>Asignado a:</strong> ${empleadoInfo.nombre} ${empleadoInfo.apellidos || ""}</p>` : ""}
-              ${coche.direccion_actual ? `<p style="margin: 4px 0; color: #6b7280;"><strong>Ubicación:</strong> ${coche.direccion_actual}</p>` : ""}
-              ${canRelocate ? `<p style="margin: 4px 0; color: #10b981; font-size: 12px;"><strong>💡 Tip:</strong> Puedes arrastrar este marcador para reubicarlo</p>` : ""}
-              <div style="margin-top: 8px;">
-                <a href="/coches/detalle/${coche.matricula}" 
-                   style="background-color: #3b82f6; color: white; padding: 4px 8px; border-radius: 4px; text-decoration: none; font-size: 12px;">
-                  Ver detalles
-                </a>
+            <div style="padding: 12px; font-family: Arial, sans-serif; max-width: 520px;">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start;">
+                <div>
+                  ${
+                    coche.primeraFoto
+                      ? `<img src="${coche.primeraFoto}" alt="Foto ${coche.matricula}" style="width:100%; border-radius:8px; object-fit:cover; max-height:140px;" />`
+                      : `<div style="width:100%; height:140px; border-radius:8px; background:#f3f4f6; display:flex; align-items:center; justify-content:center; color:#9ca3af; font-size:32px;">🚗</div>`
+                  }
+                </div>
+                <div>
+                  <h3 style="margin: 0 0 8px 0; color: #1f2937;">${coche.matricula}</h3>
+                  <p style="margin: 4px 0; color: #6b7280;"><strong>Vehículo:</strong> ${coche.marca} ${coche.modelo}</p>
+                  <p style="margin: 4px 0; color: #6b7280;"><strong>Estado:</strong> 
+                    <span style="color: ${isAssigned ? "#059669" : "#2563eb"};">
+                      ${isAssigned ? "Asignado" : "Disponible"}
+                    </span>
+                  </p>
+                  ${empleadoInfo ? `<p style="margin: 4px 0; color: #6b7280;"><strong>Asignado a:</strong> ${empleadoInfo.nombre} ${empleadoInfo.apellidos || ""}</p>` : ""}
+                  ${coche.direccion_actual ? `<p style="margin: 4px 0; color: #6b7280;"><strong>Ubicación:</strong> ${coche.direccion_actual}</p>` : ""}
+                  ${canRelocate ? `<p style="margin: 6px 0; color: #10b981; font-size: 12px;"><strong>💡 Tip:</strong> Mantén pulsado el marcador y arrástralo para reubicar</p>` : ""}
+                  ${isAdmin ? `
+                    <div style="margin-top: 8px;">
+                      <a href="/coches/detalle/${coche.matricula}" 
+                         style="background-color: #3b82f6; color: white; padding: 4px 8px; border-radius: 4px; text-decoration: none; font-size: 12px;">
+                        Ver detalles
+                      </a>
+                    </div>
+                  ` : ''}
+                </div>
               </div>
             </div>
           `,
@@ -448,7 +492,6 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
               isDragging = true
               originalPosition = marker.getPosition()?.toJSON() || position
               console.log(`🎯 Iniciando reubicación de ${coche.matricula}`)
-              setVehicleMessage(`📍 Reubicando ${coche.matricula}... Suelta para guardar la nueva ubicación`)
             })
 
             // Durante el arrastre
@@ -462,24 +505,28 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
             // Cuando termina de arrastrar
             marker.addListener("dragend", async (event: any) => {
               isDragging = false
-              const newLat = event.latLng.lat()
-              const newLng = event.latLng.lng()
+              const pos = event?.latLng || marker.getPosition()
+              if (!pos) {
+                setVehicleMessage(`❌ No se pudo leer la nueva posición de ${coche.matricula}`)
+                marker.setPosition(originalPosition)
+                return
+              }
+              const newLat = pos.lat()
+              const newLng = pos.lng()
+              if (!Number.isFinite(newLat) || !Number.isFinite(newLng)) {
+                setVehicleMessage(`❌ Coordenadas inválidas para ${coche.matricula}`)
+                marker.setPosition(originalPosition)
+                return
+              }
               
               console.log(`🎯 Finalizando reubicación de ${coche.matricula} en:`, { lat: newLat, lng: newLng })
-              
-              // Mostrar mensaje de guardando
-              setVehicleMessage(`💾 Guardando nueva ubicación de ${coche.matricula}...`)
               
               try {
                 const resultado = await actualizarUbicacionCoche(coche.matricula, newLat, newLng)
                 
                 if (resultado.success) {
-                  setVehicleMessage(`✅ ${resultado.message}`)
-                  
-                  // Refresh para mostrar la nueva ubicación
-                  setTimeout(() => {
-                    window.location.reload()
-                  }, 2000)
+                  // Mantener el marcador en la nueva posición sin recargar
+                  marker.setPosition({ lat: newLat, lng: newLng })
                 } else {
                   setVehicleMessage(`❌ ${resultado.error}`)
                   // Volver a la posición original si hay error
@@ -501,6 +548,15 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
             })
 
             marker.addListener("mouseout", () => {
+              if (!isDragging) {
+                map.setOptions({ draggableCursor: null })
+              }
+            })
+            // Mejorar la UX: mostrar cursor de arrastre al pulsar y soltar
+            marker.addListener("mousedown", () => {
+              map.setOptions({ draggableCursor: "grabbing" })
+            })
+            marker.addListener("mouseup", () => {
               if (!isDragging) {
                 map.setOptions({ draggableCursor: null })
               }
@@ -532,75 +588,26 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
         }
       }
     },
-    [coches, getEmpleadoInfo, clearMarkers, isGoogleMapsReady],
+    [coches, getEmpleadoInfo, clearMarkers, isGoogleMapsReady, userRole, userEmail, miCocheMatricula, misReservas],
   )
 
   // Función para actualizar la ubicación de un vehículo
   const updateVehicleLocation = useCallback(async (matricula: string, lat: number, lng: number) => {
     console.log(`🎯 Actualizando ubicación de ${matricula} en:`, { lat, lng })
-    
-    // Crear marcador temporal en la posición seleccionada
-    if (mapInstance.current && isGoogleMapsReady()) {
-      try {
-        const tempMarker = new window.google.maps.Marker({
-          position: { lat, lng },
-          map: mapInstance.current,
-          title: `Nueva ubicación para ${matricula}`,
-          icon: {
-            path: window.google.maps.SymbolPath.CIRCLE,
-            scale: 12,
-            fillColor: "#dc2626", // Rojo para indicar nueva ubicación
-            fillOpacity: 0.9,
-            strokeColor: "#ffffff",
-            strokeWeight: 3,
-          },
-          animation: window.google.maps.Animation.BOUNCE
-        })
-
-        // Quitar la animación después de 2 segundos
-        setTimeout(() => {
-          if (tempMarker) {
-            tempMarker.setAnimation(null)
-          }
-        }, 2000)
-
-        setVehicleMessage(`📍 Guardando nueva ubicación para ${matricula}...`)
-        
-        // Remover el marcador temporal después de 5 segundos
-        setTimeout(() => {
-          if (tempMarker) {
-            tempMarker.setMap(null)
-          }
-        }, 5000)
-      } catch (error) {
-        console.error("Error creando marcador temporal:", error)
-      }
-    }
+    setVehicleMessage(`📍 Guardando nueva ubicación para ${matricula}...`)
 
     try {
       const resultado = await actualizarUbicacionCoche(matricula, lat, lng)
       
       if (resultado.success) {
         setVehicleMessage(`✅ ${resultado.message}`)
-        setIsLocationMode(false)
-        setVehicleToLocate(null)
-        isLocationModeRef.current = false
-        vehicleToLocateRef.current = null
-        
-        // Refresh para mostrar la nueva ubicación
-        setTimeout(() => {
-          window.location.reload()
-        }, 2000)
       } else {
         setVehicleMessage(`❌ ${resultado.error}`)
-        setIsLocationMode(false)
-        setVehicleToLocate(null)
-        isLocationModeRef.current = false
-        vehicleToLocateRef.current = null
       }
     } catch (error) {
       console.error("Error actualizando ubicación:", error)
       setVehicleMessage(`❌ Error al actualizar la ubicación del vehículo ${matricula}`)
+    } finally {
       setIsLocationMode(false)
       setVehicleToLocate(null)
       isLocationModeRef.current = false
@@ -649,21 +656,6 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
         //console.log("🎯 Mapa completamente listo")
         addMarkers(map)
         setIsInitializing(false)
-      })
-
-      // Agregar listener para clics en el mapa (para modo de ubicación)
-      // Usar refs para acceder al estado actual
-      map.addListener("click", (event: any) => {
-        console.log("🖱️ Click en mapa detectado. isLocationMode:", isLocationModeRef.current, "vehicleToLocate:", vehicleToLocateRef.current)
-        
-        if (isLocationModeRef.current && vehicleToLocateRef.current) {
-          const lat = event.latLng.lat()
-          const lng = event.latLng.lng()
-          console.log("📍 Coordenadas obtenidas:", { lat, lng })
-          updateVehicleLocation(vehicleToLocateRef.current, lat, lng)
-        } else {
-          console.log("⚠️ No está en modo ubicación o no hay vehículo seleccionado")
-        }
       })
 
       // Fallback
@@ -881,10 +873,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
   // Función para manejar cuando se crea una reserva exitosamente
   const handleReservaCreada = useCallback((mensaje: string) => {
     setReservationMessage(`✅ ${mensaje}`)
-    // Refresh para actualizar la información después de un breve delay
-    setTimeout(() => {
-      window.location.reload()
-    }, 2000)
+    // No recargamos la página; podrías refrescar datos específicos si fuese necesario
   }, [])
 
   // Función para manejar la liberación de un vehículo
@@ -899,10 +888,6 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
       
       if (resultado.success) {
         setReservationMessage(`✅ ${resultado.message}`)
-        // Refresh para actualizar la información
-        setTimeout(() => {
-          window.location.reload()
-        }, 2000)
       } else {
         setReservationMessage(`❌ ${resultado.error}`)
       }
@@ -956,6 +941,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
   const handleVehicleSelectChange = useCallback(
     (event: React.ChangeEvent<HTMLSelectElement>) => {
       const matricula = event.target.value
+      selectedMatriculaRef.current = matricula
       setSelectedMatricula(matricula)
       setVehicleMessage("")
 
@@ -1218,6 +1204,15 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
                     const color = getMatriculaColor(matricula)
                     const estadoReserva = reservasActivas.get(matricula)
                     const empleadoInfo = getEmpleadoInfo(coche || { asignadoa: undefined } as any)
+                    const reservaEmpleadoInfo = estadoReserva?.empleadoId ? empleadosMap.get(estadoReserva.empleadoId) : null
+                    const empleadoNombre = empleadoInfo ? `${empleadoInfo.nombre} ${empleadoInfo.apellidos || ""}`.trim() : ""
+                    const reservaEmpleadoNombre = reservaEmpleadoInfo
+                      ? `${reservaEmpleadoInfo.nombre} ${reservaEmpleadoInfo.apellidos || ""}`.trim()
+                      : estadoReserva?.empleadoId
+                        ? `ID: ${estadoReserva.empleadoId}`
+                        : ""
+                    const reservaActiva = !!(estadoReserva?.enCurso || estadoReserva?.vencida || estadoReserva?.bloquea)
+                    const personaEtiqueta = (!isDisponible && empleadoNombre) ? empleadoNombre : reservaActiva ? reservaEmpleadoNombre : ""
                     
                     // Lógica para el icono diferenciando estados
                     let icono = ""
@@ -1252,7 +1247,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
                         value={matricula}
                         style={{ color: color }}
                       >
-                        {matricula} {icono || '[Prog]'}{estadoReserva?.vencida ? ' (vencida)' : estadoReserva?.enCurso ? ' (reservada)' : estadoReserva?.programada ? `${extra}` : ''}{!isDisponible && empleadoInfo ? ` · ${empleadoInfo.nombre} ${empleadoInfo.apellidos || ''}` : ''}
+                        {matricula} {icono || '[Prog]'}{estadoReserva?.vencida ? ' (vencida)' : estadoReserva?.enCurso ? ' (reservada)' : estadoReserva?.programada ? `${extra}` : ''}{personaEtiqueta ? ` · ${personaEtiqueta}` : ''}
                       </option>
                     )
                   })}
@@ -1584,7 +1579,7 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
                   <span className="text-green-600">
                     {userRole === 'administrador' 
                       ? 'Puedes reubicar cualquier vehículo arrastrándolo' 
-                      : 'Puedes reubicar tus vehículos arrastrándolos'}
+                      : 'Puedes reubicar tus vehículos asignados o con reservas activas'}
                   </span>
                 </div>
               )}
@@ -1660,6 +1655,60 @@ export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCoch
                       Reintentar
                     </Button>
                   </div>
+                </div>
+              )}
+
+              {/* Menú contextual para reubicar */}
+              {contextMenu.visible && (
+                <div
+                  style={{
+                    position: "fixed",
+                    top: contextMenu.y,
+                    left: contextMenu.x,
+                    background: "white",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "6px",
+                    boxShadow: "0 10px 25px rgba(0,0,0,0.15)",
+                    zIndex: 9999,
+                    minWidth: "180px",
+                  }}
+                >
+                  <div style={{ padding: "10px", borderBottom: "1px solid #f3f4f6" }}>
+                    <div style={{ fontWeight: 600, fontSize: "14px", color: "#111827" }}>
+                      {contextMenu.matricula}
+                    </div>
+                    <div style={{ fontSize: "12px", color: "#6b7280" }}>
+                      Selecciona "Reubicar" y luego haz clic en el mapa
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleContextRelocate}
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      border: "none",
+                      background: "#10b981",
+                      color: "white",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      borderBottom: "1px solid #0ea472",
+                    }}
+                  >
+                    Reubicar
+                  </button>
+                  <button
+                    onClick={handleContextCancel}
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      border: "none",
+                      background: "white",
+                      color: "#6b7280",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Cancelar
+                  </button>
                 </div>
               )}
             </div>
