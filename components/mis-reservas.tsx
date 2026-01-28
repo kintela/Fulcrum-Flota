@@ -341,13 +341,14 @@ export function MisReservas({
                             {getEstadoReserva(reserva) === 'vencida' && (
                               <div className="mt-3 flex flex-wrap gap-2 items-center">
                                 <p className="text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded px-2 py-1">
-                                  Vencida pero no marcada como completada
+                                  Vencida pero no marcada como completada {sinUbicacion ? 'y el coche no está ubicado' : 'y el coche está ubicado'}
                                 </p>
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  disabled={completingId === reserva.id}
+                                  disabled={completingId === reserva.id || sinUbicacion}
                                   onClick={async () => {
+                                    if (sinUbicacion) return
                                     setCompletingId(reserva.id)
                                     const resp = await completarReserva(reserva.id)
                                     if (!resp.success) {
@@ -357,7 +358,8 @@ export function MisReservas({
                                     }
                                     setCompletingId(null)
                                   }}
-                                  className="text-xs h-6 px-2 border-orange-300 hover:bg-orange-100"
+                                  className={`text-xs h-6 px-2 border-orange-300 hover:bg-orange-100 ${sinUbicacion ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                  title={sinUbicacion ? 'Debes ubicar el coche antes de completar la reserva' : undefined}
                                 >
                                   {completingId === reserva.id ? 'Guardando...' : 'Marcar completada'}
                                 </Button>
@@ -371,6 +373,11 @@ export function MisReservas({
                                   >
                                     {ubicandoId === reserva.id ? 'Ubicando...' : 'Ubicar en sede'}
                                   </Button>
+                                )}
+                                {sinUbicacion && (
+                                  <span className="text-xs text-orange-700">
+                                    Hasta que no lo ubiques no puedes completar tu reserva.
+                                  </span>
                                 )}
                               </div>
                             )}
