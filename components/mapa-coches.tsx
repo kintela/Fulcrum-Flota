@@ -37,6 +37,7 @@ interface MapaCochesProps {
     activateLocationMode: (matricula: string) => void
     cancelLocationMode: () => void
   }) => void
+  onReservaCreada?: () => void
 }
 
 // Hook personalizado para Google Maps con verificación completa
@@ -165,7 +166,7 @@ function useGoogleMaps() {
   return { isLoaded, error, loadGoogleMaps, isGoogleMapsReady }
 }
 
-export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCocheMatricula, misReservas = [], onFunctionsReady }: MapaCochesProps) {
+export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCocheMatricula, misReservas = [], onFunctionsReady, onReservaCreada }: MapaCochesProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstance = useRef<any>(null)
   const markers = useRef<any[]>([])
@@ -878,9 +879,14 @@ const selectedMatriculaRef = useRef<string>("all")
 
   // Función para manejar cuando se crea una reserva exitosamente
   const handleReservaCreada = useCallback((mensaje: string) => {
-    setReservationMessage(`✅ ${mensaje}`)
-    // No recargamos la página; podrías refrescar datos específicos si fuese necesario
-  }, [])
+    if (isAdmin) {
+      setReservationMessage(`✅ ${mensaje}`)
+    } else {
+      setReservationMessage("")
+      setVehicleMessage("")
+    }
+    onReservaCreada?.()
+  }, [isAdmin, onReservaCreada])
 
   // Función para manejar la liberación de un vehículo
   const handleLiberar = useCallback(async () => {
@@ -1358,7 +1364,7 @@ const selectedMatriculaRef = useRef<string>("all")
               )}
             </div>
             
-            {vehicleMessage && (
+            {vehicleMessage && (isAdmin || vehicleMessage.startsWith('❌')) && (
               <div 
                 className={`mt-3 p-3 rounded-md ${
                   isLocationMode 
@@ -1386,7 +1392,7 @@ const selectedMatriculaRef = useRef<string>("all")
               </div>
             )}
             
-            {reservationMessage && (
+            {reservationMessage && (isAdmin || reservationMessage.startsWith('❌')) && (
               <div className={`mt-3 p-3 rounded-md ${
                 reservationMessage.startsWith('✅') 
                   ? 'bg-green-50 border border-green-200' 

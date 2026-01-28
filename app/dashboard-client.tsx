@@ -717,9 +717,13 @@ export default function DashboardClient({
   
   // Estado para las reservas del usuario (se actualizará desde MisReservas)
   const [misReservas, setMisReservas] = useState<Array<{ matricula: string; id: number; estado: string }>>([])
+  const [reservasRefreshToken, setReservasRefreshToken] = useState(0)
 
   const handleReservasChange = (reservas: Array<{ matricula: string; id: number; estado: string }>) => {
     setMisReservas(reservas)
+  }
+  const handleReservaCreada = () => {
+    setReservasRefreshToken((prev) => prev + 1)
   }
 
   return (
@@ -763,6 +767,7 @@ export default function DashboardClient({
           <MisReservas 
             onCocheEnCancelacion={setCocheEnCancelacion}
             onReservasChange={handleReservasChange}
+            refreshToken={reservasRefreshToken}
           />
         </Suspense>
 
@@ -776,6 +781,7 @@ export default function DashboardClient({
             miCocheMatricula={cocheEnCancelacion}
             misReservas={misReservas}
             onFunctionsReady={setMapFunctions}
+            onReservaCreada={handleReservaCreada}
           />
         </Suspense>
       </div>

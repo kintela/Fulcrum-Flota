@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -37,10 +37,12 @@ interface Reserva {
 
 export function MisReservas({ 
   onCocheEnCancelacion,
-  onReservasChange 
+  onReservasChange,
+  refreshToken
 }: { 
   onCocheEnCancelacion?: (matricula: string | null) => void
   onReservasChange?: (reservas: Array<{ matricula: string; id: number; estado: string }>) => void
+  refreshToken?: number
 }) {
   const [reservas, setReservas] = useState<Reserva[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -50,6 +52,7 @@ export function MisReservas({
   const [reservaToCancel, setReservaToCancel] = useState<Reserva | null>(null)
   const [capturandoUbicacion, setCapturandoUbicacion] = useState<number | null>(null)
   const [completingId, setCompletingId] = useState<number | null>(null)
+  const hasMountedRef = useRef(false)
 
   const cargarReservas = async () => {
     setIsLoading(true)
@@ -83,6 +86,15 @@ export function MisReservas({
   useEffect(() => {
     cargarReservas()
   }, [])
+
+  useEffect(() => {
+    if (refreshToken === undefined) return
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true
+      return
+    }
+    cargarReservas()
+  }, [refreshToken])
 
   const handleCancelarReserva = async (reservaId: number) => {
     setCancellingId(reservaId)
