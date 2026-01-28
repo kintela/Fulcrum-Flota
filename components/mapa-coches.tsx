@@ -1157,6 +1157,8 @@ const selectedMatriculaRef = useRef<string>("all")
     }
   }, [filterMode, cochesDisponibles.length, cochesAsignados.length, cochesReservados.length, cochesConUbicacion.length, cochesSinUbicacion.length])
 
+  const isAdmin = userRole === 'administrador' || userRole === 'admin'
+
   return (
     <Card className="w-full">
       <CardHeader>
@@ -1398,6 +1400,7 @@ const selectedMatriculaRef = useRef<string>("all")
           </div>
 
           {/* Estadísticas */}
+          {isAdmin && (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 p-3 bg-gray-50 rounded-lg">
             {/* Total sin ubicación */}
             <button
@@ -1549,8 +1552,10 @@ const selectedMatriculaRef = useRef<string>("all")
               </div>
             </button>
           </div>
+          )}
 
           {/* Leyenda */}
+          {isAdmin && (
           <div className="flex items-center justify-between bg-white p-3 rounded-lg border">
             <div className="flex items-center gap-6 text-sm text-gray-600">
               <div className="flex items-center gap-2">
@@ -1603,6 +1608,7 @@ const selectedMatriculaRef = useRef<string>("all")
               }
             </div>
           </div>
+          )}
 
           {/* Contenedor del mapa */}
           <div className="w-full bg-white rounded-lg border shadow-sm overflow-hidden">
