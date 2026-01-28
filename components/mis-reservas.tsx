@@ -18,6 +18,7 @@ import { Calendar, Clock, Car, X, RefreshCw, AlertTriangle, MapPin, Loader2 } fr
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { obtenerReservasUsuario, cancelarReserva, completarReserva } from "@/app/actions/reservas-temporales"
+import { ubicarCocheEnSede } from "@/app/actions/ubicacion"
 import { capturarYAsignarUbicacion } from "@/lib/ubicacion-utils"
 
 interface Reserva {
@@ -32,17 +33,22 @@ interface Reserva {
     matricula: string
     marca: string
     modelo: string
+    latitud?: number | null
+    longitud?: number | null
+    direccion_actual?: string | null
   }
 }
 
 export function MisReservas({ 
   onCocheEnCancelacion,
   onReservasChange,
-  refreshToken
+  refreshToken,
+  onUbicacionInicial
 }: { 
   onCocheEnCancelacion?: (matricula: string | null) => void
   onReservasChange?: (reservas: Array<{ matricula: string; id: number; estado: string }>) => void
   refreshToken?: number
+  onUbicacionInicial?: (matricula: string, ubicacion: { latitud: number; longitud: number; direccion_actual?: string }) => void
 }) {
   const [reservas, setReservas] = useState<Reserva[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -52,6 +58,7 @@ export function MisReservas({
   const [reservaToCancel, setReservaToCancel] = useState<Reserva | null>(null)
   const [capturandoUbicacion, setCapturandoUbicacion] = useState<number | null>(null)
   const [completingId, setCompletingId] = useState<number | null>(null)
+  const [ubicandoId, setUbicandoId] = useState<number | null>(null)
   const hasMountedRef = useRef(false)
 
   const cargarReservas = async () => {
@@ -182,6 +189,27 @@ export function MisReservas({
       (reserva.estado === 'activa' && new Date(reserva.fecha_fin) > new Date())
   }
 
+  const handleUbicarEnSede = async (reserva: Reserva) => {
+    setUbicandoId(reserva.id)
+    setError("")
+    try {
+      const resultado = await ubicarCocheEnSede(reserva.coches.matricula)
+      if (resultado.success) {
+        await cargarReservas()
+        if (resultado.ubicacion) {
+          onUbicacionInicial?.(reserva.coches.matricula, resultado.ubicacion)
+        }
+      } else {
+        setError(resultado.error || "Error al ubicar el vehículo en sede")
+      }
+    } catch (error) {
+      console.error("Error ubicando vehículo:", error)
+      setError("Error inesperado al ubicar el vehículo")
+    } finally {
+      setUbicandoId(null)
+    }
+  }
+
   const getEstadoReserva = (reserva: Reserva) => {
     const ahora = new Date()
     const inicio = new Date(reserva.fecha_inicio)
@@ -306,31 +334,65 @@ export function MisReservas({
                           </span>
                         </div>
                       </div>
-                      {getEstadoReserva(reserva) === 'vencida' && (
-                        <div className="mt-3 flex flex-wrap gap-2 items-center">
-                          <p className="text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded px-2 py-1">
-                            Vencida pero no marcada como completada
-                          </p>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={completingId === reserva.id}
-                            onClick={async () => {
-                              setCompletingId(reserva.id)
-                              const resp = await completarReserva(reserva.id)
-                              if (!resp.success) {
-                                alert(resp.error)
-                              } else {
-                                await cargarReservas()
-                              }
-                              setCompletingId(null)
-                            }}
-                            className="text-xs h-6 px-2 border-orange-300 hover:bg-orange-100"
-                          >
-                            {completingId === reserva.id ? 'Guardando...' : 'Marcar completada'}
-                          </Button>
-                        </div>
-                      )}
+                      {(() => {
+                        const sinUbicacion = !reserva.coches.latitud || !reserva.coches.longitud
+                        return (
+                          <>
+                            {getEstadoReserva(reserva) === 'vencida' && (
+                              <div className="mt-3 flex flex-wrap gap-2 items-center">
+                                <p className="text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded px-2 py-1">
+                                  Vencida pero no marcada como completada
+                                </p>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={completingId === reserva.id}
+                                  onClick={async () => {
+                                    setCompletingId(reserva.id)
+                                    const resp = await completarReserva(reserva.id)
+                                    if (!resp.success) {
+                                      alert(resp.error)
+                                    } else {
+                                      await cargarReservas()
+                                    }
+                                    setCompletingId(null)
+                                  }}
+                                  className="text-xs h-6 px-2 border-orange-300 hover:bg-orange-100"
+                                >
+                                  {completingId === reserva.id ? 'Guardando...' : 'Marcar completada'}
+                                </Button>
+                                {sinUbicacion && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={ubicandoId === reserva.id}
+                                    onClick={() => handleUbicarEnSede(reserva)}
+                                    className="text-xs h-6 px-2 border-orange-300 hover:bg-orange-100"
+                                  >
+                                    {ubicandoId === reserva.id ? 'Ubicando...' : 'Ubicar en sede'}
+                                  </Button>
+                                )}
+                              </div>
+                            )}
+                            {getEstadoReserva(reserva) !== 'vencida' && sinUbicacion && (
+                              <div className="mt-3 flex flex-wrap gap-2 items-center">
+                                <p className="text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded px-2 py-1">
+                                  Sin ubicación registrada
+                                </p>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={ubicandoId === reserva.id}
+                                  onClick={() => handleUbicarEnSede(reserva)}
+                                  className="text-xs h-6 px-2 border-orange-300 hover:bg-orange-100"
+                                >
+                                  {ubicandoId === reserva.id ? 'Ubicando...' : 'Ubicar en sede'}
+                                </Button>
+                              </div>
+                            )}
+                          </>
+                        )
+                      })()}
                       
                       {reserva.observaciones && (
                         <div className="mt-3 p-2 bg-white rounded border">

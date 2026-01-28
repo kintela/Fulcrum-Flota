@@ -38,6 +38,7 @@ interface MapaCochesProps {
     cancelLocationMode: () => void
   }) => void
   onReservaCreada?: () => void
+  locationOverrides?: Record<string, { latitud: number; longitud: number; direccion_actual?: string }>
 }
 
 // Hook personalizado para Google Maps con verificación completa
@@ -166,7 +167,7 @@ function useGoogleMaps() {
   return { isLoaded, error, loadGoogleMaps, isGoogleMapsReady }
 }
 
-export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCocheMatricula, misReservas = [], onFunctionsReady, onReservaCreada }: MapaCochesProps) {
+export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCocheMatricula, misReservas = [], onFunctionsReady, onReservaCreada, locationOverrides = {} }: MapaCochesProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstance = useRef<any>(null)
   const markers = useRef<any[]>([])
@@ -217,9 +218,18 @@ const selectedMatriculaRef = useRef<string>("all")
   const isAdmin = userRole === 'administrador' || userRole === 'admin'
 
   const cochesVisibles = useMemo(() => {
-    if (isAdmin) return coches
-    return coches.filter((coche) => !coche.asignadoa && !coche.donante)
-  }, [coches, isAdmin])
+    const base = isAdmin ? coches : coches.filter((coche) => !coche.asignadoa && !coche.donante)
+    return base.map((coche) => {
+      const override = locationOverrides[coche.matricula]
+      if (!override) return coche
+      return {
+        ...coche,
+        latitud: override.latitud,
+        longitud: override.longitud,
+        direccion_actual: override.direccion_actual ?? coche.direccion_actual
+      }
+    })
+  }, [coches, isAdmin, locationOverrides])
 
   // Crear mapa de empleados (memoizado para evitar recrear marcadores en cada render)
   const empleadosMap = useMemo(() => {
@@ -887,6 +897,7 @@ const selectedMatriculaRef = useRef<string>("all")
     }
     onReservaCreada?.()
   }, [isAdmin, onReservaCreada])
+
 
   // Función para manejar la liberación de un vehículo
   const handleLiberar = useCallback(async () => {

@@ -76,3 +76,56 @@ export async function actualizarUbicacionCoche(matricula: string, latitud: numbe
     }
   }
 }
+
+export async function ubicarCocheEnSede(matricula: string) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return { success: false, error: "No autorizado" }
+    }
+
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+    if (!apiKey) {
+      return { success: false, error: "API key de Google Maps no configurada" }
+    }
+
+    const direccionSede = "Aldapa 13, Leioa, 48940, Bizkaia, España"
+    const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(direccionSede)}&key=${apiKey}&language=es`
+    const geocodeResponse = await fetch(geocodeUrl)
+    const geocodeData = await geocodeResponse.json()
+
+    if (geocodeData.status !== "OK" || !geocodeData.results?.length) {
+      return { success: false, error: "No se pudo geocodificar la dirección de la sede" }
+    }
+
+    const location = geocodeData.results[0].geometry.location
+    const latitud = location.lat
+    const longitud = location.lng
+    const direccionActual = geocodeData.results[0].formatted_address
+
+    const client = supabaseAdmin ?? supabase
+    const { error: updateError } = await client
+      .from("coches")
+      .update({
+        latitud,
+        longitud,
+        direccion_actual: direccionActual,
+        ultima_ubicacion: new Date().toISOString(),
+      })
+      .eq("matricula", matricula)
+
+    if (updateError) {
+      console.error("Error updating vehicle location:", updateError)
+      return { success: false, error: "Error al actualizar la ubicación del vehículo" }
+    }
+
+    return {
+      success: true,
+      message: `Ubicación inicial asignada en sede Fulcrum`,
+      ubicacion: { latitud, longitud, direccion_actual: direccionActual },
+    }
+  } catch (error) {
+    console.error("Error in ubicarCocheEnSede:", error)
+    return { success: false, error: "Error inesperado al ubicar el vehículo" }
+  }
+}

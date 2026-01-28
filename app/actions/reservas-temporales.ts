@@ -171,7 +171,10 @@ export async function obtenerReservasUsuario() {
         coches (
           matricula,
           marca,
-          modelo
+          modelo,
+          latitud,
+          longitud,
+          direccion_actual
         )
       `)
       .eq('empleado_id', empleado.id)
