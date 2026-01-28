@@ -26,7 +26,7 @@ interface Reserva {
   fecha_inicio: string
   fecha_fin: string
   observaciones?: string
-  estado: 'activa' | 'completada' | 'cancelada'
+  estado: 'activa' | 'pendiente' | 'completada' | 'cancelada'
   created_at: string
   coches: {
     matricula: string
@@ -176,10 +176,10 @@ export function MisReservas({
 
   const isReservaActiva = (reserva: Reserva) => {
     // Una reserva se puede cancelar si:
-    // 1. Está en estado 'activa' 
-    // 2. No ha terminado aún (fecha_fin > ahora)
-    // Esto permite cancelar tanto reservas pendientes como reservas en curso
-    return reserva.estado === 'activa' && new Date(reserva.fecha_fin) > new Date()
+    // 1. Está en estado 'pendiente' (programada futura)
+    // 2. Está en estado 'activa' y no ha terminado aún (fecha_fin > ahora)
+    return reserva.estado === 'pendiente' ||
+      (reserva.estado === 'activa' && new Date(reserva.fecha_fin) > new Date())
   }
 
   const getEstadoReserva = (reserva: Reserva) => {
@@ -200,8 +200,8 @@ export function MisReservas({
     }
   }
 
-  const reservasActivas = reservas.filter(r => r.estado === 'activa')
-  const reservasHistoricas = reservas.filter(r => r.estado !== 'activa')
+  const reservasActivas = reservas.filter(r => r.estado === 'activa' || r.estado === 'pendiente')
+  const reservasHistoricas = reservas.filter(r => r.estado !== 'activa' && r.estado !== 'pendiente')
 
   return (
     <Card>
