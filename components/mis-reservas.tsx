@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -59,7 +61,18 @@ export function MisReservas({
   const [capturandoUbicacion, setCapturandoUbicacion] = useState<number | null>(null)
   const [completingId, setCompletingId] = useState<number | null>(null)
   const [ubicandoId, setUbicandoId] = useState<number | null>(null)
+  const [showCompleteDialog, setShowCompleteDialog] = useState(false)
+  const [reservaToComplete, setReservaToComplete] = useState<Reserva | null>(null)
+  const [observacionCompletar, setObservacionCompletar] = useState("")
   const hasMountedRef = useRef(false)
+
+  const formatObservaciones = (texto?: string | null) => {
+    if (!texto) return ""
+    return texto
+      .split("\n")
+      .map((linea) => linea.replace(/^\[[^\]]+\]\s*/, ""))
+      .join("\n")
+  }
 
   const cargarReservas = async () => {
     setIsLoading(true)
@@ -139,6 +152,33 @@ export function MisReservas({
     setReservaToCancel(null)
     // Limpiar el coche en cancelación
     onCocheEnCancelacion?.(null)
+  }
+
+  const handleConfirmarCompletar = (reserva: Reserva) => {
+    setReservaToComplete(reserva)
+    setObservacionCompletar("")
+    setShowCompleteDialog(true)
+  }
+
+  const handleCerrarCompletar = () => {
+    setShowCompleteDialog(false)
+    setReservaToComplete(null)
+    setObservacionCompletar("")
+  }
+
+  const handleCompletarReserva = async () => {
+    if (!reservaToComplete) return
+    setCompletingId(reservaToComplete.id)
+    const resp = await completarReserva(reservaToComplete.id, observacionCompletar)
+    if (!resp.success) {
+      alert(resp.error)
+    } else {
+      await cargarReservas()
+      setShowCompleteDialog(false)
+      setReservaToComplete(null)
+      setObservacionCompletar("")
+    }
+    setCompletingId(null)
   }
 
   const handleCapturarUbicacion = async (matricula: string, reservaId: number) => {
@@ -347,16 +387,9 @@ export function MisReservas({
                                   size="sm"
                                   variant="outline"
                                   disabled={completingId === reserva.id || sinUbicacion}
-                                  onClick={async () => {
+                                  onClick={() => {
                                     if (sinUbicacion) return
-                                    setCompletingId(reserva.id)
-                                    const resp = await completarReserva(reserva.id)
-                                    if (!resp.success) {
-                                      alert(resp.error)
-                                    } else {
-                                      await cargarReservas()
-                                    }
-                                    setCompletingId(null)
+                                    handleConfirmarCompletar(reserva)
                                   }}
                                   className={`text-xs h-6 px-2 border-orange-300 hover:bg-orange-100 ${sinUbicacion ? 'opacity-60 cursor-not-allowed' : ''}`}
                                   title={sinUbicacion ? 'Debes ubicar el coche antes de completar la reserva' : undefined}
@@ -448,6 +481,13 @@ export function MisReservas({
                           return `${format(inicio, 'dd/MM/yyyy HH:mm')} a ${format(fin, 'dd/MM/yyyy HH:mm')}`
                         })()}
                       </div>
+
+                      {reserva.observaciones && (
+                        <div className="mt-2 text-xs text-gray-600 whitespace-pre-line">
+                          <span className="font-medium text-gray-700">Observaciones:</span>{" "}
+                          {formatObservaciones(reserva.observaciones)}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -554,6 +594,60 @@ export function MisReservas({
                 ) : (
                   'Sí, cancelar reserva'
                 )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Diálogo de completar reserva con observaciones */}
+        <AlertDialog open={showCompleteDialog} onOpenChange={setShowCompleteDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle asChild>
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-orange-600" />
+                  Marcar reserva como completada
+                </div>
+              </AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-3">
+                  <p>¿Quieres añadir una observación para esta reserva?</p>
+                  {reservaToComplete && (
+                    <div className="mt-2 p-3 bg-gray-50 rounded-md border">
+                      <p className="font-semibold text-gray-900">
+                        {reservaToComplete.coches.matricula} - {reservaToComplete.coches.marca} {reservaToComplete.coches.modelo}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        <strong>Desde:</strong> {format(new Date(reservaToComplete.fecha_inicio), "PPP 'a las' HH:mm", { locale: es })}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        <strong>Hasta:</strong> {format(new Date(reservaToComplete.fecha_fin), "PPP 'a las' HH:mm", { locale: es })}
+                      </p>
+                    </div>
+                  )}
+                  <div>
+                    <Label htmlFor="observacion-completar">Observaciones (opcional)</Label>
+                    <Textarea
+                      id="observacion-completar"
+                      value={observacionCompletar}
+                      onChange={(e) => setObservacionCompletar(e.target.value)}
+                      placeholder="Escribe una observación..."
+                      className="mt-2"
+                    />
+                  </div>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={handleCerrarCompletar}>
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleCompletarReserva}
+                className="bg-orange-600 hover:bg-orange-700"
+                disabled={completingId !== null}
+              >
+                {completingId ? 'Guardando...' : 'Marcar completada'}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

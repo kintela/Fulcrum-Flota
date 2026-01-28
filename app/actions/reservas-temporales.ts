@@ -279,7 +279,7 @@ export async function cancelarReserva(reservaId: number) {
   }
 }
 
-export async function completarReserva(reservaId: number) {
+export async function completarReserva(reservaId: number, observacion?: string) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
@@ -305,9 +305,18 @@ export async function completarReserva(reservaId: number) {
     if (reserva.estado !== 'activa') {
       return { success: false, error: 'Sólo se pueden completar reservas activas' }
     }
+    const updateData: any = { estado: 'completada' }
+    const obs = observacion?.trim()
+    if (obs) {
+      const anterior = reserva.observaciones ? String(reserva.observaciones).trim() : ''
+      updateData.observaciones = anterior
+        ? `${anterior}\n${obs}`
+        : obs
+    }
+
     const { error: updateError } = await supabase
       .from('reservas')
-      .update({ estado: 'completada' })
+      .update(updateData)
       .eq('id', reservaId)
     if (updateError) {
       console.error('Error completando reserva:', updateError)

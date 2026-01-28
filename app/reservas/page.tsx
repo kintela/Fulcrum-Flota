@@ -94,12 +94,12 @@ export default function ReservasPage() {
     }
   }
 
-  const handleCompletarReserva = async (reservaId: number) => {
+  const handleCompletarReserva = async (reservaId: number, observacion?: string) => {
     setCompletandoReserva(reservaId)
     setMensaje("")
 
     try {
-      const resultado = await completarReservaTemporalAdmin(reservaId)
+      const resultado = await completarReservaTemporalAdmin(reservaId, observacion)
 
       if (resultado.success) {
         setMensaje(`✅ ${resultado.message}`)
