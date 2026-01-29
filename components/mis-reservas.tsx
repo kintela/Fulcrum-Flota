@@ -1,11 +1,12 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,12 +17,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Calendar, Clock, Car, X, RefreshCw, AlertTriangle, MapPin, Loader2 } from "lucide-react"
+import { Calendar, Clock, Car, X, RefreshCw, AlertTriangle, MapPin, Loader2, Plus } from "lucide-react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
-import { obtenerReservasUsuario, cancelarReserva, completarReserva } from "@/app/actions/reservas-temporales"
+import { obtenerReservasUsuario, cancelarReserva, completarReserva, ampliarReservaTemporal } from "@/app/actions/reservas-temporales"
 import { ubicarCocheEnSede } from "@/app/actions/ubicacion"
 import { capturarYAsignarUbicacion } from "@/lib/ubicacion-utils"
+import { DayPicker } from "react-day-picker"
 
 interface Reserva {
   id: number
@@ -68,6 +70,13 @@ export function MisReservas({
   const [observacionCompletar, setObservacionCompletar] = useState("")
   const [quejaCompletar, setQuejaCompletar] = useState("")
   const [estadoLimpiezaCompletar, setEstadoLimpiezaCompletar] = useState<"" | "bien" | "regular" | "mal">("")
+  const [extendingId, setExtendingId] = useState<number | null>(null)
+  const [showExtendDialog, setShowExtendDialog] = useState(false)
+  const [reservaToExtend, setReservaToExtend] = useState<Reserva | null>(null)
+  const [extendFechaFin, setExtendFechaFin] = useState<Date | null>(null)
+  const [extendHoraFin, setExtendHoraFin] = useState("")
+  const [showExtendCalendar, setShowExtendCalendar] = useState(false)
+  const [extendError, setExtendError] = useState("")
   const hasMountedRef = useRef(false)
 
   const formatObservaciones = (texto?: string | null) => {
@@ -194,6 +203,94 @@ export function MisReservas({
       setEstadoLimpiezaCompletar("")
     }
     setCompletingId(null)
+  }
+
+  const generarHoras = () => {
+    const horas = []
+    for (let i = 0; i < 24; i++) {
+      for (let j = 0; j < 60; j += 30) {
+        const hora = `${i.toString().padStart(2, "0")}:${j.toString().padStart(2, "0")}`
+        horas.push(hora)
+      }
+    }
+    return horas
+  }
+
+  const formatHora = (date: Date) =>
+    `${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`
+
+  const minHoraFinExtend = useMemo(() => {
+    if (!reservaToExtend || !extendFechaFin) return null
+    const finActual = new Date(reservaToExtend.fecha_fin)
+    if (extendFechaFin.toDateString() !== finActual.toDateString()) return null
+    const minimo = new Date(finActual.getTime() + 30 * 60 * 1000)
+    if (minimo.toDateString() !== finActual.toDateString()) return "24:00"
+    return formatHora(minimo)
+  }, [reservaToExtend, extendFechaFin])
+
+  useEffect(() => {
+    if (!extendFechaFin) return
+    if (minHoraFinExtend === "24:00") {
+      const next = new Date(extendFechaFin)
+      next.setDate(next.getDate() + 1)
+      setExtendFechaFin(next)
+      setExtendHoraFin("00:00")
+      return
+    }
+    if (minHoraFinExtend && extendHoraFin < minHoraFinExtend) {
+      setExtendHoraFin(minHoraFinExtend)
+    }
+  }, [minHoraFinExtend, extendHoraFin, extendFechaFin])
+
+  const handleConfirmarAmpliar = (reserva: Reserva) => {
+    const finActual = new Date(reserva.fecha_fin)
+    const sugerida = new Date(finActual.getTime() + 30 * 60 * 1000)
+    setReservaToExtend(reserva)
+    setExtendFechaFin(sugerida)
+    setExtendHoraFin(formatHora(sugerida))
+    setExtendError("")
+    setShowExtendCalendar(false)
+    setShowExtendDialog(true)
+  }
+
+  const handleCerrarAmpliar = () => {
+    setShowExtendDialog(false)
+    setReservaToExtend(null)
+    setExtendFechaFin(null)
+    setExtendHoraFin("")
+    setExtendError("")
+    setShowExtendCalendar(false)
+  }
+
+  const handleGuardarAmpliacion = async () => {
+    if (!reservaToExtend || !extendFechaFin || !extendHoraFin) return
+
+    const [h, m] = extendHoraFin.split(":").map(Number)
+    const nuevaFechaFin = new Date(extendFechaFin)
+    nuevaFechaFin.setHours(h, m, 0, 0)
+
+    const finActual = new Date(reservaToExtend.fecha_fin)
+    if (nuevaFechaFin <= finActual) {
+      setExtendError("La nueva fecha de fin debe ser posterior a la actual.")
+      return
+    }
+
+    setExtendingId(reservaToExtend.id)
+    setExtendError("")
+    try {
+      const resultado = await ampliarReservaTemporal(reservaToExtend.id, nuevaFechaFin.toISOString())
+      if (resultado.success) {
+        await cargarReservas()
+        handleCerrarAmpliar()
+      } else {
+        setExtendError(resultado.error || "Error al ampliar la reserva")
+      }
+    } catch (error) {
+      console.error("Error ampliando reserva:", error)
+      setExtendError("Error inesperado al ampliar la reserva")
+    } finally {
+      setExtendingId(null)
+    }
   }
 
   const handleCapturarUbicacion = async (matricula: string, reservaId: number) => {
@@ -352,7 +449,24 @@ export function MisReservas({
                         
                         <div className="flex items-center gap-2">
                           {getEstadoBadge(reserva)}
-                          
+
+                          {isReservaActiva(reserva) && (
+                            <Button
+                              onClick={() => handleConfirmarAmpliar(reserva)}
+                              disabled={extendingId === reserva.id}
+                              variant="outline"
+                              size="sm"
+                              className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                              title="Añade el plazo de la reserva"
+                            >
+                              {extendingId === reserva.id ? (
+                                <RefreshCw className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Plus className="h-4 w-4" />
+                              )}
+                            </Button>
+                          )}
+
                           {isReservaActiva(reserva) && (
                             <Button
                               onClick={() => handleConfirmarCancelacion(reserva)}
@@ -699,6 +813,166 @@ export function MisReservas({
                 disabled={completingId !== null}
               >
                 {completingId ? 'Guardando...' : 'Marcar completada'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Diálogo para ampliar plazo */}
+        <AlertDialog
+          open={showExtendDialog}
+          onOpenChange={(open) => {
+            if (!open) {
+              handleCerrarAmpliar()
+            } else {
+              setShowExtendDialog(true)
+            }
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle asChild>
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-blue-600" />
+                  Ampliar plazo de reserva
+                </div>
+              </AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-4">
+                  {reservaToExtend && (
+                    <div className="p-3 bg-gray-50 rounded-md border">
+                      <p className="font-semibold text-gray-900">
+                        {reservaToExtend.coches.matricula} - {reservaToExtend.coches.marca} {reservaToExtend.coches.modelo}
+                      </p>
+                      <p className="text-xs text-gray-600">
+                        Fin actual: {format(new Date(reservaToExtend.fecha_fin), "PPP 'a las' HH:mm", { locale: es })}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Fecha de Inicio</Label>
+                      <Button type="button" variant="outline" className="w-full justify-start text-left font-normal" disabled>
+                        <Calendar className="mr-2 h-4 w-4" />
+                        {reservaToExtend
+                          ? format(new Date(reservaToExtend.fecha_inicio), "PPP", { locale: es })
+                          : "Seleccionar fecha"}
+                      </Button>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Hora de Inicio</Label>
+                      <div className="relative">
+                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <Input
+                          disabled
+                          value={reservaToExtend ? formatHora(new Date(reservaToExtend.fecha_inicio)) : ""}
+                          className="pl-10"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Fecha de Fin (nueva)</Label>
+                      <div className="relative">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full justify-start text-left font-normal"
+                          onClick={() => setShowExtendCalendar(!showExtendCalendar)}
+                        >
+                          <Calendar className="mr-2 h-4 w-4" />
+                          {extendFechaFin ? format(extendFechaFin, "PPP", { locale: es }) : "Seleccionar fecha"}
+                        </Button>
+
+                        {showExtendCalendar && (
+                          <div className="absolute top-full mt-1 z-50 bg-white border rounded-md shadow-lg p-3">
+                            <DayPicker
+                              mode="single"
+                              selected={extendFechaFin || undefined}
+                              onSelect={(date) => {
+                                if (date) {
+                                  setExtendFechaFin(date)
+                                  setShowExtendCalendar(false)
+                                  setExtendError("")
+                                }
+                              }}
+                              disabled={
+                                reservaToExtend
+                                  ? { before: new Date(reservaToExtend.fecha_fin) }
+                                  : undefined
+                              }
+                              locale={es}
+                              classNames={{
+                                day_selected: "bg-blue-600 text-white",
+                                day_today: "bg-blue-100 text-blue-600 font-semibold",
+                              }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Hora de Fin (nueva)</Label>
+                      <div className="relative">
+                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <select
+                          value={extendHoraFin}
+                          onChange={(e) => {
+                            setExtendHoraFin(e.target.value)
+                            setExtendError("")
+                          }}
+                          className="w-full pl-10 pr-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          {generarHoras().map((hora) => {
+                            let disabledOpt = false
+                            if (reservaToExtend && extendFechaFin) {
+                              const finActual = new Date(reservaToExtend.fecha_fin)
+                              if (extendFechaFin.toDateString() === finActual.toDateString()) {
+                                const baseMin = finActual.getHours() * 60 + finActual.getMinutes()
+                                const [h, m] = hora.split(":").map(Number)
+                                disabledOpt = h * 60 + m <= baseMin
+                              }
+                            }
+                            return (
+                              <option key={hora} value={hora} disabled={disabledOpt}>
+                                {hora}{disabledOpt ? " (no disponible)" : ""}
+                              </option>
+                            )
+                          })}
+                        </select>
+                        {reservaToExtend && extendFechaFin && extendFechaFin.toDateString() === new Date(reservaToExtend.fecha_fin).toDateString() && (
+                          <p className="mt-1 text-xs text-gray-500">
+                            {minHoraFinExtend === "24:00"
+                              ? "El fin debe pasar al día siguiente"
+                              : `Mínimo fin: ${minHoraFinExtend}`}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {extendError && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                      <p className="text-sm text-red-700">{extendError}</p>
+                    </div>
+                  )}
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={handleCerrarAmpliar}>
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleGuardarAmpliacion}
+                className="bg-blue-600 hover:bg-blue-700"
+                disabled={extendingId !== null}
+              >
+                {extendingId ? "Guardando..." : "Guardar ampliación"}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
