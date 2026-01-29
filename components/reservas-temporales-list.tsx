@@ -25,7 +25,7 @@ interface ReservasTemporalesListProps {
   reservas: ReservaTemporal[]
   onCancelarReserva: (reservaId: number) => Promise<void>
   cancelandoReserva: number | null
-  onCompletarReserva: (reservaId: number, observacion?: string) => Promise<void>
+  onCompletarReserva: (reservaId: number, observacion?: string, queja?: string) => Promise<void>
   completandoReserva: number | null
   isAdmin: boolean
   searchText: string
@@ -86,6 +86,7 @@ export default function ReservasTemporalesList({
   const [showCompleteDialog, setShowCompleteDialog] = useState(false)
   const [reservaToComplete, setReservaToComplete] = useState<ReservaTemporal | null>(null)
   const [observacionCompletar, setObservacionCompletar] = useState("")
+  const [quejaCompletar, setQuejaCompletar] = useState("")
 
   const handleCapturarUbicacion = async (matricula: string, reservaId: number) => {
     console.log('🔧 Capturando ubicación para:', matricula, reservaId)
@@ -111,6 +112,7 @@ export default function ReservasTemporalesList({
   const handleConfirmarCompletar = (reserva: ReservaTemporal) => {
     setReservaToComplete(reserva)
     setObservacionCompletar("")
+    setQuejaCompletar("")
     setShowCompleteDialog(true)
   }
 
@@ -118,14 +120,16 @@ export default function ReservasTemporalesList({
     setShowCompleteDialog(false)
     setReservaToComplete(null)
     setObservacionCompletar("")
+    setQuejaCompletar("")
   }
 
   const handleCompletarReserva = async () => {
     if (!reservaToComplete) return
-    await onCompletarReserva(reservaToComplete.id, observacionCompletar)
+    await onCompletarReserva(reservaToComplete.id, observacionCompletar, quejaCompletar)
     setShowCompleteDialog(false)
     setReservaToComplete(null)
     setObservacionCompletar("")
+    setQuejaCompletar("")
   }
   // Filtrar reservas por texto de búsqueda
   const reservasFiltradas = reservas.filter((reserva) => {
@@ -448,6 +452,16 @@ export default function ReservasTemporalesList({
                     value={observacionCompletar}
                     onChange={(e) => setObservacionCompletar(e.target.value)}
                     placeholder="Escribe una observación..."
+                    className="mt-2"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="queja-completar-admin">Quejas (opcional)</Label>
+                  <Textarea
+                    id="queja-completar-admin"
+                    value={quejaCompletar}
+                    onChange={(e) => setQuejaCompletar(e.target.value)}
+                    placeholder="Escribe una queja..."
                     className="mt-2"
                   />
                 </div>

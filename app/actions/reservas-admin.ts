@@ -248,7 +248,7 @@ export async function cancelarReservaTemporal(reservaId: number) {
   }
 }
 
-export async function completarReservaTemporalAdmin(reservaId: number, observacion?: string) {
+export async function completarReservaTemporalAdmin(reservaId: number, observacion?: string, queja?: string) {
   try {
     const session = await getServerSession(authOptions)
 
@@ -279,7 +279,7 @@ export async function completarReservaTemporalAdmin(reservaId: number, observaci
     // Verificar que la reserva existe
     const { data: reserva, error: reservaError } = await supabase
       .from("reservas")
-      .select("id, estado, fecha_fin, observaciones")
+      .select("id, estado, fecha_fin, observaciones, quejas")
       .eq('id', reservaId)
       .single()
 
@@ -320,6 +320,13 @@ export async function completarReservaTemporalAdmin(reservaId: number, observaci
       updateData.observaciones = anterior
         ? `${anterior}\n${obs}`
         : obs
+    }
+    const q = queja?.trim()
+    if (q) {
+      const anteriorQuejas = reserva.quejas ? String(reserva.quejas).trim() : ''
+      updateData.quejas = anteriorQuejas
+        ? `${anteriorQuejas}\n${q}`
+        : q
     }
 
     const { error: updateError } = await supabase

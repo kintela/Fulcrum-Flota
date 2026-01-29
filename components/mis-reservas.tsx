@@ -29,6 +29,7 @@ interface Reserva {
   fecha_inicio: string
   fecha_fin: string
   observaciones?: string
+  quejas?: string
   estado: 'activa' | 'pendiente' | 'completada' | 'cancelada'
   created_at: string
   coches: {
@@ -64,6 +65,7 @@ export function MisReservas({
   const [showCompleteDialog, setShowCompleteDialog] = useState(false)
   const [reservaToComplete, setReservaToComplete] = useState<Reserva | null>(null)
   const [observacionCompletar, setObservacionCompletar] = useState("")
+  const [quejaCompletar, setQuejaCompletar] = useState("")
   const hasMountedRef = useRef(false)
 
   const formatObservaciones = (texto?: string | null) => {
@@ -157,6 +159,7 @@ export function MisReservas({
   const handleConfirmarCompletar = (reserva: Reserva) => {
     setReservaToComplete(reserva)
     setObservacionCompletar("")
+    setQuejaCompletar("")
     setShowCompleteDialog(true)
   }
 
@@ -164,12 +167,13 @@ export function MisReservas({
     setShowCompleteDialog(false)
     setReservaToComplete(null)
     setObservacionCompletar("")
+    setQuejaCompletar("")
   }
 
   const handleCompletarReserva = async () => {
     if (!reservaToComplete) return
     setCompletingId(reservaToComplete.id)
-    const resp = await completarReserva(reservaToComplete.id, observacionCompletar)
+    const resp = await completarReserva(reservaToComplete.id, observacionCompletar, quejaCompletar)
     if (!resp.success) {
       alert(resp.error)
     } else {
@@ -177,6 +181,7 @@ export function MisReservas({
       setShowCompleteDialog(false)
       setReservaToComplete(null)
       setObservacionCompletar("")
+      setQuejaCompletar("")
     }
     setCompletingId(null)
   }
@@ -488,6 +493,12 @@ export function MisReservas({
                           {formatObservaciones(reserva.observaciones)}
                         </div>
                       )}
+                      {reserva.quejas && (
+                        <div className="mt-2 text-xs text-gray-600 whitespace-pre-line">
+                          <span className="font-medium text-gray-700">Quejas:</span>{" "}
+                          {formatObservaciones(reserva.quejas)}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -632,6 +643,16 @@ export function MisReservas({
                       value={observacionCompletar}
                       onChange={(e) => setObservacionCompletar(e.target.value)}
                       placeholder="Escribe una observación..."
+                      className="mt-2"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="queja-completar">Quejas (opcional)</Label>
+                    <Textarea
+                      id="queja-completar"
+                      value={quejaCompletar}
+                      onChange={(e) => setQuejaCompletar(e.target.value)}
+                      placeholder="Escribe una queja..."
                       className="mt-2"
                     />
                   </div>

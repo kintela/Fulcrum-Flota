@@ -279,7 +279,7 @@ export async function cancelarReserva(reservaId: number) {
   }
 }
 
-export async function completarReserva(reservaId: number, observacion?: string) {
+export async function completarReserva(reservaId: number, observacion?: string, queja?: string) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
@@ -312,6 +312,13 @@ export async function completarReserva(reservaId: number, observacion?: string) 
       updateData.observaciones = anterior
         ? `${anterior}\n${obs}`
         : obs
+    }
+    const q = queja?.trim()
+    if (q) {
+      const anteriorQuejas = reserva.quejas ? String(reserva.quejas).trim() : ''
+      updateData.quejas = anteriorQuejas
+        ? `${anteriorQuejas}\n${q}`
+        : q
     }
 
     const { error: updateError } = await supabase
