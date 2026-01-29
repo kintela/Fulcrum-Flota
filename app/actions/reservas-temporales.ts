@@ -171,7 +171,10 @@ export async function obtenerReservasUsuario() {
         coches (
           matricula,
           marca,
-          modelo
+          modelo,
+          latitud,
+          longitud,
+          direccion_actual
         )
       `)
       .eq('empleado_id', empleado.id)
@@ -276,7 +279,12 @@ export async function cancelarReserva(reservaId: number) {
   }
 }
 
-export async function completarReserva(reservaId: number) {
+export async function completarReserva(
+  reservaId: number,
+  observacion?: string,
+  queja?: string,
+  estadoLimpieza?: "bien" | "regular" | "mal"
+) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
@@ -302,9 +310,28 @@ export async function completarReserva(reservaId: number) {
     if (reserva.estado !== 'activa') {
       return { success: false, error: 'Sólo se pueden completar reservas activas' }
     }
+    const updateData: any = { estado: 'completada' }
+    const obs = observacion?.trim()
+    if (obs) {
+      const anterior = reserva.observaciones ? String(reserva.observaciones).trim() : ''
+      updateData.observaciones = anterior
+        ? `${anterior}\n${obs}`
+        : obs
+    }
+    const q = queja?.trim()
+    if (q) {
+      const anteriorQuejas = reserva.quejas ? String(reserva.quejas).trim() : ''
+      updateData.quejas = anteriorQuejas
+        ? `${anteriorQuejas}\n${q}`
+        : q
+    }
+    if (estadoLimpieza && ["bien", "regular", "mal"].includes(estadoLimpieza)) {
+      updateData.limpieza = estadoLimpieza
+    }
+
     const { error: updateError } = await supabase
       .from('reservas')
-      .update({ estado: 'completada' })
+      .update(updateData)
       .eq('id', reservaId)
     if (updateError) {
       console.error('Error completando reserva:', updateError)
@@ -314,6 +341,97 @@ export async function completarReserva(reservaId: number) {
   } catch (error) {
     console.error('Error en completarReserva:', error)
     return { success: false, error: 'Error inesperado al completar la reserva' }
+  }
+}
+
+export async function ampliarReservaTemporal(reservaId: number, nuevaFechaFin: string) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return { success: false, error: "Usuario no autenticado" }
+    }
+
+    const { data: empleado, error: empleadoError } = await supabase
+      .from("empleados")
+      .select("id")
+      .eq("email", session.user.email)
+      .single()
+
+    if (empleadoError || !empleado) {
+      return { success: false, error: "No se encontró el empleado asociado a este usuario" }
+    }
+
+    const { data: reserva, error: reservaError } = await supabase
+      .from("reservas")
+      .select("id, matricula, fecha_inicio, fecha_fin, estado")
+      .eq("id", reservaId)
+      .eq("empleado_id", empleado.id)
+      .single()
+
+    if (reservaError || !reserva) {
+      return { success: false, error: "Reserva no encontrada o no autorizada" }
+    }
+
+    if (!(reserva.estado === "pendiente" || reserva.estado === "activa")) {
+      return { success: false, error: "Solo se pueden ampliar reservas pendientes o activas" }
+    }
+
+    const fechaInicio = new Date(reserva.fecha_inicio)
+    const fechaFinActual = new Date(reserva.fecha_fin)
+    const fechaFinNueva = new Date(nuevaFechaFin)
+
+    if (reserva.estado === "activa" && fechaFinActual <= new Date()) {
+      return { success: false, error: "No se pueden ampliar reservas activas ya vencidas" }
+    }
+
+    if (!Number.isFinite(fechaFinNueva.getTime())) {
+      return { success: false, error: "La nueva fecha de fin no es válida" }
+    }
+
+    if (fechaFinNueva <= fechaFinActual) {
+      return { success: false, error: "La nueva fecha de fin debe ser posterior a la actual" }
+    }
+
+    if (fechaFinNueva <= fechaInicio) {
+      return { success: false, error: "La fecha de fin debe ser posterior a la fecha de inicio" }
+    }
+
+    const { data: otrasReservas, error: otrasError } = await supabase
+      .from("reservas")
+      .select("id, fecha_inicio, fecha_fin, bloqueo_desde")
+      .eq("matricula", reserva.matricula)
+      .in("estado", ["activa", "pendiente"])
+      .neq("id", reservaId)
+
+    if (otrasError) {
+      console.error("Error verificando reservas para ampliar:", otrasError)
+      return { success: false, error: "Error al comprobar disponibilidad" }
+    }
+
+    const hayConflicto = (otrasReservas || []).some((r) => {
+      const inicioBloqueo = r.bloqueo_desde ? new Date(r.bloqueo_desde) : new Date(r.fecha_inicio)
+      const fin = new Date(r.fecha_fin)
+      return inicioBloqueo < fechaFinNueva && fin > fechaInicio
+    })
+
+    if (hayConflicto) {
+      return { success: false, error: "No se puede ampliar la reserva porque hay otra reserva en ese período" }
+    }
+
+    const { error: updateError } = await supabase
+      .from("reservas")
+      .update({ fecha_fin: fechaFinNueva.toISOString() })
+      .eq("id", reservaId)
+
+    if (updateError) {
+      console.error("Error ampliando reserva:", updateError)
+      return { success: false, error: "Error al ampliar la reserva" }
+    }
+
+    return { success: true, message: "Plazo de reserva ampliado" }
+  } catch (error) {
+    console.error("Error en ampliarReservaTemporal:", error)
+    return { success: false, error: "Error inesperado al ampliar la reserva" }
   }
 }
 

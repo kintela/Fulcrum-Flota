@@ -1,6 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
 import { Calendar, User, Car, Clock, X, AlertTriangle, MapPin, Loader2 } from "lucide-react"
 import { format, isAfter, isBefore, parseISO } from "date-fns"
 import { es } from "date-fns/locale"
@@ -23,7 +25,7 @@ interface ReservasTemporalesListProps {
   reservas: ReservaTemporal[]
   onCancelarReserva: (reservaId: number) => Promise<void>
   cancelandoReserva: number | null
-  onCompletarReserva: (reservaId: number) => Promise<void>
+  onCompletarReserva: (reservaId: number, observacion?: string, queja?: string, estadoLimpieza?: "bien" | "regular" | "mal") => Promise<void>
   completandoReserva: number | null
   isAdmin: boolean
   searchText: string
@@ -81,6 +83,11 @@ export default function ReservasTemporalesList({
   searchText 
 }: ReservasTemporalesListProps) {
   const [capturandoUbicacion, setCapturandoUbicacion] = useState<number | null>(null)
+  const [showCompleteDialog, setShowCompleteDialog] = useState(false)
+  const [reservaToComplete, setReservaToComplete] = useState<ReservaTemporal | null>(null)
+  const [observacionCompletar, setObservacionCompletar] = useState("")
+  const [quejaCompletar, setQuejaCompletar] = useState("")
+  const [estadoLimpiezaCompletar, setEstadoLimpiezaCompletar] = useState<"" | "bien" | "regular" | "mal">("")
 
   const handleCapturarUbicacion = async (matricula: string, reservaId: number) => {
     console.log('🔧 Capturando ubicación para:', matricula, reservaId)
@@ -101,6 +108,37 @@ export default function ReservasTemporalesList({
     } finally {
       setCapturandoUbicacion(null)
     }
+  }
+
+  const handleConfirmarCompletar = (reserva: ReservaTemporal) => {
+    setReservaToComplete(reserva)
+    setObservacionCompletar("")
+    setQuejaCompletar("")
+    setEstadoLimpiezaCompletar("")
+    setShowCompleteDialog(true)
+  }
+
+  const handleCerrarCompletar = () => {
+    setShowCompleteDialog(false)
+    setReservaToComplete(null)
+    setObservacionCompletar("")
+    setQuejaCompletar("")
+    setEstadoLimpiezaCompletar("")
+  }
+
+  const handleCompletarReserva = async () => {
+    if (!reservaToComplete) return
+    await onCompletarReserva(
+      reservaToComplete.id,
+      observacionCompletar,
+      quejaCompletar,
+      estadoLimpiezaCompletar || undefined
+    )
+    setShowCompleteDialog(false)
+    setReservaToComplete(null)
+    setObservacionCompletar("")
+    setQuejaCompletar("")
+    setEstadoLimpiezaCompletar("")
   }
   // Filtrar reservas por texto de búsqueda
   const reservasFiltradas = reservas.filter((reserva) => {
@@ -275,7 +313,7 @@ export default function ReservasTemporalesList({
                               size="sm"
                               className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
                               disabled={completandoReserva === reserva.id || cancelandoReserva === reserva.id}
-                              onClick={() => onCompletarReserva(reserva.id)}
+                              onClick={() => handleConfirmarCompletar(reserva)}
                             >
                               {completandoReserva === reserva.id ? (
                                 <div className="flex items-center gap-2">
@@ -389,6 +427,82 @@ export default function ReservasTemporalesList({
           ))}
         </div>
       </CardContent>
+      <AlertDialog open={showCompleteDialog} onOpenChange={setShowCompleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle asChild>
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-orange-600" />
+                Marcar reserva como completada
+              </div>
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>¿Quieres añadir una observación para esta reserva?</p>
+                {reservaToComplete && (
+                  <div className="mt-2 p-3 bg-gray-50 rounded-md border">
+                    <p className="font-semibold text-gray-900">
+                      {reservaToComplete.matricula} - {reservaToComplete.coches.marca} {reservaToComplete.coches.modelo}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      <strong>Desde:</strong>{' '}
+                      {format(parseISO(reservaToComplete.fecha_inicio), 'dd/MM/yyyy HH:mm', { locale: es })}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      <strong>Hasta:</strong>{' '}
+                      {format(parseISO(reservaToComplete.fecha_fin), 'dd/MM/yyyy HH:mm', { locale: es })}
+                    </p>
+                  </div>
+                )}
+                <div>
+                  <Label htmlFor="observacion-completar-admin">Observaciones (opcional)</Label>
+                  <Textarea
+                    id="observacion-completar-admin"
+                    value={observacionCompletar}
+                    onChange={(e) => setObservacionCompletar(e.target.value)}
+                    placeholder="Escribe una observación..."
+                    className="mt-2"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="queja-completar-admin">Quejas (opcional)</Label>
+                  <Textarea
+                    id="queja-completar-admin"
+                    value={quejaCompletar}
+                    onChange={(e) => setQuejaCompletar(e.target.value)}
+                    placeholder="Escribe una queja..."
+                    className="mt-2"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="estado-limpieza-admin">Estado de limpieza (opcional)</Label>
+                  <select
+                    id="estado-limpieza-admin"
+                    value={estadoLimpiezaCompletar}
+                    onChange={(e) => setEstadoLimpiezaCompletar(e.target.value as any)}
+                    className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                  >
+                    <option value="">Sin seleccionar</option>
+                    <option value="bien">bien</option>
+                    <option value="regular">regular</option>
+                    <option value="mal">mal</option>
+                  </select>
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCerrarCompletar}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCompletarReserva}
+              className="bg-orange-600 hover:bg-orange-700"
+              disabled={completandoReserva !== null}
+            >
+              {completandoReserva ? 'Guardando...' : 'Marcar completada'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   )
 }

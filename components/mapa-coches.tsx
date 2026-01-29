@@ -37,6 +37,8 @@ interface MapaCochesProps {
     activateLocationMode: (matricula: string) => void
     cancelLocationMode: () => void
   }) => void
+  onReservaCreada?: () => void
+  locationOverrides?: Record<string, { latitud: number; longitud: number; direccion_actual?: string }>
 }
 
 // Hook personalizado para Google Maps con verificación completa
@@ -165,7 +167,7 @@ function useGoogleMaps() {
   return { isLoaded, error, loadGoogleMaps, isGoogleMapsReady }
 }
 
-export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCocheMatricula, misReservas = [], onFunctionsReady }: MapaCochesProps) {
+export function MapaCoches({ coches, empleados = [], userRole, userEmail, miCocheMatricula, misReservas = [], onFunctionsReady, onReservaCreada, locationOverrides = {} }: MapaCochesProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstance = useRef<any>(null)
   const markers = useRef<any[]>([])
@@ -212,6 +214,22 @@ const selectedMatriculaRef = useRef<string>("all")
       }
     >
   >(new Map())
+
+  const isAdmin = userRole === 'administrador' || userRole === 'admin'
+
+  const cochesVisibles = useMemo(() => {
+    const base = isAdmin ? coches : coches.filter((coche) => !coche.asignadoa && !coche.donante)
+    return base.map((coche) => {
+      const override = locationOverrides[coche.matricula]
+      if (!override) return coche
+      return {
+        ...coche,
+        latitud: override.latitud,
+        longitud: override.longitud,
+        direccion_actual: override.direccion_actual ?? coche.direccion_actual
+      }
+    })
+  }, [coches, isAdmin, locationOverrides])
 
   // Crear mapa de empleados (memoizado para evitar recrear marcadores en cada render)
   const empleadosMap = useMemo(() => {
@@ -367,7 +385,7 @@ const selectedMatriculaRef = useRef<string>("all")
       // Limpiar marcadores existentes
       clearMarkers()
 
-      const cochesConUbicacion = coches.filter(
+      const cochesConUbicacion = cochesVisibles.filter(
         (coche) =>
           coche.latitud &&
           coche.longitud &&
@@ -420,7 +438,6 @@ const selectedMatriculaRef = useRef<string>("all")
           // Determinar si el usuario puede reubicar este vehículo
           // Administradores: pueden reubicar cualquier vehículo
           // Usuarios: solo pueden reubicar sus vehículos asignados
-          const isAdmin = userRole === 'administrador' || userRole === 'admin'
           const canRelocate = isAdmin || (userRole === 'usuario' && esMiCoche)
 
           // Crear marcador con tamaño especial para "mis coches"
@@ -588,7 +605,7 @@ const selectedMatriculaRef = useRef<string>("all")
         }
       }
     },
-    [coches, getEmpleadoInfo, clearMarkers, isGoogleMapsReady, userRole, userEmail, miCocheMatricula, misReservas],
+    [cochesVisibles, getEmpleadoInfo, clearMarkers, isGoogleMapsReady, userRole, userEmail, miCocheMatricula, misReservas, isAdmin],
   )
 
   // Función para actualizar la ubicación de un vehículo
@@ -687,7 +704,7 @@ const selectedMatriculaRef = useRef<string>("all")
     if (mapInstance.current && isLoaded && isGoogleMapsReady()) {
       addMarkers(mapInstance.current)
     }
-  }, [coches, empleados, addMarkers, isLoaded, isGoogleMapsReady])
+  }, [cochesVisibles, empleados, addMarkers, isLoaded, isGoogleMapsReady])
 
   // Cleanup al desmontar
   useEffect(() => {
@@ -701,23 +718,23 @@ const selectedMatriculaRef = useRef<string>("all")
 
   // Effect para cargar / refrescar reservas activas cuando cambian los coches O las reservas del usuario (crear/cancelar/completar)
   useEffect(() => {
-    if (coches.length > 0) {
-      const matriculas = coches
+    if (cochesVisibles.length > 0) {
+      const matriculas = cochesVisibles
         .filter(coche => !coche.donante)
         .map(coche => coche.matricula)
       if (matriculas.length > 0) {
         verificarReservasActivas(matriculas)
       }
     }
-  }, [coches, misReservas, verificarReservasActivas])
+  }, [cochesVisibles, misReservas, verificarReservasActivas])
 
   const handleRefresh = useCallback(() => {
     window.location.reload()
   }, [])
 
   const handleCenter = useCallback(() => {
-    if (mapInstance.current && coches.length > 0 && isGoogleMapsReady()) {
-      const cochesConUbicacion = coches.filter((c) => c.latitud && c.longitud && !c.donante)
+    if (mapInstance.current && cochesVisibles.length > 0 && isGoogleMapsReady()) {
+      const cochesConUbicacion = cochesVisibles.filter((c) => c.latitud && c.longitud && !c.donante)
       if (cochesConUbicacion.length > 0) {
         try {
           const bounds = new window.google.maps.LatLngBounds()
@@ -737,17 +754,17 @@ const selectedMatriculaRef = useRef<string>("all")
         }
       }
     }
-  }, [coches, isGoogleMapsReady])
+  }, [cochesVisibles, isGoogleMapsReady])
 
   const isLoading = !isLoaded || isInitializing
   const displayError = error || mapError
 
   // Calcular estadísticas
-  const cochesConUbicacion = coches.filter((c) => c.latitud && c.longitud && !c.donante)
-  const cochesSinUbicacion = coches.filter((c) => (!c.latitud || !c.longitud) && !c.donante)
+  const cochesConUbicacion = cochesVisibles.filter((c) => c.latitud && c.longitud && !c.donante)
+  const cochesSinUbicacion = cochesVisibles.filter((c) => (!c.latitud || !c.longitud) && !c.donante)
   
   // Calcular asignados y disponibles de TODOS los coches (no solo los que tienen ubicación)
-  const todosLosCoches = coches.filter((c) => !c.donante)
+  const todosLosCoches = cochesVisibles.filter((c) => !c.donante)
   const cochesAsignados = todosLosCoches.filter((c) => getEmpleadoInfo(c) || c.asignadoa)
   const cochesReservados = todosLosCoches.filter((c) => {
     const estadoReserva = reservasActivas.get(c.matricula)
@@ -823,7 +840,7 @@ const selectedMatriculaRef = useRef<string>("all")
     (matricula: string) => {
       if (!mapInstance.current || !isGoogleMapsReady()) return
 
-      const coche = coches.find((c) => c.matricula === matricula)
+      const coche = cochesVisibles.find((c) => c.matricula === matricula)
       if (!coche || !coche.latitud || !coche.longitud) return
 
       try {
@@ -847,14 +864,14 @@ const selectedMatriculaRef = useRef<string>("all")
         console.error("Error zooming to vehicle:", error)
       }
     },
-    [coches, isGoogleMapsReady],
+    [cochesVisibles, isGoogleMapsReady],
   )
 
   // Función para abrir el modal de reserva temporal
   const handleAbrirReservaTemporal = useCallback(() => {
     if (!selectedMatricula || selectedMatricula === "all") return
     
-    const coche = coches.find(c => c.matricula === selectedMatricula)
+    const coche = cochesVisibles.find(c => c.matricula === selectedMatricula)
     if (!coche) return
 
     setSelectedVehicleForReservation({
@@ -862,7 +879,7 @@ const selectedMatriculaRef = useRef<string>("all")
       marcaModelo: `${coche.marca} ${coche.modelo}`
     })
     setShowReservaModal(true)
-  }, [selectedMatricula, coches])
+  }, [selectedMatricula, cochesVisibles])
 
   // Función para cerrar el modal y limpiar estados
   const handleCerrarReservaTemporal = useCallback(() => {
@@ -872,9 +889,15 @@ const selectedMatriculaRef = useRef<string>("all")
 
   // Función para manejar cuando se crea una reserva exitosamente
   const handleReservaCreada = useCallback((mensaje: string) => {
-    setReservationMessage(`✅ ${mensaje}`)
-    // No recargamos la página; podrías refrescar datos específicos si fuese necesario
-  }, [])
+    if (isAdmin) {
+      setReservationMessage(`✅ ${mensaje}`)
+    } else {
+      setReservationMessage("")
+      setVehicleMessage("")
+    }
+    onReservaCreada?.()
+  }, [isAdmin, onReservaCreada])
+
 
   // Función para manejar la liberación de un vehículo
   const handleLiberar = useCallback(async () => {
@@ -904,7 +927,7 @@ const selectedMatriculaRef = useRef<string>("all")
     if (!selectedMatricula || selectedMatricula === "all") return false
     if (!userEmail) return false
     
-    const coche = coches.find((c) => c.matricula === selectedMatricula)
+    const coche = cochesVisibles.find((c) => c.matricula === selectedMatricula)
     if (!coche) return false
     
     // Solo mostrar si el coche está asignado y no es donante
@@ -916,7 +939,7 @@ const selectedMatriculaRef = useRef<string>("all")
     // Si es usuario regular, solo puede liberar sus propios vehículos
     const empleadoInfo = getEmpleadoInfo(coche)
     return empleadoInfo && empleadoInfo.email === userEmail
-  }, [selectedMatricula, userEmail, userRole, coches, getEmpleadoInfo])
+  }, [selectedMatricula, userEmail, userRole, cochesVisibles, getEmpleadoInfo])
 
   // Función para activar el modo de ubicación
   const activateLocationMode = useCallback((matricula: string) => {
@@ -965,7 +988,7 @@ const selectedMatriculaRef = useRef<string>("all")
             setVehicleMessage(`ℹ️ Filtro activo: resaltando ${count} vehículos en el desplegable`)
           }
           
-          const cochesConUbicacionLocal = coches.filter((c) => c.latitud && c.longitud && !c.donante)
+          const cochesConUbicacionLocal = cochesVisibles.filter((c) => c.latitud && c.longitud && !c.donante)
           if (cochesConUbicacionLocal.length > 0) {
             const bounds = new window.google.maps.LatLngBounds()
             cochesConUbicacionLocal.forEach((coche) => {
@@ -982,7 +1005,7 @@ const selectedMatriculaRef = useRef<string>("all")
         return
       }
 
-      const coche = coches.find((c) => c.matricula === matricula)
+      const coche = cochesVisibles.find((c) => c.matricula === matricula)
       if (!coche) {
         setVehicleMessage("❌ Vehículo no encontrado")
         return
@@ -1049,7 +1072,7 @@ const selectedMatriculaRef = useRef<string>("all")
         }
       }
     },
-    [coches, getEmpleadoInfo, isGoogleMapsReady, isLoaded, filterMode],
+    [cochesVisibles, getEmpleadoInfo, isGoogleMapsReady, isLoaded, filterMode],
   )
 
   // Effect para pasar las funciones al componente padre
@@ -1064,7 +1087,7 @@ const selectedMatriculaRef = useRef<string>("all")
   }, [onFunctionsReady, isLoaded, zoomToVehicle, activateLocationMode, cancelLocationMode])
 
   // Obtener todas las matrículas ordenadas alfabéticamente
-  const matriculasOrdenadas = coches
+  const matriculasOrdenadas = cochesVisibles
     .map((c) => c.matricula)
     .sort((a, b) => a.localeCompare(b))
     .filter((matricula, index, array) => array.indexOf(matricula) === index)
@@ -1077,7 +1100,7 @@ const selectedMatriculaRef = useRef<string>("all")
 
   // Función para obtener el color de una matrícula según su estado y el filtro activo
   const getMatriculaColor = useCallback((matricula: string) => {
-    const coche = coches.find((c) => c.matricula === matricula)
+    const coche = cochesVisibles.find((c) => c.matricula === matricula)
     if (!coche) return "#000000" // Negro por defecto
 
     const isDisponible = isCocheDisponible(coche)
@@ -1136,7 +1159,7 @@ const selectedMatriculaRef = useRef<string>("all")
 
     // Fallback (no debería llegar aquí)
     return "#000000"
-  }, [coches, getEmpleadoInfo, filterMode, isCocheDisponible])
+  }, [cochesVisibles, getEmpleadoInfo, filterMode, isCocheDisponible])
 
   // Función para obtener el texto descriptivo de filtro actual
   const getFilterDescription = useCallback(() => {
@@ -1198,7 +1221,7 @@ const selectedMatriculaRef = useRef<string>("all")
                     Mostrar todos
                   </option>
                   {getFilteredMatriculas().map((matricula) => {
-                    const coche = coches.find((c) => c.matricula === matricula)
+                    const coche = cochesVisibles.find((c) => c.matricula === matricula)
                     const hasLocation = coche?.latitud && coche?.longitud && !coche?.donante
                     const isDisponible = coche ? isCocheDisponible(coche) : false
                     const color = getMatriculaColor(matricula)
@@ -1277,7 +1300,7 @@ const selectedMatriculaRef = useRef<string>("all")
                       
                       // Restablecer vista del mapa a todos los vehículos con ubicación
                       if (mapInstance.current && isLoaded && isGoogleMapsReady()) {
-                        const cochesConUbicacion = coches.filter((c) => c.latitud && c.longitud && !c.donante)
+                        const cochesConUbicacion = cochesVisibles.filter((c) => c.latitud && c.longitud && !c.donante)
                         if (cochesConUbicacion.length > 0) {
                           const bounds = new window.google.maps.LatLngBounds()
                           cochesConUbicacion.forEach((coche) => {
@@ -1306,7 +1329,7 @@ const selectedMatriculaRef = useRef<string>("all")
               {selectedMatricula && 
                selectedMatricula !== "all" && 
                (() => {
-                 const cocheSeleccionado = coches.find(c => c.matricula === selectedMatricula)
+                 const cocheSeleccionado = cochesVisibles.find(c => c.matricula === selectedMatricula)
                  return cocheSeleccionado && !cocheSeleccionado.donante && isCocheDisponible(cocheSeleccionado)
                })() && (
                 <Button
@@ -1324,7 +1347,7 @@ const selectedMatriculaRef = useRef<string>("all")
               {selectedMatricula && 
                selectedMatricula !== "all" && 
                (() => {
-                 const cocheSeleccionado = coches.find(c => c.matricula === selectedMatricula)
+                 const cocheSeleccionado = cochesVisibles.find(c => c.matricula === selectedMatricula)
                  return cocheSeleccionado && !cocheSeleccionado.donante && !isCocheDisponible(cocheSeleccionado)
                })() && (
                 <div className="bg-gray-50 border border-gray-200 rounded-md p-3">
@@ -1352,7 +1375,7 @@ const selectedMatriculaRef = useRef<string>("all")
               )}
             </div>
             
-            {vehicleMessage && (
+            {vehicleMessage && (isAdmin || vehicleMessage.startsWith('❌')) && (
               <div 
                 className={`mt-3 p-3 rounded-md ${
                   isLocationMode 
@@ -1380,7 +1403,7 @@ const selectedMatriculaRef = useRef<string>("all")
               </div>
             )}
             
-            {reservationMessage && (
+            {reservationMessage && (isAdmin || reservationMessage.startsWith('❌')) && (
               <div className={`mt-3 p-3 rounded-md ${
                 reservationMessage.startsWith('✅') 
                   ? 'bg-green-50 border border-green-200' 
@@ -1398,6 +1421,7 @@ const selectedMatriculaRef = useRef<string>("all")
           </div>
 
           {/* Estadísticas */}
+          {isAdmin && (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 p-3 bg-gray-50 rounded-lg">
             {/* Total sin ubicación */}
             <button
@@ -1549,8 +1573,10 @@ const selectedMatriculaRef = useRef<string>("all")
               </div>
             </button>
           </div>
+          )}
 
           {/* Leyenda */}
+          {isAdmin && (
           <div className="flex items-center justify-between bg-white p-3 rounded-lg border">
             <div className="flex items-center gap-6 text-sm text-gray-600">
               <div className="flex items-center gap-2">
@@ -1603,6 +1629,7 @@ const selectedMatriculaRef = useRef<string>("all")
               }
             </div>
           </div>
+          )}
 
           {/* Contenedor del mapa */}
           <div className="w-full bg-white rounded-lg border shadow-sm overflow-hidden">
@@ -1624,7 +1651,7 @@ const selectedMatriculaRef = useRef<string>("all")
                     <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-gray-400" />
                     <p className="text-gray-500 mb-2">Cargando mapa...</p>
                     <p className="text-xs text-gray-400">
-                      Total coches: {coches.length} | Con ubicación: {cochesConUbicacion.length}
+                      Total coches: {cochesVisibles.length} | Con ubicación: {cochesConUbicacion.length}
                     </p>
                     {!isLoaded && <p className="text-xs text-gray-400 mt-2">Cargando Google Maps...</p>}
                   </div>

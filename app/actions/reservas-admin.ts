@@ -248,7 +248,12 @@ export async function cancelarReservaTemporal(reservaId: number) {
   }
 }
 
-export async function completarReservaTemporalAdmin(reservaId: number) {
+export async function completarReservaTemporalAdmin(
+  reservaId: number,
+  observacion?: string,
+  queja?: string,
+  estadoLimpieza?: "bien" | "regular" | "mal"
+) {
   try {
     const session = await getServerSession(authOptions)
 
@@ -279,7 +284,7 @@ export async function completarReservaTemporalAdmin(reservaId: number) {
     // Verificar que la reserva existe
     const { data: reserva, error: reservaError } = await supabase
       .from("reservas")
-      .select("id, estado, fecha_fin")
+      .select("id, estado, fecha_fin, observaciones, quejas")
       .eq('id', reservaId)
       .single()
 
@@ -313,9 +318,28 @@ export async function completarReservaTemporalAdmin(reservaId: number) {
       }
     }
 
+    const updateData: any = { estado: 'completada' }
+    const obs = observacion?.trim()
+    if (obs) {
+      const anterior = reserva.observaciones ? String(reserva.observaciones).trim() : ''
+      updateData.observaciones = anterior
+        ? `${anterior}\n${obs}`
+        : obs
+    }
+    const q = queja?.trim()
+    if (q) {
+      const anteriorQuejas = reserva.quejas ? String(reserva.quejas).trim() : ''
+      updateData.quejas = anteriorQuejas
+        ? `${anteriorQuejas}\n${q}`
+        : q
+    }
+    if (estadoLimpieza && ["bien", "regular", "mal"].includes(estadoLimpieza)) {
+      updateData.limpieza = estadoLimpieza
+    }
+
     const { error: updateError } = await supabase
       .from("reservas")
-      .update({ estado: 'completada' })
+      .update(updateData)
       .eq('id', reservaId)
 
     if (updateError) {

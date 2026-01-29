@@ -717,9 +717,17 @@ export default function DashboardClient({
   
   // Estado para las reservas del usuario (se actualizará desde MisReservas)
   const [misReservas, setMisReservas] = useState<Array<{ matricula: string; id: number; estado: string }>>([])
+  const [reservasRefreshToken, setReservasRefreshToken] = useState(0)
+  const [ubicacionOverrides, setUbicacionOverrides] = useState<Record<string, { latitud: number; longitud: number; direccion_actual?: string }>>({})
 
   const handleReservasChange = (reservas: Array<{ matricula: string; id: number; estado: string }>) => {
     setMisReservas(reservas)
+  }
+  const handleReservaCreada = () => {
+    setReservasRefreshToken((prev) => prev + 1)
+  }
+  const handleUbicacionInicial = (matricula: string, ubicacion: { latitud: number; longitud: number; direccion_actual?: string }) => {
+    setUbicacionOverrides((prev) => ({ ...prev, [matricula]: ubicacion }))
   }
 
   return (
@@ -763,6 +771,8 @@ export default function DashboardClient({
           <MisReservas 
             onCocheEnCancelacion={setCocheEnCancelacion}
             onReservasChange={handleReservasChange}
+            refreshToken={reservasRefreshToken}
+            onUbicacionInicial={handleUbicacionInicial}
           />
         </Suspense>
 
@@ -776,6 +786,8 @@ export default function DashboardClient({
             miCocheMatricula={cocheEnCancelacion}
             misReservas={misReservas}
             onFunctionsReady={setMapFunctions}
+            onReservaCreada={handleReservaCreada}
+            locationOverrides={ubicacionOverrides}
           />
         </Suspense>
       </div>
