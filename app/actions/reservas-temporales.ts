@@ -279,7 +279,12 @@ export async function cancelarReserva(reservaId: number) {
   }
 }
 
-export async function completarReserva(reservaId: number, observacion?: string, queja?: string) {
+export async function completarReserva(
+  reservaId: number,
+  observacion?: string,
+  queja?: string,
+  estadoLimpieza?: "bien" | "regular" | "mal"
+) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
@@ -319,6 +324,9 @@ export async function completarReserva(reservaId: number, observacion?: string, 
       updateData.quejas = anteriorQuejas
         ? `${anteriorQuejas}\n${q}`
         : q
+    }
+    if (estadoLimpieza && ["bien", "regular", "mal"].includes(estadoLimpieza)) {
+      updateData.limpieza = estadoLimpieza
     }
 
     const { error: updateError } = await supabase

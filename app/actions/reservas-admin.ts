@@ -248,7 +248,12 @@ export async function cancelarReservaTemporal(reservaId: number) {
   }
 }
 
-export async function completarReservaTemporalAdmin(reservaId: number, observacion?: string, queja?: string) {
+export async function completarReservaTemporalAdmin(
+  reservaId: number,
+  observacion?: string,
+  queja?: string,
+  estadoLimpieza?: "bien" | "regular" | "mal"
+) {
   try {
     const session = await getServerSession(authOptions)
 
@@ -327,6 +332,9 @@ export async function completarReservaTemporalAdmin(reservaId: number, observaci
       updateData.quejas = anteriorQuejas
         ? `${anteriorQuejas}\n${q}`
         : q
+    }
+    if (estadoLimpieza && ["bien", "regular", "mal"].includes(estadoLimpieza)) {
+      updateData.limpieza = estadoLimpieza
     }
 
     const { error: updateError } = await supabase

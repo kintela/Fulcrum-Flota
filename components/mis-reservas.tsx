@@ -30,6 +30,7 @@ interface Reserva {
   fecha_fin: string
   observaciones?: string
   quejas?: string
+  limpieza?: "bien" | "regular" | "mal" | null
   estado: 'activa' | 'pendiente' | 'completada' | 'cancelada'
   created_at: string
   coches: {
@@ -66,6 +67,7 @@ export function MisReservas({
   const [reservaToComplete, setReservaToComplete] = useState<Reserva | null>(null)
   const [observacionCompletar, setObservacionCompletar] = useState("")
   const [quejaCompletar, setQuejaCompletar] = useState("")
+  const [estadoLimpiezaCompletar, setEstadoLimpiezaCompletar] = useState<"" | "bien" | "regular" | "mal">("")
   const hasMountedRef = useRef(false)
 
   const formatObservaciones = (texto?: string | null) => {
@@ -160,6 +162,7 @@ export function MisReservas({
     setReservaToComplete(reserva)
     setObservacionCompletar("")
     setQuejaCompletar("")
+    setEstadoLimpiezaCompletar("")
     setShowCompleteDialog(true)
   }
 
@@ -168,12 +171,18 @@ export function MisReservas({
     setReservaToComplete(null)
     setObservacionCompletar("")
     setQuejaCompletar("")
+    setEstadoLimpiezaCompletar("")
   }
 
   const handleCompletarReserva = async () => {
     if (!reservaToComplete) return
     setCompletingId(reservaToComplete.id)
-    const resp = await completarReserva(reservaToComplete.id, observacionCompletar, quejaCompletar)
+    const resp = await completarReserva(
+      reservaToComplete.id,
+      observacionCompletar,
+      quejaCompletar,
+      estadoLimpiezaCompletar || undefined
+    )
     if (!resp.success) {
       alert(resp.error)
     } else {
@@ -182,6 +191,7 @@ export function MisReservas({
       setReservaToComplete(null)
       setObservacionCompletar("")
       setQuejaCompletar("")
+      setEstadoLimpiezaCompletar("")
     }
     setCompletingId(null)
   }
@@ -499,6 +509,12 @@ export function MisReservas({
                           {formatObservaciones(reserva.quejas)}
                         </div>
                       )}
+                      {reserva.limpieza && (
+                        <div className="mt-2 text-xs text-gray-600">
+                          <span className="font-medium text-gray-700">Limpieza:</span>{" "}
+                          {reserva.limpieza}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -655,6 +671,20 @@ export function MisReservas({
                       placeholder="Escribe una queja..."
                       className="mt-2"
                     />
+                  </div>
+                  <div>
+                    <Label htmlFor="estado-limpieza">Estado de limpieza (opcional)</Label>
+                    <select
+                      id="estado-limpieza"
+                      value={estadoLimpiezaCompletar}
+                      onChange={(e) => setEstadoLimpiezaCompletar(e.target.value as any)}
+                      className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                    >
+                      <option value="">Sin seleccionar</option>
+                      <option value="bien">bien</option>
+                      <option value="regular">regular</option>
+                      <option value="mal">mal</option>
+                    </select>
                   </div>
                 </div>
               </AlertDialogDescription>

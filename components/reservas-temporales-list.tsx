@@ -25,7 +25,7 @@ interface ReservasTemporalesListProps {
   reservas: ReservaTemporal[]
   onCancelarReserva: (reservaId: number) => Promise<void>
   cancelandoReserva: number | null
-  onCompletarReserva: (reservaId: number, observacion?: string, queja?: string) => Promise<void>
+  onCompletarReserva: (reservaId: number, observacion?: string, queja?: string, estadoLimpieza?: "bien" | "regular" | "mal") => Promise<void>
   completandoReserva: number | null
   isAdmin: boolean
   searchText: string
@@ -87,6 +87,7 @@ export default function ReservasTemporalesList({
   const [reservaToComplete, setReservaToComplete] = useState<ReservaTemporal | null>(null)
   const [observacionCompletar, setObservacionCompletar] = useState("")
   const [quejaCompletar, setQuejaCompletar] = useState("")
+  const [estadoLimpiezaCompletar, setEstadoLimpiezaCompletar] = useState<"" | "bien" | "regular" | "mal">("")
 
   const handleCapturarUbicacion = async (matricula: string, reservaId: number) => {
     console.log('🔧 Capturando ubicación para:', matricula, reservaId)
@@ -113,6 +114,7 @@ export default function ReservasTemporalesList({
     setReservaToComplete(reserva)
     setObservacionCompletar("")
     setQuejaCompletar("")
+    setEstadoLimpiezaCompletar("")
     setShowCompleteDialog(true)
   }
 
@@ -121,15 +123,22 @@ export default function ReservasTemporalesList({
     setReservaToComplete(null)
     setObservacionCompletar("")
     setQuejaCompletar("")
+    setEstadoLimpiezaCompletar("")
   }
 
   const handleCompletarReserva = async () => {
     if (!reservaToComplete) return
-    await onCompletarReserva(reservaToComplete.id, observacionCompletar, quejaCompletar)
+    await onCompletarReserva(
+      reservaToComplete.id,
+      observacionCompletar,
+      quejaCompletar,
+      estadoLimpiezaCompletar || undefined
+    )
     setShowCompleteDialog(false)
     setReservaToComplete(null)
     setObservacionCompletar("")
     setQuejaCompletar("")
+    setEstadoLimpiezaCompletar("")
   }
   // Filtrar reservas por texto de búsqueda
   const reservasFiltradas = reservas.filter((reserva) => {
@@ -464,6 +473,20 @@ export default function ReservasTemporalesList({
                     placeholder="Escribe una queja..."
                     className="mt-2"
                   />
+                </div>
+                <div>
+                  <Label htmlFor="estado-limpieza-admin">Estado de limpieza (opcional)</Label>
+                  <select
+                    id="estado-limpieza-admin"
+                    value={estadoLimpiezaCompletar}
+                    onChange={(e) => setEstadoLimpiezaCompletar(e.target.value as any)}
+                    className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                  >
+                    <option value="">Sin seleccionar</option>
+                    <option value="bien">bien</option>
+                    <option value="regular">regular</option>
+                    <option value="mal">mal</option>
+                  </select>
                 </div>
               </div>
             </AlertDialogDescription>
