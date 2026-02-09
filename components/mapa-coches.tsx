@@ -1330,7 +1330,7 @@ const selectedMatriculaRef = useRef<string>("all")
                selectedMatricula !== "all" && 
                (() => {
                  const cocheSeleccionado = cochesVisibles.find(c => c.matricula === selectedMatricula)
-                 return cocheSeleccionado && !cocheSeleccionado.donante && isCocheDisponible(cocheSeleccionado)
+                 return cocheSeleccionado && !cocheSeleccionado.donante && !cocheSeleccionado.asignadoa
                })() && (
                 <Button
                   onClick={handleAbrirReservaTemporal}
@@ -1343,21 +1343,44 @@ const selectedMatriculaRef = useRef<string>("all")
                 </Button>
               )}
 
-              {/* Mensaje cuando el coche no está disponible */}
-              {selectedMatricula && 
-               selectedMatricula !== "all" && 
+              {/* Mensaje informativo sobre disponibilidad */}
+              {selectedMatricula &&
+               selectedMatricula !== "all" &&
                (() => {
                  const cocheSeleccionado = cochesVisibles.find(c => c.matricula === selectedMatricula)
-                 return cocheSeleccionado && !cocheSeleccionado.donante && !isCocheDisponible(cocheSeleccionado)
+                 if (!cocheSeleccionado || cocheSeleccionado.donante) return false
+                 const estadoReserva = reservasActivas.get(selectedMatricula)
+                 const bloqueadoPorReserva = !!(estadoReserva?.enCurso || estadoReserva?.vencida || estadoReserva?.bloquea)
+                 const asignado = !!cocheSeleccionado.asignadoa
+                 return asignado || bloqueadoPorReserva
                })() && (
                 <div className="bg-gray-50 border border-gray-200 rounded-md p-3">
                   <div className="flex items-center gap-2 text-gray-600">
                     <Ban className="h-4 w-4" />
-                    <span className="text-sm">Este vehículo no está disponible para reservas</span>
+                    <span className="text-sm">Este vehículo tiene restricciones</span>
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    El vehículo está asignado permanentemente o tiene una reserva temporal activa (en curso o vencida sin completar).
-                  </p>
+                  {(() => {
+                    const cocheSeleccionado = cochesVisibles.find(c => c.matricula === selectedMatricula)
+                    if (!cocheSeleccionado) return null
+                    const estadoReserva = reservasActivas.get(selectedMatricula)
+                    const bloqueadoPorReserva = !!(estadoReserva?.enCurso || estadoReserva?.vencida || estadoReserva?.bloquea)
+                    const asignado = !!cocheSeleccionado.asignadoa
+                    if (asignado) {
+                      return (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Este vehículo está asignado permanentemente y no se puede reservar.
+                        </p>
+                      )
+                    }
+                    if (bloqueadoPorReserva) {
+                      return (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Tiene reservas en curso o bloqueos. Puedes abrir el calendario y elegir fechas libres.
+                        </p>
+                      )
+                    }
+                    return null
+                  })()}
                 </div>
               )}
               
