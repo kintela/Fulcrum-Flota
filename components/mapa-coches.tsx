@@ -1239,7 +1239,6 @@ const selectedMatriculaRef = useRef<string>("all")
                     
                     // Lógica para el icono diferenciando estados
                     let icono = ""
-                    let extra = ""
                     if (estadoReserva?.vencida) {
                       icono = "⚠️" // vencida no completada
                     } else if (estadoReserva?.enCurso) {
@@ -1248,16 +1247,6 @@ const selectedMatriculaRef = useRef<string>("all")
                       icono = "👤" // asignado permanente u otra causa
                     } else if (estadoReserva?.programada) {
                       icono = "⏰" // próxima reserva programada (emoji más compatible)
-                      if (estadoReserva.proximaInicio && estadoReserva.proximaFin) {
-                        try {
-                          const inicio = new Date(estadoReserva.proximaInicio)
-                          const fin = new Date(estadoReserva.proximaFin)
-                          const sameDay = inicio.toDateString() === fin.toDateString()
-                          const fmt = (d: Date) => d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
-                          const dia = inicio.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })
-                          extra = ` ${sameDay ? dia + ' ' : ''}${fmt(inicio)}-${fmt(fin)}`
-                        } catch {}
-                      }
                     } else if (hasLocation) {
                       icono = "📍"
                     } else {
@@ -1270,7 +1259,7 @@ const selectedMatriculaRef = useRef<string>("all")
                         value={matricula}
                         style={{ color: color }}
                       >
-                        {matricula} {icono || '[Prog]'}{estadoReserva?.vencida ? ' (vencida)' : estadoReserva?.enCurso ? ' (reservada)' : estadoReserva?.programada ? `${extra}` : ''}{personaEtiqueta ? ` · ${personaEtiqueta}` : ''}
+                        {matricula} {icono || '[Prog]'}{estadoReserva?.vencida ? ' (vencida)' : estadoReserva?.enCurso ? ' (reservada)' : ''}{personaEtiqueta ? ` · ${personaEtiqueta}` : ''}
                       </option>
                     )
                   })}

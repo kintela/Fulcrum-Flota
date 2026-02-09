@@ -52,7 +52,7 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
   const [numeroMeses, setNumeroMeses] = useState(1)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
-  const [bloqueos, setBloqueos] = useState<Array<{ desde: Date; hasta: Date }>>([])
+  const [bloqueos, setBloqueos] = useState<Array<{ desde: Date; hasta: Date; inicioReal: Date }>>([])
   const diasReservados = useMemo(() => {
     if (bloqueos.length === 0) return []
     const dias = new Map<string, Date>()
@@ -170,6 +170,7 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
   // Ajustar hora/fecha fin a inicio + 4h cuando cambie la hora de inicio
   useEffect(() => {
     if (!fechaInicio || !fechaFin) return
+    if (!isSameDay(fechaInicio, fechaFin)) return
     if (skipAutoAjusteRef.current) {
       skipAutoAjusteRef.current = false
       return
@@ -382,9 +383,10 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
         }
 
         const ventanas = data.map((r) => {
-          const desde = r.bloqueo_desde ? new Date(r.bloqueo_desde) : new Date(r.fecha_inicio)
+          const inicioReal = new Date(r.fecha_inicio)
+          const desde = r.bloqueo_desde ? new Date(r.bloqueo_desde) : inicioReal
           const hasta = new Date(r.fecha_fin)
-          return { desde, hasta }
+          return { desde, hasta, inicioReal }
         })
 
         setBloqueos(ventanas)
@@ -464,6 +466,7 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
                     "bg-gray-900 text-white hover:bg-gray-900 focus:bg-gray-900 rounded-full",
                   today: "border border-gray-900 text-gray-900",
                   outside: "text-gray-300",
+                  hidden: "invisible",
                   disabled:
                     "text-gray-400 bg-gray-100/80 opacity-70 line-through cursor-not-allowed pointer-events-none hover:bg-gray-100",
                   range_start:
@@ -588,7 +591,7 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
                 <p className="font-medium text-gray-700">Reservas existentes:</p>
                 <ul className="mt-1 space-y-1">
                   {bloqueos.map((b, idx) => {
-                    const inicio = format(b.desde, "dd/MM/yyyy HH:mm")
+                    const inicio = format(b.inicioReal, "dd/MM/yyyy HH:mm")
                     const fin = format(b.hasta, "dd/MM/yyyy HH:mm")
                     return (
                       <li key={`${inicio}-${fin}-${idx}`}>
