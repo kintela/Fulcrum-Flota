@@ -1,18 +1,19 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Calendar, Clock, X } from "lucide-react"
-import { format, addHours, isBefore, isAfter } from "date-fns"
+import { Calendar as CalendarIcon, Clock } from "lucide-react"
+import { format, isBefore, isAfter, startOfDay, isSameDay, addDays } from "date-fns"
 import { es } from "date-fns/locale"
-import { DayPicker } from "react-day-picker"
+import { Calendar } from "@/components/ui/calendar"
+import { type DateRange, type OnSelectHandler, type DayButtonProps } from "react-day-picker"
 import { crearReservaTemporal, verificarDisponibilidad } from "@/app/actions/reservas-temporales"
 import { supabase } from "@/lib/supabase"
 import { DialogDescription } from "@radix-ui/react-dialog"
+import { cn } from "@/lib/utils"
 
 interface ReservaModalProps {
   isOpen: boolean
@@ -40,7 +41,7 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
   const cuatroHorasDespues = new Date(inicioBase.getTime() + 4 * 60 * 60 * 1000)
 
   const [fechaInicio, setFechaInicio] = useState<Date>(inicioBase)
-  const [fechaFin, setFechaFin] = useState<Date>(cuatroHorasDespues)
+  const [fechaFin, setFechaFin] = useState<Date | undefined>(cuatroHorasDespues)
   const [horaInicio, setHoraInicio] = useState(
     `${inicioBase.getHours().toString().padStart(2, "0")}:${inicioBase.getMinutes().toString().padStart(2, "0")}`
   )
@@ -48,29 +49,88 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
     `${cuatroHorasDespues.getHours().toString().padStart(2, "0")}:${cuatroHorasDespues.getMinutes().toString().padStart(2, "0")}`
   )
   const [observaciones, setObservaciones] = useState("")
+  const [numeroMeses, setNumeroMeses] = useState(1)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
-  const [showCalendarInicio, setShowCalendarInicio] = useState(false)
-  const [showCalendarFin, setShowCalendarFin] = useState(false)
   const [bloqueos, setBloqueos] = useState<Array<{ desde: Date; hasta: Date }>>([])
+  const diasReservados = useMemo(() => {
+    if (bloqueos.length === 0) return []
+    const dias = new Map<string, Date>()
+    bloqueos.forEach(({ desde, hasta }) => {
+      const start = new Date(desde)
+      start.setHours(0, 0, 0, 0)
+      const end = new Date(hasta)
+      end.setHours(0, 0, 0, 0)
+      const cursor = new Date(start)
+      while (cursor <= end) {
+        const key = cursor.toISOString().slice(0, 10)
+        if (!dias.has(key)) dias.set(key, new Date(cursor))
+        cursor.setDate(cursor.getDate() + 1)
+      }
+    })
+    return Array.from(dias.values())
+  }, [bloqueos])
 
-  // Nueva lógica: calcular hora mínima permitida para inicio si la fecha seleccionada es hoy
-  const minHoraInicioHoy = useMemo(() => {
+  const diasBloqueados = useMemo(() => {
+    if (bloqueos.length === 0) return []
+    const dayMap = new Map<
+      string,
+      { dayStart: Date; dayEnd: Date; intervals: Array<[number, number]> }
+    >()
+
+    bloqueos.forEach(({ desde, hasta }) => {
+      let cursor = startOfDay(desde)
+      const endCursor = startOfDay(hasta)
+
+      while (cursor <= endCursor) {
+        const dayStart = new Date(cursor)
+        const dayEnd = addDays(dayStart, 1)
+        const intervalStart = Math.max(desde.getTime(), dayStart.getTime())
+        const intervalEnd = Math.min(hasta.getTime(), dayEnd.getTime())
+
+        if (intervalEnd > intervalStart) {
+          const key = dayStart.toISOString().slice(0, 10)
+          const entry = dayMap.get(key) || { dayStart, dayEnd, intervals: [] }
+          entry.intervals.push([intervalStart, intervalEnd])
+          dayMap.set(key, entry)
+        }
+
+        cursor = addDays(cursor, 1)
+      }
+    })
+
+    const bloqueados: Date[] = []
+    dayMap.forEach(({ dayStart, dayEnd, intervals }) => {
+      intervals.sort((a, b) => a[0] - b[0])
+      let [currentStart, currentEnd] = intervals[0]
+      if (currentStart > dayStart.getTime()) return
+      for (let i = 1; i < intervals.length; i++) {
+        const [s, e] = intervals[i]
+        if (s > currentEnd) return
+        if (e > currentEnd) currentEnd = e
+        if (currentEnd >= dayEnd.getTime()) break
+      }
+      if (currentEnd >= dayEnd.getTime()) {
+        bloqueados.push(dayStart)
+      }
+    })
+
+    return bloqueados
+  }, [bloqueos])
+
+  const minHoraInicioPorBloqueo = useMemo(() => {
     if (!fechaInicio) return null
-    const hoy = new Date()
-    if (fechaInicio.toDateString() !== hoy.toDateString()) return null
-    // Redondear a siguiente bloque de 30 minutos
-    const minutes = hoy.getMinutes()
-    const rounded = new Date(hoy)
-    if (minutes < 30) {
-      rounded.setMinutes(30, 0, 0)
-    } else {
-      rounded.setHours(rounded.getHours() + 1, 0, 0, 0)
-    }
-    const hh = rounded.getHours().toString().padStart(2, '0')
-    const mm = rounded.getMinutes().toString().padStart(2, '0')
+    const inicioDia = startOfDay(fechaInicio)
+    const bloqueosArrastre = bloqueos.filter(
+      (b) => b.desde < inicioDia && b.hasta > inicioDia
+    )
+    if (bloqueosArrastre.length === 0) return null
+    const ultimoFin = bloqueosArrastre.reduce((max, current) => (current.hasta > max ? current.hasta : max), bloqueosArrastre[0].hasta)
+    const redondeado = roundToNext30(ultimoFin)
+    const hh = redondeado.getHours().toString().padStart(2, "0")
+    const mm = redondeado.getMinutes().toString().padStart(2, "0")
     return `${hh}:${mm}`
-  }, [fechaInicio])
+  }, [bloqueos, fechaInicio])
 
   // NUEVO: hora mínima de fin cuando inicio y fin son el mismo día
   const minHoraFin = useMemo(() => {
@@ -87,23 +147,41 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
     return `${hh.toString().padStart(2,'0')}:${mm.toString().padStart(2,'0')}`
   }, [fechaInicio, fechaFin, horaInicio])
 
-  // Si la hora seleccionada queda por debajo tras cambiar fecha -> ajustar
+  const skipAutoAjusteRef = useRef(false)
+  const rangoSeleccionado = useMemo<DateRange>(
+    () => ({ from: fechaInicio, to: fechaFin }),
+    [fechaInicio, fechaFin]
+  )
+
   useEffect(() => {
-    if (minHoraInicioHoy && horaInicio < minHoraInicioHoy) {
-      setHoraInicio(minHoraInicioHoy)
+    const mql = window.matchMedia("(min-width: 1024px)")
+    const sync = () => setNumeroMeses(mql.matches ? 2 : 1)
+    sync()
+    mql.addEventListener("change", sync)
+    return () => mql.removeEventListener("change", sync)
+  }, [])
+
+  useEffect(() => {
+    if (minHoraInicioPorBloqueo && horaInicio < minHoraInicioPorBloqueo) {
+      setHoraInicio(minHoraInicioPorBloqueo)
     }
-  }, [minHoraInicioHoy, horaInicio])
+  }, [minHoraInicioPorBloqueo, horaInicio])
 
   // Ajustar hora/fecha fin a inicio + 4h cuando cambie la hora de inicio
   useEffect(() => {
-    if (!fechaInicio) return
+    if (!fechaInicio || !fechaFin) return
+    if (skipAutoAjusteRef.current) {
+      skipAutoAjusteRef.current = false
+      return
+    }
     const [h, m] = horaInicio.split(":").map(Number)
     const inicioDate = new Date(fechaInicio)
     inicioDate.setHours(h, m, 0, 0)
     const finDate = new Date(inicioDate.getTime() + 4 * 60 * 60 * 1000)
+    if (fechaFin.getTime() === finDate.getTime()) return
     setFechaFin(finDate)
     setHoraFin(`${finDate.getHours().toString().padStart(2, "0")}:${finDate.getMinutes().toString().padStart(2, "0")}`)
-  }, [horaInicio, fechaInicio])
+  }, [horaInicio, fechaInicio, fechaFin])
 
   // Ajustar hora fin si es inválida respecto a inicio (mismo día)
   useEffect(() => {
@@ -122,9 +200,8 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
     }
   }, [minHoraFin, horaFin, fechaFin, fechaInicio])
 
-  const today = new Date()
-  const tomorrow = new Date(today)
-  tomorrow.setDate(today.getDate() + 1)
+  const today = useMemo(() => startOfDay(new Date()), [])
+  const isBeforeToday = (date: Date) => startOfDay(date).getTime() < today.getTime()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -134,7 +211,7 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
     try {
       // Validaciones básicas
       if (!fechaInicio || !fechaFin) {
-        setError("Debe seleccionar fecha de inicio y fin")
+        setError("Debe seleccionar fecha de inicio y fin en el calendario")
         return
       }
 
@@ -152,9 +229,14 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
       console.log(`   Fecha local creada: ${fechaFinCompleta.toString()}`)
       console.log(`   Fecha UTC para BD: ${fechaFinCompleta.toISOString()}`)
 
-      // Validar que las fechas sean válidas
-      if (isBefore(fechaInicioCompleta, new Date())) {
+      // Validar que las fechas sean válidas (permitir cualquier hora del día de hoy)
+      if (isBefore(fechaInicioCompleta, today)) {
         setError("La fecha de inicio no puede ser anterior a la fecha actual")
+        return
+      }
+
+      if (minHoraInicioPorBloqueo && horaInicio < minHoraInicioPorBloqueo) {
+        setError(`La hora de inicio no puede ser anterior a ${minHoraInicioPorBloqueo}`)
         return
       }
 
@@ -214,24 +296,62 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
     setHoraFin(`${plus4.getHours().toString().padStart(2, "0")}:${plus4.getMinutes().toString().padStart(2, "0")}`)
     setObservaciones("")
     setError("")
-    setShowCalendarInicio(false)
-    setShowCalendarFin(false)
+    skipAutoAjusteRef.current = false
     onClose()
   }
 
-  const handleFechaInicioSelect = (date: Date | undefined) => {
-    setFechaInicio(date)
-    setShowCalendarInicio(false)
-    
-    // Si se selecciona fecha de inicio y no hay fecha de fin, sugerir el mismo día
-    if (date && !fechaFin) {
-      setFechaFin(date)
+  const handleRangeSelect: OnSelectHandler<DateRange | undefined> = (
+    _nextRange,
+    selectedDay,
+    modifiers
+  ) => {
+    if (!selectedDay) return
+    if (modifiers.disabled || modifiers.full || isBeforeToday(selectedDay)) return
+
+    const tieneRangoCompleto = !!fechaInicio && !!fechaFin
+
+    if (!fechaInicio || tieneRangoCompleto) {
+      setFechaInicio(selectedDay)
+      setFechaFin(undefined)
+      setError("")
+      return
     }
+
+    if (selectedDay.getTime() < fechaInicio.getTime()) {
+      setFechaInicio(selectedDay)
+      setFechaFin(undefined)
+      setError("")
+      return
+    }
+
+    skipAutoAjusteRef.current = true
+    setFechaFin(selectedDay)
+    setError("")
   }
 
-  const handleFechaFinSelect = (date: Date | undefined) => {
-    setFechaFin(date)
-    setShowCalendarFin(false)
+  const DayButton = (props: DayButtonProps) => {
+    const { day, modifiers, className, ...buttonProps } = props
+    const ref = useRef<HTMLButtonElement | null>(null)
+    useEffect(() => {
+      if (modifiers.focused) ref.current?.focus()
+    }, [modifiers.focused])
+
+    const bloqueadoCompleto = modifiers.full === true
+    const tooltip = bloqueadoCompleto ? "Día completo ya reservado" : buttonProps.title
+
+    return (
+      <button
+        ref={ref}
+        aria-disabled={bloqueadoCompleto || undefined}
+        title={tooltip}
+        {...buttonProps}
+        className={cn(
+          className,
+          bloqueadoCompleto &&
+            "cursor-not-allowed bg-amber-200 text-amber-900 hover:bg-amber-200"
+        )}
+      />
+    )
   }
 
   const generarHoras = () => {
@@ -281,10 +401,10 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md" aria-describedby="reserva-modal-description">
+      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto" aria-describedby="reserva-modal-description">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5 text-blue-600" />
+            <CalendarIcon className="h-5 w-5 text-blue-600" />
             Reservar Vehículo
           </DialogTitle>
           <DialogDescription id="reserva-modal-description" className="sr-only">
@@ -296,35 +416,84 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Fecha de Inicio */}
+          {/* Calendario de Reserva */}
           <div className="space-y-2">
-            <Label htmlFor="fechaInicio">Fecha de Inicio</Label>
-            <div className="relative">
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full justify-start text-left font-normal"
-                onClick={() => setShowCalendarInicio(!showCalendarInicio)}
-              >
-                <Calendar className="mr-2 h-4 w-4" />
-                {fechaInicio ? format(fechaInicio, "PPP", { locale: es }) : "Seleccionar fecha"}
-              </Button>
-              
-              {showCalendarInicio && (
-                <div className="absolute top-full mt-1 z-50 bg-white border rounded-md shadow-lg p-3">
-                  <DayPicker
-                    mode="single"
-                    selected={fechaInicio}
-                    onSelect={handleFechaInicioSelect}
-                    disabled={{ before: today }}
-                    locale={es}
-                    classNames={{
-                      day_selected: "bg-blue-600 text-white",
-                      day_today: "bg-blue-100 text-blue-600 font-semibold"
-                    }}
-                  />
-                </div>
-              )}
+            <Label>Fechas de Reserva</Label>
+            <div className="rounded-md border bg-white">
+              <Calendar
+                mode="range"
+                numberOfMonths={numeroMeses}
+                pagedNavigation
+                selected={rangoSeleccionado}
+                onSelect={handleRangeSelect}
+                disabled={{ before: today }}
+                showOutsideDays={false}
+                locale={es}
+                modifiers={{ reservado: diasReservados, full: diasBloqueados }}
+                modifiersClassNames={{
+                  reservado: "bg-amber-100 text-amber-700",
+                  full: "bg-amber-200 text-amber-900"
+                }}
+                modifiersStyles={{
+                  disabled: {
+                    color: "#9ca3af",
+                    backgroundColor: "#f3f4f6",
+                    textDecoration: "line-through"
+                  }
+                }}
+                classNames={{
+                  months: "flex flex-col lg:flex-row gap-8",
+                  month: "space-y-3",
+                  caption: "flex justify-center pt-1 relative items-center",
+                  caption_label: "text-base font-semibold text-gray-900",
+                  nav: "space-x-2 flex items-center",
+                  nav_button:
+                    "h-8 w-8 rounded-full border border-gray-200 bg-white text-gray-700 hover:bg-gray-100",
+                  nav_button_previous: "absolute left-1",
+                  nav_button_next: "absolute right-1",
+                  table: "w-full border-collapse",
+                  head_row: "flex",
+                  head_cell:
+                    "w-10 text-[11px] font-semibold text-gray-500 uppercase tracking-wide",
+                  row: "flex w-full mt-2",
+                  cell: "h-10 w-10 text-center text-sm p-0 relative",
+                  day: "h-10 w-10 p-0 text-center",
+                  day_button:
+                    "h-10 w-10 rounded-full flex items-center justify-center cursor-pointer hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
+                  selected:
+                    "bg-gray-900 text-white hover:bg-gray-900 focus:bg-gray-900 rounded-full",
+                  today: "border border-gray-900 text-gray-900",
+                  outside: "text-gray-300",
+                  disabled:
+                    "text-gray-400 bg-gray-100/80 opacity-70 line-through cursor-not-allowed pointer-events-none hover:bg-gray-100",
+                  range_start:
+                    "bg-gray-900 text-white rounded-full hover:bg-gray-900",
+                  range_end:
+                    "bg-gray-900 text-white rounded-full hover:bg-gray-900",
+                  range_middle: "bg-gray-100 text-gray-900 rounded-none",
+                }}
+                components={{ DayButton }}
+                className="w-full"
+              />
+            </div>
+            <p className="text-xs text-gray-500">
+              Haz clic una vez para marcar el <span className="font-medium text-gray-700">Inicio</span> y otra vez para el <span className="font-medium text-gray-700">Fin</span>. Si haces clic en otro día, se reinicia la selección.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-gray-600">
+              <div className="flex items-center gap-2">
+                <CalendarIcon className="h-4 w-4 text-blue-600" />
+                <span className="font-medium text-gray-800">Inicio:</span>
+                <span>
+                  {rangoSeleccionado?.from ? format(rangoSeleccionado.from, "PPP", { locale: es }) : "Selecciona día"}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <CalendarIcon className="h-4 w-4 text-blue-600" />
+                <span className="font-medium text-gray-800">Fin:</span>
+                <span>
+                  {rangoSeleccionado?.to ? format(rangoSeleccionado.to, "PPP", { locale: es }) : "Selecciona día"}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -339,7 +508,7 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
                 className="w-full pl-10 pr-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {generarHoras().map((hora) => {
-                  const disabledPorHora = !!minHoraInicioHoy && hora < minHoraInicioHoy
+                  const disabledPorMinBloqueo = !!minHoraInicioPorBloqueo && hora < minHoraInicioPorBloqueo
                   let disabledPorBloqueo = false
 
                   if (fechaInicio) {
@@ -349,7 +518,7 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
                     disabledPorBloqueo = bloqueos.some((b) => slot >= b.desde && slot < b.hasta)
                   }
 
-                  const disabledOpt = disabledPorHora || disabledPorBloqueo
+                  const disabledOpt = disabledPorBloqueo || disabledPorMinBloqueo
                   return (
                     <option key={hora} value={hora} disabled={disabledOpt}>
                       {hora}{disabledOpt ? ' (no disponible)' : ''}
@@ -357,40 +526,10 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
                   )
                 })}
               </select>
-              {minHoraInicioHoy && (
-                <p className="mt-1 text-xs text-gray-500">Mínimo hoy: {minHoraInicioHoy}</p>
-              )}
-            </div>
-          </div>
-
-          {/* Fecha de Fin */}
-          <div className="space-y-2">
-            <Label htmlFor="fechaFin">Fecha de Fin</Label>
-            <div className="relative">
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full justify-start text-left font-normal"
-                onClick={() => setShowCalendarFin(!showCalendarFin)}
-              >
-                <Calendar className="mr-2 h-4 w-4" />
-                {fechaFin ? format(fechaFin, "PPP", { locale: es }) : "Seleccionar fecha"}
-              </Button>
-              
-              {showCalendarFin && (
-                <div className="absolute top-full mt-1 z-50 bg-white border rounded-md shadow-lg p-3">
-                  <DayPicker
-                    mode="single"
-                    selected={fechaFin}
-                    onSelect={handleFechaFinSelect}
-                    disabled={{ before: fechaInicio || today }}
-                    locale={es}
-                    classNames={{
-                      day_selected: "bg-blue-600 text-white",
-                      day_today: "bg-blue-100 text-blue-600 font-semibold"
-                    }}
-                  />
-                </div>
+              {minHoraInicioPorBloqueo && (
+                <p className="mt-1 text-xs text-gray-500">
+                  Mínimo por reserva anterior: {minHoraInicioPorBloqueo}
+                </p>
               )}
             </div>
           </div>
@@ -403,6 +542,7 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
               <select
                 value={horaFin}
                 onChange={(e) => setHoraFin(e.target.value)}
+                disabled={!fechaFin}
                 className="w-full pl-10 pr-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {generarHoras().map((hora) => {
@@ -427,6 +567,9 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
                   )
                 })}
               </select>
+              {!fechaFin && (
+                <p className="mt-1 text-xs text-gray-500">Selecciona una fecha de fin para habilitar la hora.</p>
+              )}
               {fechaInicio && fechaFin && fechaInicio.toDateString() === fechaFin.toDateString() && (
                 <p className="mt-1 text-xs text-gray-500">
                   {minHoraFin === "24:00" ? 'El fin debe pasar al día siguiente' : `Mínimo fin: ${minHoraFin}`}
@@ -434,6 +577,29 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
               )}
             </div>
           </div>
+
+          {bloqueos.length > 0 && (
+            <div className="space-y-2">
+              <div className="text-xs text-gray-600 flex items-center gap-2">
+                <span className="inline-block h-3 w-3 rounded border border-amber-300 bg-amber-100" />
+                Días con reservas existentes
+              </div>
+              <div className="text-xs text-gray-600">
+                <p className="font-medium text-gray-700">Reservas existentes:</p>
+                <ul className="mt-1 space-y-1">
+                  {bloqueos.map((b, idx) => {
+                    const inicio = format(b.desde, "dd/MM/yyyy HH:mm")
+                    const fin = format(b.hasta, "dd/MM/yyyy HH:mm")
+                    return (
+                      <li key={`${inicio}-${fin}-${idx}`}>
+                        {inicio} → {fin}
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            </div>
+          )}
 
           {/* Observaciones */}
           <div className="space-y-2">
