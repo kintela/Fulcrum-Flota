@@ -170,6 +170,7 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
   // Ajustar hora/fecha fin a inicio + 4h cuando cambie la hora de inicio
   useEffect(() => {
     if (!fechaInicio || !fechaFin) return
+    if (!isSameDay(fechaInicio, fechaFin)) return
     if (skipAutoAjusteRef.current) {
       skipAutoAjusteRef.current = false
       return
@@ -464,6 +465,7 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
                     "bg-gray-900 text-white hover:bg-gray-900 focus:bg-gray-900 rounded-full",
                   today: "border border-gray-900 text-gray-900",
                   outside: "text-gray-300",
+                  hidden: "invisible",
                   disabled:
                     "text-gray-400 bg-gray-100/80 opacity-70 line-through cursor-not-allowed pointer-events-none hover:bg-gray-100",
                   range_start:
