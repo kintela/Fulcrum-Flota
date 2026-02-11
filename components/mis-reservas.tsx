@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,12 +18,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Calendar, Clock, Car, X, RefreshCw, AlertTriangle, MapPin, Loader2, Plus } from "lucide-react"
+import { Calendar, Clock, Car, X, RefreshCw, AlertTriangle, MapPin, Loader2, Plus, CreditCard, Truck } from "lucide-react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { obtenerReservasUsuario, cancelarReserva, completarReserva, ampliarReservaTemporal } from "@/app/actions/reservas-temporales"
 import { ubicarCocheEnSede } from "@/app/actions/ubicacion"
 import { capturarYAsignarUbicacion } from "@/lib/ubicacion-utils"
+import { obtenerFotosCoche } from "@/lib/storage"
+import { CarThumbnail } from "@/components/car-thumbnail"
+import { obtenerFichaCoche, type CocheFicha } from "@/app/actions/coches"
 import { DayPicker } from "react-day-picker"
 
 interface Reserva {
@@ -43,6 +47,28 @@ interface Reserva {
     longitud?: number | null
     direccion_actual?: string | null
   }
+}
+
+function getITVStatus(date: string): { isUrgent: boolean; isOverdue: boolean; daysRemaining: number } {
+  const targetDate = new Date(date)
+  const today = new Date()
+  const diffTime = targetDate.getTime() - today.getTime()
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+
+  return {
+    isUrgent: diffDays <= 30 && diffDays >= 0,
+    isOverdue: diffDays < 0,
+    daysRemaining: diffDays,
+  }
+}
+
+function formatDate(dateString: string): string {
+  const date = new Date(dateString)
+  return date.toLocaleDateString("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  })
 }
 
 export function MisReservas({ 
@@ -77,6 +103,10 @@ export function MisReservas({
   const [extendHoraFin, setExtendHoraFin] = useState("")
   const [showExtendCalendar, setShowExtendCalendar] = useState(false)
   const [extendError, setExtendError] = useState("")
+  const [fotosCache, setFotosCache] = useState<{ [matricula: string]: string | null }>({})
+  const [historialSeleccionado, setHistorialSeleccionado] = useState<Reserva | null>(null)
+  const [fichaCocheCache, setFichaCocheCache] = useState<Record<string, CocheFicha | null>>({})
+  const [fichaCocheLoading, setFichaCocheLoading] = useState<string | null>(null)
   const hasMountedRef = useRef(false)
 
   const formatObservaciones = (texto?: string | null) => {
@@ -128,6 +158,60 @@ export function MisReservas({
     }
     cargarReservas()
   }, [refreshToken])
+
+  useEffect(() => {
+    async function cargarFotos() {
+      const nuevasFotos: { [matricula: string]: string | null } = {}
+      for (const reserva of reservas) {
+        const matricula = reserva.coches?.matricula
+        if (!matricula) continue
+        if (fotosCache[matricula] !== undefined) continue
+        try {
+          const fotosResult = await obtenerFotosCoche(matricula)
+          nuevasFotos[matricula] =
+            fotosResult.success && fotosResult.fotos && fotosResult.fotos.length > 0
+              ? fotosResult.fotos[0]
+              : null
+        } catch {
+          nuevasFotos[matricula] = null
+        }
+      }
+
+      if (Object.keys(nuevasFotos).length > 0) {
+        setFotosCache((prev) => ({ ...prev, ...nuevasFotos }))
+      }
+    }
+
+    if (reservas.length > 0) {
+      cargarFotos()
+    }
+  }, [reservas])
+
+  useEffect(() => {
+    if (!historialSeleccionado) return
+    const matricula = historialSeleccionado.coches.matricula
+    if (fichaCocheCache[matricula] !== undefined) return
+
+    let isActive = true
+    setFichaCocheLoading(matricula)
+
+    obtenerFichaCoche(matricula)
+      .then((resultado) => {
+        if (!isActive) return
+        setFichaCocheCache((prev) => ({
+          ...prev,
+          [matricula]: resultado.success ? resultado.ficha : null,
+        }))
+      })
+      .finally(() => {
+        if (!isActive) return
+        setFichaCocheLoading((current) => (current === matricula ? null : current))
+      })
+
+    return () => {
+      isActive = false
+    }
+  }, [historialSeleccionado, fichaCocheCache])
 
   const handleCancelarReserva = async (reservaId: number) => {
     setCancellingId(reservaId)
@@ -382,6 +466,11 @@ export function MisReservas({
 
   const reservasActivas = reservas.filter(r => r.estado === 'activa' || r.estado === 'pendiente')
   const reservasHistoricas = reservas.filter(r => r.estado !== 'activa' && r.estado !== 'pendiente')
+  const matriculaSeleccionada = historialSeleccionado?.coches.matricula ?? null
+  const fichaSeleccionada = matriculaSeleccionada ? fichaCocheCache[matriculaSeleccionada] : null
+  const itvStatusSeleccionado = fichaSeleccionada?.proximaRevisionITV
+    ? getITVStatus(fichaSeleccionada.proximaRevisionITV)
+    : null
 
   return (
     <Card>
@@ -436,11 +525,25 @@ export function MisReservas({
                     >
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center gap-3">
-                          <Car className="h-5 w-5 text-green-600" />
+                          <button
+                            type="button"
+                            onClick={() => setHistorialSeleccionado(reserva)}
+                            className="cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg"
+                            title="Ver resumen de la reserva"
+                          >
+                            <CarThumbnail
+                              src={fotosCache[reserva.coches.matricula] ?? null}
+                              alt={`${reserva.coches.marca} ${reserva.coches.modelo}`}
+                              matricula={reserva.coches.matricula}
+                            />
+                          </button>
                           <div>
-                            <p className="font-semibold text-gray-900">
-                              {reserva.coches.matricula}
-                            </p>
+                            <div className="flex items-center gap-2">
+                              <Car className="h-5 w-5 text-green-600" />
+                              <p className="font-semibold text-gray-900">
+                                {reserva.coches.matricula}
+                              </p>
+                            </div>
                             <p className="text-sm text-gray-600">
                               {reserva.coches.marca} {reserva.coches.modelo}
                             </p>
@@ -591,14 +694,30 @@ export function MisReservas({
                       className="border rounded-lg p-3 bg-gray-50"
                     >
                       <div className="flex items-start justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <Car className="h-4 w-4 text-gray-500" />
-                          <span className="font-medium text-gray-900">
-                            {reserva.coches.matricula}
-                          </span>
-                          <span className="text-sm text-gray-600">
-                            {reserva.coches.marca} {reserva.coches.modelo}
-                          </span>
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setHistorialSeleccionado(reserva)}
+                            className="cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg"
+                            title="Ver resumen de la reserva"
+                          >
+                            <CarThumbnail
+                              src={fotosCache[reserva.coches.matricula] ?? null}
+                              alt={`${reserva.coches.marca} ${reserva.coches.modelo}`}
+                              matricula={reserva.coches.matricula}
+                            />
+                          </button>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <Car className="h-4 w-4 text-gray-500" />
+                              <span className="font-medium text-gray-900">
+                                {reserva.coches.matricula}
+                              </span>
+                            </div>
+                            <span className="text-sm text-gray-600">
+                              {reserva.coches.marca} {reserva.coches.modelo}
+                            </span>
+                          </div>
                         </div>
                         {getEstadoBadge(reserva)}
                       </div>
@@ -647,6 +766,203 @@ export function MisReservas({
             )}
           </div>
         )}
+
+        <Dialog
+          open={!!historialSeleccionado}
+          onOpenChange={(open) => {
+            if (!open) setHistorialSeleccionado(null)
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Resumen de la reserva</DialogTitle>
+              <DialogDescription>
+                Detalles principales de la reserva seleccionada.
+              </DialogDescription>
+            </DialogHeader>
+            {historialSeleccionado && (
+              <div className="space-y-4">
+                <div className="rounded-lg border bg-gray-50 p-3">
+                  {fichaCocheLoading === matriculaSeleccionada && !fichaSeleccionada ? (
+                    <div className="flex items-center text-sm text-gray-500">
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Cargando ficha del coche...
+                    </div>
+                  ) : fichaSeleccionada ? (
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="text-lg font-semibold text-gray-900">
+                            {fichaSeleccionada.matricula}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            {fichaSeleccionada.marca} {fichaSeleccionada.modelo}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {getEstadoReserva(historialSeleccionado)}
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end">
+                          <CarThumbnail
+                            src={matriculaSeleccionada ? fotosCache[matriculaSeleccionada] ?? null : null}
+                            alt={`${fichaSeleccionada.marca} ${fichaSeleccionada.modelo}`}
+                            matricula={fichaSeleccionada.matricula}
+                          />
+                          {fichaSeleccionada.empleadoNombre ? (
+                            <p className="text-sm text-blue-600 font-medium text-right mt-1">
+                              {fichaSeleccionada.empleadoNombre}
+                            </p>
+                          ) : fichaSeleccionada.alquiler ? (
+                            <p className="text-sm text-purple-600 font-medium mt-1">Alquiler</p>
+                          ) : (
+                            <p className="text-sm text-gray-400 mt-1">Sin asignar</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 text-sm">
+                        {fichaSeleccionada.color && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Color:</span>
+                            <span>{fichaSeleccionada.color}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Kilómetros:</span>
+                          <span>{fichaSeleccionada.kms?.toLocaleString() || 0} km</span>
+                        </div>
+                        {fichaSeleccionada.combustible && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Combustible:</span>
+                            <span>{fichaSeleccionada.combustible}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Próxima ITV:</span>
+                          <div className="flex items-center">
+                            {fichaSeleccionada.proximaRevisionITV ? (
+                              <>
+                                {itvStatusSeleccionado?.isOverdue && (
+                                  <AlertTriangle className="h-4 w-4 text-red-600 mr-1" />
+                                )}
+                                {itvStatusSeleccionado?.isUrgent && !itvStatusSeleccionado?.isOverdue && (
+                                  <Clock className="h-4 w-4 text-red-500 mr-1" />
+                                )}
+                                <span
+                                  className={
+                                    itvStatusSeleccionado?.isOverdue || itvStatusSeleccionado?.isUrgent
+                                      ? "text-red-600 font-semibold"
+                                      : ""
+                                  }
+                                >
+                                  {formatDate(fichaSeleccionada.proximaRevisionITV)}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-gray-400 italic">Sin datos</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Tarjeta SOLRED:</span>
+                          <div className="flex items-center">
+                            {fichaSeleccionada.tarjetaSolred ? (
+                              <>
+                                <CreditCard className="h-4 w-4 text-blue-600 mr-1" />
+                                <span className="text-blue-600 font-semibold">
+                                  PIN: {fichaSeleccionada.tarjetaSolred.pin}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-gray-400 italic">Sin tarjeta</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Tarjeta ViaT:</span>
+                          <div className="flex items-center">
+                            {fichaSeleccionada.tarjetaViat ? (
+                              <>
+                                <Truck className="h-4 w-4 text-green-600 mr-1" />
+                                <span className="text-green-600 font-semibold">
+                                  {fichaSeleccionada.tarjetaViat.id}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-gray-400 italic">Sin tarjeta</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Seguro:</span>
+                          <div className="flex items-center">
+                            {fichaSeleccionada.seguroActivo ? (
+                              <div className="text-right">
+                                <div className="flex items-center">
+                                  <span
+                                    className={
+                                      fichaSeleccionada.seguroActivo.fecha_vencimiento &&
+                                      new Date(fichaSeleccionada.seguroActivo.fecha_vencimiento) < new Date()
+                                        ? "text-red-600 font-semibold"
+                                        : "text-blue-600 font-semibold"
+                                    }
+                                  >
+                                    {fichaSeleccionada.seguroActivo.fecha_vencimiento
+                                      ? formatDate(fichaSeleccionada.seguroActivo.fecha_vencimiento)
+                                      : "Sin datos"}
+                                  </span>
+                                </div>
+                                {fichaSeleccionada.seguroActivo.telefono_asistencia1 && (
+                                  <span className="text-xs text-gray-600">
+                                    Tel: {fichaSeleccionada.seguroActivo.telefono_asistencia1}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 italic">Sin seguro</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-gray-500">
+                      No se pudo cargar la ficha del coche.
+                    </div>
+                  )}
+                </div>
+                <div className="text-sm text-gray-700 space-y-1">
+                  <div>
+                    <span className="font-medium">Inicio:</span>{" "}
+                    {format(new Date(historialSeleccionado.fecha_inicio), "PPP 'a las' HH:mm", { locale: es })}
+                  </div>
+                  <div>
+                    <span className="font-medium">Fin:</span>{" "}
+                    {format(new Date(historialSeleccionado.fecha_fin), "PPP 'a las' HH:mm", { locale: es })}
+                  </div>
+                </div>
+                {historialSeleccionado.observaciones && (
+                  <div className="text-sm text-gray-600 whitespace-pre-line">
+                    <span className="font-medium text-gray-700">Observaciones:</span>{" "}
+                    {formatObservaciones(historialSeleccionado.observaciones)}
+                  </div>
+                )}
+                {historialSeleccionado.quejas && (
+                  <div className="text-sm text-gray-600 whitespace-pre-line">
+                    <span className="font-medium text-gray-700">Quejas:</span>{" "}
+                    {formatObservaciones(historialSeleccionado.quejas)}
+                  </div>
+                )}
+                {historialSeleccionado.limpieza && (
+                  <div className="text-sm text-gray-600">
+                    <span className="font-medium text-gray-700">Limpieza:</span>{" "}
+                    {historialSeleccionado.limpieza}
+                  </div>
+                )}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {/* Diálogo de confirmación para cancelar reserva */}
         <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
