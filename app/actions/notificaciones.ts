@@ -63,12 +63,12 @@ export async function verificarReservasVencidas() {
     // Obtener la fecha actual en UTC
     const ahora = new Date()
     
-    // Considerar vencida si fecha_fin <= hace 1 hora (damos margen antes de avisar)
-    const haceUnaHora = new Date(ahora.getTime() - (60 * 60 * 1000))
+    // Considerar vencida si fecha_fin <= ahora (sin margen)
+    const limiteVencimiento = ahora
     
     console.log(`🕒 Hora actual UTC: ${ahora.toISOString()}`)
     console.log(`🕒 Hora actual local (Madrid): ${ahora.toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}`)
-    console.log(`⏰ Buscando reservas que finalizaron antes de: ${haceUnaHora.toISOString()}`)
+    console.log(`⏰ Buscando reservas que finalizaron antes de: ${limiteVencimiento.toISOString()}`)
 
     // Obtener todas las reservas activas para filtrar manualmente
     console.log(`🔍 Obteniendo todas las reservas activas para filtrar manualmente...`)
@@ -116,7 +116,7 @@ export async function verificarReservasVencidas() {
         try {
           // Usar la fecha tal como está en BD (ya está en UTC correctamente)
           const fechaFin = new Date(reserva.fecha_fin)
-          const estaVencida = fechaFin < haceUnaHora
+          const estaVencida = fechaFin <= limiteVencimiento
           const horasVencida = (ahora.getTime() - fechaFin.getTime()) / (1000 * 60 * 60)
           
           console.log(`   📋 Reserva ${reserva.id} (${reserva.matricula}):`)

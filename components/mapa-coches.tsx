@@ -873,13 +873,18 @@ const selectedMatriculaRef = useRef<string>("all")
     
     const coche = cochesVisibles.find(c => c.matricula === selectedMatricula)
     if (!coche) return
+    const estadoReserva = reservasActivas.get(selectedMatricula)
+    if (estadoReserva?.vencida) {
+      setReservationMessage("❌ Este vehículo tiene una reserva vencida pendiente de completar. Debes completarla antes de crear una nueva.")
+      return
+    }
 
     setSelectedVehicleForReservation({
       matricula: coche.matricula,
       marcaModelo: `${coche.marca} ${coche.modelo}`
     })
     setShowReservaModal(true)
-  }, [selectedMatricula, cochesVisibles])
+  }, [selectedMatricula, cochesVisibles, reservasActivas])
 
   // Función para cerrar el modal y limpiar estados
   const handleCerrarReservaTemporal = useCallback(() => {
@@ -1319,18 +1324,24 @@ const selectedMatriculaRef = useRef<string>("all")
                selectedMatricula !== "all" && 
                (() => {
                  const cocheSeleccionado = cochesVisibles.find(c => c.matricula === selectedMatricula)
-                 return cocheSeleccionado && !cocheSeleccionado.donante && !cocheSeleccionado.asignadoa
-               })() && (
-                <Button
-                  onClick={handleAbrirReservaTemporal}
-                  disabled={isReserving || isReleasing}
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
-                  size="sm"
-                >
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Reserva Temporal
-                </Button>
-              )}
+                 if (!cocheSeleccionado || cocheSeleccionado.donante || cocheSeleccionado.asignadoa) {
+                   return null
+                 }
+                 const estadoReserva = reservasActivas.get(selectedMatricula)
+                 const bloqueadaPorVencida = !!estadoReserva?.vencida
+                 return (
+                  <Button
+                    onClick={handleAbrirReservaTemporal}
+                    disabled={isReserving || isReleasing || bloqueadaPorVencida}
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                    size="sm"
+                    title={bloqueadaPorVencida ? "Reserva vencida pendiente de completar" : "Crear reserva temporal"}
+                  >
+                    <Calendar className="h-4 w-4 mr-2" />
+                    Reserva Temporal
+                  </Button>
+                 )
+               })()}
 
               {/* Mensaje informativo sobre disponibilidad */}
               {selectedMatricula &&
@@ -1358,6 +1369,13 @@ const selectedMatriculaRef = useRef<string>("all")
                       return (
                         <p className="text-xs text-gray-500 mt-1">
                           Este vehículo está asignado permanentemente y no se puede reservar.
+                        </p>
+                      )
+                    }
+                    if (estadoReserva?.vencida) {
+                      return (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Tiene una reserva vencida pendiente de completar. No se puede reservar hasta que se complete.
                         </p>
                       )
                     }
