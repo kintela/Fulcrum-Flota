@@ -34,12 +34,25 @@ interface ResultadoITV {
   timestamp: string
 }
 
+interface ResultadoMantenimiento {
+  success: boolean
+  message: string
+  data?: {
+    mantenimientosVencidos: number
+    mantenimientosProximos: number
+    notificacionesEnviadas: number
+    erroresEnvio: number
+  }
+  timestamp: string
+}
+
 export default function NotificacionesAdmin() {
   const [cargando, setCargando] = useState(false)
   const [resultado, setResultado] = useState<ResultadoPrueba | null>(null)
   const [estadisticas, setEstadisticas] = useState<EstadisticasNotificaciones | null>(null)
   const [resultadoActivacion, setResultadoActivacion] = useState<any | null>(null)
   const [resultadoITV, setResultadoITV] = useState<ResultadoITV | null>(null)
+  const [resultadoMantenimiento, setResultadoMantenimiento] = useState<ResultadoMantenimiento | null>(null)
 
   const probarConfiguracion = async () => {
     setCargando(true)
@@ -139,6 +152,29 @@ export default function NotificacionesAdmin() {
       setResultadoITV({
         success: false,
         message: 'Error ejecutando alertas ITV',
+        timestamp: new Date().toISOString()
+      })
+    }
+    setCargando(false)
+  }
+
+  const ejecutarAlertasMantenimiento = async () => {
+    setCargando(true)
+    try {
+      const response = await fetch('/api/cron/mantenimiento-alertas', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: 'run' })
+      })
+
+      const data = await response.json()
+      setResultadoMantenimiento(data)
+    } catch (error) {
+      setResultadoMantenimiento({
+        success: false,
+        message: 'Error ejecutando alertas de mantenimiento',
         timestamp: new Date().toISOString()
       })
     }
@@ -343,10 +379,29 @@ export default function NotificacionesAdmin() {
             </Button>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Alertas Mantenimiento</CardTitle>
+            <CardDescription>
+              Ejecuta ahora las alertas de mantenimientos vencidos y próximos
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              onClick={ejecutarAlertasMantenimiento}
+              disabled={cargando}
+              variant="secondary"
+              className="w-full"
+            >
+              {cargando ? 'Ejecutando...' : 'Ejecutar Mantenimiento'}
+            </Button>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Resultados combinados */}
-      {(resultado || resultadoActivacion || resultadoITV) && (
+      {(resultado || resultadoActivacion || resultadoITV || resultadoMantenimiento) && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -430,6 +485,30 @@ export default function NotificacionesAdmin() {
                     <div>Notificaciones enviadas: {resultadoITV.data.notificacionesEnviadas}</div>
                     {resultadoITV.data.erroresEnvio > 0 && (
                       <div className="text-red-600">Errores de envío: {resultadoITV.data.erroresEnvio}</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {resultadoMantenimiento && (
+              <div className="space-y-2 border-t pt-4">
+                <div className="flex items-center justify-between">
+                  <div className="font-semibold">Alertas Mantenimiento</div>
+                  <div className="text-xs text-muted-foreground">
+                    Ejecutado el {new Date(resultadoMantenimiento.timestamp).toLocaleString('es-ES')}
+                  </div>
+                </div>
+                <p className={resultadoMantenimiento.success ? 'text-green-600' : 'text-red-600'}>
+                  {resultadoMantenimiento.message}
+                </p>
+                {resultadoMantenimiento.data && (
+                  <div className="grid gap-2 text-sm text-muted-foreground">
+                    <div>Mantenimientos vencidos: {resultadoMantenimiento.data.mantenimientosVencidos}</div>
+                    <div>Mantenimientos próximos: {resultadoMantenimiento.data.mantenimientosProximos}</div>
+                    <div>Notificaciones enviadas: {resultadoMantenimiento.data.notificacionesEnviadas}</div>
+                    {resultadoMantenimiento.data.erroresEnvio > 0 && (
+                      <div className="text-red-600">Errores de envío: {resultadoMantenimiento.data.erroresEnvio}</div>
                     )}
                   </div>
                 )}
