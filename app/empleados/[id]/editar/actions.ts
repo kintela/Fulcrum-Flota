@@ -44,18 +44,6 @@ export async function editarEmpleado(id: number, formData: FormData) {
         : formData.get("baneado") === "on",
     }
 
-    // Solo incluir contraseña si se proporciona una nueva
-    const nuevaContraseña = formData.get("contraseña") as string
-    if (nuevaContraseña && nuevaContraseña.trim() !== "") {
-      if (nuevaContraseña.length < 6) {
-        return {
-          success: false,
-          error: "La nueva contraseña debe tener al menos 6 caracteres",
-        }
-      }
-      empleadoData.contraseña = nuevaContraseña
-    }
-
     // Validaciones básicas
     if (!empleadoData.nombre || !empleadoData.apellidos || !empleadoData.email) {
       return {

@@ -185,21 +185,6 @@ export default function EditarEmpleadoPage({ params }: EditarEmpleadoPageProps) 
                   />
                 </div>
 
-                <div className="md:col-span-2">
-                  <Label htmlFor="contraseña">Nueva Contraseña</Label>
-                  <Input
-                    id="contraseña"
-                    name="contraseña"
-                    type="password"
-                    placeholder="Dejar vacío para mantener la actual"
-                    minLength={6}
-                    className="mt-1"
-                  />
-                  <p className="text-sm text-gray-500 mt-1">
-                    Dejar vacío para mantener la contraseña actual. Si se introduce una nueva, debe tener mínimo 6
-                    caracteres.
-                  </p>
-                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
