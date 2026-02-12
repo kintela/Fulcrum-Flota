@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 import { editarEmpleado, obtenerEmpleado } from "./actions"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
@@ -193,6 +194,20 @@ export default function EditarEmpleadoPage({ params }: EditarEmpleadoPageProps) 
                     Dejar vacío para mantener la contraseña actual. Si se introduce una nueva, debe tener mínimo 6
                     caracteres.
                   </p>
+                </div>
+              </div>
+
+              <div className="rounded-md border border-gray-200 bg-gray-50 p-4">
+                <div className="flex items-start gap-3">
+                  <Checkbox id="baneado" name="baneado" defaultChecked={!!empleado.baneado} />
+                  <div>
+                    <Label htmlFor="baneado" className="text-sm font-medium">
+                      Empleado baneado
+                    </Label>
+                    <p className="text-xs text-gray-600 mt-1">
+                      Un empleado baneado no puede crear nuevas reservas.
+                    </p>
+                  </div>
                 </div>
               </div>
 

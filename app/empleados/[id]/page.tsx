@@ -83,6 +83,12 @@ export default async function EmpleadoDetailPage({ params }: EmpleadoDetailPageP
                 <span className="font-medium">{empleado.id}</span>
               </div>
               <div className="flex justify-between">
+                <span className="text-gray-500">Estado:</span>
+                <span className={empleado.baneado ? "text-red-600 font-medium" : "text-green-600 font-medium"}>
+                  {empleado.baneado ? "Baneado" : "Activo"}
+                </span>
+              </div>
+              <div className="flex justify-between">
                 <span className="text-gray-500">Nombre:</span>
                 <span>{empleado.nombre}</span>
               </div>

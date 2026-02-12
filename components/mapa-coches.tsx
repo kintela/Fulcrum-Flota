@@ -765,6 +765,14 @@ const selectedMatriculaRef = useRef<string>("all")
   
   // Calcular asignados y disponibles de TODOS los coches (no solo los que tienen ubicación)
   const todosLosCoches = cochesVisibles.filter((c) => !c.donante)
+
+  const empleadoActual = useMemo(() => {
+    if (!userEmail) return null
+    const emailLower = userEmail.toLowerCase()
+    return empleados.find((emp) => String(emp.email || "").toLowerCase() === emailLower) || null
+  }, [empleados, userEmail])
+
+  const usuarioBaneado = !!empleadoActual?.baneado
   const cochesAsignados = todosLosCoches.filter((c) => getEmpleadoInfo(c) || c.asignadoa)
   const cochesReservados = todosLosCoches.filter((c) => {
     const estadoReserva = reservasActivas.get(c.matricula)
@@ -870,6 +878,11 @@ const selectedMatriculaRef = useRef<string>("all")
   // Función para abrir el modal de reserva temporal
   const handleAbrirReservaTemporal = useCallback(() => {
     if (!selectedMatricula || selectedMatricula === "all") return
+
+    if (usuarioBaneado) {
+      setReservationMessage("❌ Tu usuario está baneado y no puede crear nuevas reservas.")
+      return
+    }
     
     const coche = cochesVisibles.find(c => c.matricula === selectedMatricula)
     if (!coche) return
@@ -884,7 +897,7 @@ const selectedMatriculaRef = useRef<string>("all")
       marcaModelo: `${coche.marca} ${coche.modelo}`
     })
     setShowReservaModal(true)
-  }, [selectedMatricula, cochesVisibles, reservasActivas])
+  }, [selectedMatricula, cochesVisibles, reservasActivas, usuarioBaneado])
 
   // Función para cerrar el modal y limpiar estados
   const handleCerrarReservaTemporal = useCallback(() => {
@@ -1329,13 +1342,20 @@ const selectedMatriculaRef = useRef<string>("all")
                  }
                  const estadoReserva = reservasActivas.get(selectedMatricula)
                  const bloqueadaPorVencida = !!estadoReserva?.vencida
+                 const bloqueadaPorBaneado = usuarioBaneado
                  return (
                   <Button
                     onClick={handleAbrirReservaTemporal}
-                    disabled={isReserving || isReleasing || bloqueadaPorVencida}
+                    disabled={isReserving || isReleasing || bloqueadaPorVencida || bloqueadaPorBaneado}
                     className="bg-blue-600 hover:bg-blue-700 text-white"
                     size="sm"
-                    title={bloqueadaPorVencida ? "Reserva vencida pendiente de completar" : "Crear reserva temporal"}
+                    title={
+                      bloqueadaPorBaneado
+                        ? "Usuario baneado: no puedes crear reservas"
+                        : bloqueadaPorVencida
+                          ? "Reserva vencida pendiente de completar"
+                          : "Crear reserva temporal"
+                    }
                   >
                     <Calendar className="h-4 w-4 mr-2" />
                     Reserva Temporal

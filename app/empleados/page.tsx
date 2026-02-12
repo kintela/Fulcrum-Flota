@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { Users, Plus } from "lucide-react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
@@ -85,7 +86,10 @@ export default async function EmpleadosPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {empleados.map((empleado) => (
-              <Card key={empleado.id} className="hover:shadow-lg transition-shadow">
+              <Card
+                key={empleado.id}
+                className={`hover:shadow-lg transition-shadow ${empleado.baneado ? "bg-gray-100 border-gray-300" : ""}`}
+              >
                 <CardHeader className="pb-3">
                   <div className="flex justify-between items-start">
                     <div>
@@ -93,12 +97,22 @@ export default async function EmpleadosPage() {
                         {empleado.nombre} {empleado.apellidos}
                       </CardTitle>
                       <p className="text-gray-600">{empleado.email}</p>
+                      {empleado.baneado && (
+                        <Badge variant="destructive" className="mt-2">
+                          Baneado
+                        </Badge>
+                      )}
                     </div>
                     <Users className="h-6 w-6 text-gray-400" />
                   </div>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2 mb-4">
+                    {empleado.baneado && (
+                      <div className="text-xs text-gray-600">
+                        Este empleado no puede crear nuevas reservas.
+                      </div>
+                    )}
                     {empleado.movil && (
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-500">Móvil:</span>

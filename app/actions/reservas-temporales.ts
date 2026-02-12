@@ -34,7 +34,7 @@ export async function crearReservaTemporal(data: CrearReservaData) {
     // Buscar el empleado por email
     const { data: empleado, error: empleadoError } = await supabase
       .from("empleados")
-      .select("id, nombre, apellidos")
+      .select("id, nombre, apellidos, baneado")
       .eq('email', session.user.email)
       .single()
     
@@ -42,6 +42,13 @@ export async function crearReservaTemporal(data: CrearReservaData) {
       return {
         success: false,
         error: "No se encontró el empleado asociado a este usuario"
+      }
+    }
+
+    if (empleado.baneado) {
+      return {
+        success: false,
+        error: "Tu usuario está baneado y no puede crear nuevas reservas"
       }
     }
 
