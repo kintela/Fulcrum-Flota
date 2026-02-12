@@ -82,7 +82,7 @@ export async function verificarReservasVencidas() {
         fecha_inicio,
         fecha_fin,
         estado,
-        notificacion_enviada,
+        notificacion_reserva_vencida_enviada,
         empleados!inner (
           nombre,
           apellidos,
@@ -96,7 +96,7 @@ export async function verificarReservasVencidas() {
         )
       `)
       .eq('estado', 'activa')
-      .or('notificacion_enviada.is.null,notificacion_enviada.eq.false')
+      .or('notificacion_reserva_vencida_enviada.is.null,notificacion_reserva_vencida_enviada.eq.false')
 
     if (error) {
       console.error('❌ Error consultando reservas activas:', error)
@@ -124,14 +124,14 @@ export async function verificarReservasVencidas() {
           console.log(`      Fecha parseada: ${fechaFin.toISOString()}`)
           console.log(`      Horas transcurridas: ${horasVencida.toFixed(2)}`)
           console.log(`      ¿Vencida? ${estaVencida}`)
-          console.log(`      Notificación enviada: ${reserva.notificacion_enviada}`)
+          console.log(`      Notificación enviada: ${reserva.notificacion_reserva_vencida_enviada}`)
           
           // Verificación doble para evitar duplicados
-          if (estaVencida && reserva.notificacion_enviada !== true) {
+          if (estaVencida && reserva.notificacion_reserva_vencida_enviada !== true) {
             reservasVencidas.push(reserva)
             console.log(`      ✅ Agregada para notificación`)
           } else {
-            console.log(`      ❌ No agregada (vencida: ${estaVencida}, notificada: ${reserva.notificacion_enviada})`)
+            console.log(`      ❌ No agregada (vencida: ${estaVencida}, notificada: ${reserva.notificacion_reserva_vencida_enviada})`)
           }
         } catch (error) {
           console.error(`❌ Error procesando reserva ${reserva.id}:`, error)
@@ -160,6 +160,21 @@ export async function verificarReservasVencidas() {
     for (const reserva of reservasVencidas) {
       try {
         console.log(`📨 Procesando reserva ${reserva.id} - ${reserva.matricula}`)
+
+        // Marcar la reserva como vencida en cuanto se detecta
+        try {
+          const { error: estadoError } = await supabase
+            .from('reservas')
+            .update({ estado: 'vencida' })
+            .eq('id', reserva.id)
+            .eq('estado', 'activa')
+
+          if (estadoError) {
+            console.error(`❌ Error marcando reserva ${reserva.id} como vencida:`, estadoError)
+          }
+        } catch (estadoError) {
+          console.error(`❌ Error inesperado marcando reserva ${reserva.id} como vencida:`, estadoError)
+        }
 
         // Validar fecha - usar tal como está en BD
         if (!reserva.fecha_fin || reserva.fecha_fin === null) {
@@ -287,8 +302,8 @@ export async function verificarReservasVencidas() {
           const { error: updateError } = await supabase
             .from('reservas')
             .update({ 
-              notificacion_enviada: true,
-              fecha_notificacion: ahora.toISOString()
+              notificacion_reserva_vencida_enviada: true,
+              fecha_notificacion_reserva_vencida: ahora.toISOString()
             })
             .eq('id', reserva.id)
 
@@ -354,7 +369,7 @@ export async function obtenerEstadisticasNotificaciones() {
     // Contar reservas vencidas en las últimas 24 horas
     const { data: reservasVencidas, error: errorVencidas } = await supabase
       .from("reservas")
-      .select('id, notificacion_enviada')
+      .select('id, notificacion_reserva_vencida_enviada')
       .eq('estado', 'activa')
       .lt('fecha_fin', ahora.toISOString())
       .gte('fecha_fin', hace24Horas.toISOString())
@@ -364,7 +379,7 @@ export async function obtenerEstadisticasNotificaciones() {
     }
 
     const totalVencidas = reservasVencidas?.length || 0
-    const notificadas = reservasVencidas?.filter(r => r.notificacion_enviada).length || 0
+    const notificadas = reservasVencidas?.filter(r => r.notificacion_reserva_vencida_enviada).length || 0
     const pendientes = totalVencidas - notificadas
 
     return {

@@ -23,8 +23,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         fecha_inicio,
         fecha_fin,
         estado,
-        notificacion_enviada,
-        fecha_notificacion,
+        notificacion_reserva_vencida_enviada,
+        fecha_notificacion_reserva_vencida,
         updated_at,
         empleados!inner (
           id,
@@ -111,17 +111,17 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       
       analisis: {
         estaVencida: estaVencida,
-        deberiaNotificarse: estaVencida && reserva.estado === 'activa' && !reserva.notificacion_enviada,
-        yaFueNotificada: reserva.notificacion_enviada,
+        deberiaNotificarse: estaVencida && reserva.estado === 'activa' && !reserva.notificacion_reserva_vencida_enviada,
+        yaFueNotificada: reserva.notificacion_reserva_vencida_enviada,
         estadoReserva: reserva.estado,
-        seEstaEnviandoDuplicados: reserva.notificacion_enviada && 
-          reserva.fecha_notificacion && 
-          new Date().getTime() - new Date(reserva.fecha_notificacion).getTime() > 60000
+        seEstaEnviandoDuplicados: reserva.notificacion_reserva_vencida_enviada && 
+          reserva.fecha_notificacion_reserva_vencida && 
+          new Date().getTime() - new Date(reserva.fecha_notificacion_reserva_vencida).getTime() > 60000
       },
       
       accionRecomendada: (() => {
         if (!estaVencida) return 'Reserva aún no ha vencido - no requiere acción'
-        if (reserva.notificacion_enviada) return 'Reserva ya notificada - verificar por qué podría estar enviando duplicados'
+        if (reserva.notificacion_reserva_vencida_enviada) return 'Reserva ya notificada - verificar por qué podría estar enviando duplicados'
         if (reserva.estado !== 'activa') return `Reserva en estado '${reserva.estado}' - no se notificará`
         return 'Reserva vencida pendiente de notificación - se debería notificar'
       })()

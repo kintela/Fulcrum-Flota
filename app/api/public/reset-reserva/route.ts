@@ -19,8 +19,8 @@ export async function POST(request: NextRequest) {
     const { data, error } = await supabase
       .from('reservas')
       .update({ 
-        notificacion_enviada: false,
-        fecha_notificacion: null,
+        notificacion_reserva_vencida_enviada: false,
+        fecha_notificacion_reserva_vencida: null,
         estado: 'activa'
       })
       .eq('id', reservaId)

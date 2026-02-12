@@ -11,8 +11,8 @@ export async function POST() {
     const { error: updateError } = await supabase
       .from('reservas')
       .update({ 
-        notificacion_enviada: true,
-        fecha_notificacion: ahora.toISOString()
+        notificacion_reserva_vencida_enviada: true,
+        fecha_notificacion_reserva_vencida: ahora.toISOString()
       })
       .eq('id', 12)
 
@@ -27,7 +27,7 @@ export async function POST() {
     // Verificar que se actualizó correctamente
     const { data: reservaActualizada, error: verificarError } = await supabase
       .from('reservas')
-      .select('id, notificacion_enviada, fecha_notificacion, estado')
+      .select('id, notificacion_reserva_vencida_enviada, fecha_notificacion_reserva_vencida, estado')
       .eq('id', 12)
       .single()
 
@@ -36,8 +36,8 @@ export async function POST() {
       message: 'Reserva marcada como notificada - SPAM DETENIDO',
       timestamp: ahora.toISOString(),
       reservaAntes: {
-        notificacion_enviada: false,
-        fecha_notificacion: null,
+        notificacion_reserva_vencida_enviada: false,
+        fecha_notificacion_reserva_vencida: null,
         estado: 'activa'
       },
       reservaDespues: reservaActualizada

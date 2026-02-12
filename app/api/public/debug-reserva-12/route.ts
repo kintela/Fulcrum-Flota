@@ -17,8 +17,8 @@ export async function GET() {
         empleado_id,
         fecha_fin,
         estado,
-        notificacion_enviada,
-        fecha_notificacion,
+        notificacion_reserva_vencida_enviada,
+        fecha_notificacion_reserva_vencida,
         empleados!inner (
           id,
           nombre,
@@ -41,7 +41,7 @@ export async function GET() {
     const fechaFin = new Date(reserva12.fecha_fin)
     const horasTranscurridas = (ahora.getTime() - fechaFin.getTime()) / (1000 * 60 * 60)
     const estaVencida = fechaFin < haceUnaHora
-    const deberiaNotificar = estaVencida && reserva12.estado === 'activa' && !reserva12.notificacion_enviada
+    const deberiaNotificar = estaVencida && reserva12.estado === 'activa' && !reserva12.notificacion_reserva_vencida_enviada
 
     // 3. También buscar TODAS las reservas activas sin notificar para comparar
     const { data: todasReservasActivas, error: errorTodas } = await supabase
@@ -52,7 +52,7 @@ export async function GET() {
         empleado_id,
         fecha_fin,
         estado,
-        notificacion_enviada,
+        notificacion_reserva_vencida_enviada,
         empleados!inner (
           nombre,
           apellidos,
@@ -61,7 +61,7 @@ export async function GET() {
         )
       `)
       .eq('estado', 'activa')
-      .is('notificacion_enviada', null)
+      .is('notificacion_reserva_vencida_enviada', null)
 
     const diagnostico = {
       timestamp: ahora.toISOString(),
@@ -75,12 +75,12 @@ export async function GET() {
         horasTranscurridasDesdeFinalizacion: Math.round(horasTranscurridas * 100) / 100,
         estaVencida: estaVencida,
         estadoReserva: reserva12.estado,
-        notificacionEnviada: reserva12.notificacion_enviada,
+        notificacionEnviada: reserva12.notificacion_reserva_vencida_enviada,
         deberiaNotificar: deberiaNotificar,
         razonNoNotificar: !deberiaNotificar ? (
           !estaVencida ? 'No está vencida aún' :
           reserva12.estado !== 'activa' ? `Estado no es activa: ${reserva12.estado}` :
-          reserva12.notificacion_enviada ? 'Ya fue notificada' :
+          reserva12.notificacion_reserva_vencida_enviada ? 'Ya fue notificada' :
           'Razón desconocida'
         ) : null
       },
@@ -103,7 +103,7 @@ export async function GET() {
           empleado_id: r.empleado_id,
           fecha_fin: r.fecha_fin,
           estado: r.estado,
-          notificacion_enviada: r.notificacion_enviada
+          notificacion_reserva_vencida_enviada: r.notificacion_reserva_vencida_enviada
         })) || []
       }
     }

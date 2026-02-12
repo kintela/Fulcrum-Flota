@@ -14,8 +14,8 @@ export async function GET() {
         fecha_inicio,
         fecha_fin,
         estado,
-        notificacion_enviada,
-        fecha_notificacion,
+        notificacion_reserva_vencida_enviada,
+        fecha_notificacion_reserva_vencida,
         updated_at,
         empleados!inner (
           id,
@@ -58,11 +58,11 @@ export async function GET() {
       
       problema: {
         deberiaEstarNotificada: true,
-        seEstaEnviandoDuplicados: reserva.notificacion_enviada && new Date().getTime() - new Date(reserva.fecha_notificacion || 0).getTime() > 60000,
+        seEstaEnviandoDuplicados: reserva.notificacion_reserva_vencida_enviada && new Date().getTime() - new Date(reserva.fecha_notificacion_reserva_vencida || 0).getTime() > 60000,
         calculoHorasIncorrecto: Math.abs(horasReales - 4.0) > 0.5
       },
       
-      accionRecomendada: reserva.notificacion_enviada ? 
+      accionRecomendada: reserva.notificacion_reserva_vencida_enviada ? 
         'Reserva ya notificada - verificar por qué sigue enviando duplicados' :
         'Marcar como notificada inmediatamente para detener spam'
     }

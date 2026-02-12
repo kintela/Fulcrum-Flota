@@ -9,8 +9,8 @@ export async function POST() {
     const { data: reservaReset, error } = await supabase
       .from('reservas')
       .update({
-        notificacion_enviada: false,
-        fecha_notificacion: null,
+        notificacion_reserva_vencida_enviada: false,
+        fecha_notificacion_reserva_vencida: null,
         estado: 'activa'
       })
       .eq('id', 12)

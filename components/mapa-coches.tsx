@@ -277,7 +277,7 @@ const selectedMatriculaRef = useRef<string>("all")
           .from("reservas")
           .select("id, estado, fecha_inicio, fecha_fin, bloqueo_desde, margen_bloqueo, empleado_id")
           .eq("matricula", matricula)
-          .in("estado", ["activa", "pendiente"])
+          .in("estado", ["activa", "pendiente", "vencida"])
 
         if (error) {
           console.warn(`Error verificando reservas para ${matricula}:`, error)

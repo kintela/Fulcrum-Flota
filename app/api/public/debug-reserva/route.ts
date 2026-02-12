@@ -20,8 +20,8 @@ export async function GET(request: NextRequest) {
         empleado_id,
         fecha_fin,
         estado,
-        notificacion_enviada,
-        fecha_notificacion,
+        notificacion_reserva_vencida_enviada,
+        fecha_notificacion_reserva_vencida,
         empleados!inner (
           id,
           nombre,
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
         fechaFinLocal: fechaFin.toLocaleString('es-ES', { timeZone: 'Europe/Madrid' }),
         horasTranscurridas: Math.round(horasTranscurridas * 100) / 100,
         estaVencida,
-        deberiaNotificar: estaVencida && reserva.estado === 'activa' && !reserva.notificacion_enviada
+        deberiaNotificar: estaVencida && reserva.estado === 'activa' && !reserva.notificacion_reserva_vencida_enviada
       },
       
       configuracion: {
@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
       
       razonNoNotificacion: !estaVencida ? 'No está vencida aún' :
                           reserva.estado !== 'activa' ? `Estado: ${reserva.estado}` :
-                          reserva.notificacion_enviada ? 'Ya fue notificada' :
+                          reserva.notificacion_reserva_vencida_enviada ? 'Ya fue notificada' :
                           '¡Debería ser notificada!'
     }
 

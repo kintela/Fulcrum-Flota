@@ -374,7 +374,7 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
           .from("reservas")
           .select("fecha_inicio, fecha_fin, bloqueo_desde")
           .eq("matricula", matricula)
-          .in("estado", ["activa", "pendiente"])
+          .in("estado", ["activa", "pendiente", "vencida"])
 
         if (error || !data) {
           console.warn("No se pudieron cargar bloqueos de reservas:", error)

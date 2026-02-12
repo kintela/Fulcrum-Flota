@@ -44,7 +44,7 @@ export async function verificarReservasVencidasForzado() {
         fecha_inicio,
         fecha_fin,
         estado,
-        notificacion_enviada,
+        notificacion_reserva_vencida_enviada,
         empleados!inner (
           nombre,
           apellidos,
@@ -58,7 +58,7 @@ export async function verificarReservasVencidasForzado() {
         )
       `)
       .eq('estado', 'activa')
-      .or('notificacion_enviada.is.null,notificacion_enviada.eq.false')
+      .or('notificacion_reserva_vencida_enviada.is.null,notificacion_reserva_vencida_enviada.eq.false')
 
     if (error) {
       console.error('❌ Error consultando reservas activas:', error)
@@ -85,13 +85,13 @@ export async function verificarReservasVencidasForzado() {
           console.log(`      Fecha parseada: ${fechaFin.toISOString()}`)
           console.log(`      Horas transcurridas: ${horasVencida.toFixed(2)}`)
           console.log(`      ¿Vencida? ${estaVencida}`)
-          console.log(`      Notificación enviada: ${reserva.notificacion_enviada}`)
+          console.log(`      Notificación enviada: ${reserva.notificacion_reserva_vencida_enviada}`)
           
-          if (estaVencida && reserva.notificacion_enviada !== true) {
+          if (estaVencida && reserva.notificacion_reserva_vencida_enviada !== true) {
             reservasVencidas.push(reserva)
             console.log(`      ✅ Agregada para notificación`)
           } else {
-            console.log(`      ❌ No agregada (vencida: ${estaVencida}, notificada: ${reserva.notificacion_enviada})`)
+            console.log(`      ❌ No agregada (vencida: ${estaVencida}, notificada: ${reserva.notificacion_reserva_vencida_enviada})`)
           }
         } catch (error) {
           console.error(`❌ Error procesando reserva ${reserva.id}:`, error)
@@ -212,8 +212,8 @@ export async function verificarReservasVencidasForzado() {
           const { error: updateError } = await supabase
             .from('reservas')
             .update({ 
-              notificacion_enviada: true,
-              fecha_notificacion: ahora.toISOString()
+              notificacion_reserva_vencida_enviada: true,
+              fecha_notificacion_reserva_vencida: ahora.toISOString()
             })
             .eq('id', reserva.id)
 
