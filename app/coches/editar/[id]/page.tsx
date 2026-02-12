@@ -14,6 +14,7 @@ import { SeguroManager } from "@/components/seguro-manager"
 import { SolredManager } from "@/components/solred-manager"
 import { ViatManager } from "@/components/viat-manager"
 import { ITVManager } from "@/components/itv-manager"
+import { MantenimientoManager } from "@/components/mantenimiento-manager"
 import { FotosManager } from "@/components/fotos-manager"
 
 async function getCoche(matricula: string) {
@@ -174,6 +175,9 @@ export default async function EditarCochePage({ params }: { params: { id: string
 
             {/* Gestión de ITVs */}
             <ITVManager matricula={coche.matricula} isEditing />
+
+            {/* Gestión de Mantenimientos */}
+            <MantenimientoManager matricula={coche.matricula} isEditing />
 
             {/* Gestión de SOLRED */}
             <SolredManager matricula={coche.matricula} />

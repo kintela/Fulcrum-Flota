@@ -3,6 +3,7 @@ import { ArrowLeft, Car, Calendar, User, Wrench, CreditCard } from "lucide-react
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 import { FotosManager } from "@/components/fotos-manager"
+import { MantenimientoManager } from "@/components/mantenimiento-manager"
 
 async function getCoche(id: string) {
   if (!id || id === "undefined") {
@@ -296,6 +297,11 @@ export default async function CocheDetailPage({ params }: CocheDetailPageProps) 
         {/* Fotos del vehículo */}
         <div className="mt-6">
           <FotosManager matricula={coche.matricula} isEditing={false} />
+        </div>
+
+        {/* Mantenimientos */}
+        <div className="mt-6">
+          <MantenimientoManager matricula={coche.matricula} isEditing />
         </div>
       </div>
     </div>
