@@ -13,14 +13,35 @@ export async function editarEmpleado(id: number, formData: FormData) {
       }
     }
 
+    // Obtener rol actual del empleado para no perderlo si no viene en el formulario
+    const { data: empleadoActual, error: empleadoActualError } = await supabase
+      .from("empleados")
+      .select("role")
+      .eq("id", id)
+      .single()
+
+    if (empleadoActualError || !empleadoActual) {
+      console.error("Error obteniendo rol actual:", empleadoActualError)
+      return {
+        success: false,
+        error: "No se pudo obtener el rol actual del empleado",
+      }
+    }
+
+    const roleFromForm = (formData.get("role") as string) || empleadoActual.role || "usuario"
+    const allowedRoles = ["usuario", "administrador", "admin"]
+    const roleFinal = allowedRoles.includes(roleFromForm) ? roleFromForm : "usuario"
+
     // Extraer datos del formulario
     const empleadoData: any = {
       nombre: formData.get("nombre") as string,
       apellidos: formData.get("apellidos") as string,
       email: formData.get("email") as string,
       movil: (formData.get("movil") as string) || null,
-      role: (formData.get("role") as string) || "usuario", // Añadir campo role
-      baneado: formData.get("baneado") === "on",
+      role: roleFinal,
+      baneado: roleFinal === "administrador" || roleFinal === "admin"
+        ? false
+        : formData.get("baneado") === "on",
     }
 
     // Solo incluir contraseña si se proporciona una nueva
