@@ -20,6 +20,7 @@ export async function editarEmpleado(id: number, formData: FormData) {
       email: formData.get("email") as string,
       movil: (formData.get("movil") as string) || null,
       role: (formData.get("role") as string) || "usuario", // Añadir campo role
+      baneado: formData.get("baneado") === "on",
     }
 
     // Solo incluir contraseña si se proporciona una nueva
