@@ -22,6 +22,7 @@ export default function EditarEmpleadoPage({ params }: EditarEmpleadoPageProps) 
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [empleado, setEmpleado] = useState<any>(null)
+  const [role, setRole] = useState("usuario")
   const router = useRouter()
 
   useEffect(() => {
@@ -37,6 +38,7 @@ export default function EditarEmpleadoPage({ params }: EditarEmpleadoPageProps) 
 
         if (empleadoData) {
           setEmpleado(empleadoData)
+          setRole(String(empleadoData.role || "usuario"))
         } else {
           setError(`No se encontró el empleado con ID ${params.id}`)
         }
@@ -104,12 +106,15 @@ export default function EditarEmpleadoPage({ params }: EditarEmpleadoPageProps) 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
       <div className="max-w-4xl mx-auto">
-        <div className="flex items-center mb-8">
-          <Link href="/empleados" className="flex items-center text-gray-600 hover:text-gray-900 mr-4">
+        <div className="relative mb-8">
+          <Link
+            href="/empleados"
+            className="absolute right-0 top-0 flex items-center text-gray-600 hover:text-gray-900"
+          >
             <ArrowLeft className="h-5 w-5 mr-2" />
             Volver a Empleados
           </Link>
-          <div>
+          <div className="text-center">
             <h1 className="text-3xl font-bold text-gray-900">Editar Empleado</h1>
             <p className="text-gray-600">
               Modifica los datos de {empleado.nombre} {empleado.apellidos}
@@ -180,19 +185,23 @@ export default function EditarEmpleadoPage({ params }: EditarEmpleadoPageProps) 
                   />
                 </div>
 
-                <div className="md:col-span-2">
-                  <Label htmlFor="contraseña">Nueva Contraseña</Label>
-                  <Input
-                    id="contraseña"
-                    name="contraseña"
-                    type="password"
-                    placeholder="Dejar vacío para mantener la actual"
-                    minLength={6}
-                    className="mt-1"
-                  />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <Label htmlFor="role">Rol</Label>
+                  <select
+                    id="role"
+                    name="role"
+                    value={role}
+                    onChange={(e) => setRole(e.target.value)}
+                    className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="usuario">Usuario</option>
+                    <option value="administrador">Administrador</option>
+                  </select>
                   <p className="text-sm text-gray-500 mt-1">
-                    Dejar vacío para mantener la contraseña actual. Si se introduce una nueva, debe tener mínimo 6
-                    caracteres.
+                    Cambia el rol del empleado si es necesario.
                   </p>
                 </div>
               </div>
@@ -203,14 +212,14 @@ export default function EditarEmpleadoPage({ params }: EditarEmpleadoPageProps) 
                     id="baneado"
                     name="baneado"
                     defaultChecked={!!empleado.baneado}
-                    disabled={String(empleado.role || "").toLowerCase() === "administrador" || String(empleado.role || "").toLowerCase() === "admin"}
+                    disabled={String(role || "").toLowerCase() === "administrador" || String(role || "").toLowerCase() === "admin"}
                   />
                   <div>
                     <Label htmlFor="baneado" className="text-sm font-medium">
                       Empleado baneado
                     </Label>
                     <p className="text-xs text-gray-600 mt-1">
-                      {String(empleado.role || "").toLowerCase() === "administrador" || String(empleado.role || "").toLowerCase() === "admin"
+                      {String(role || "").toLowerCase() === "administrador" || String(role || "").toLowerCase() === "admin"
                         ? "Los administradores no pueden ser baneados."
                         : "Un empleado baneado no puede crear nuevas reservas."}
                     </p>

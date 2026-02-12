@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Users, Plus } from "lucide-react"
+import { Users, Plus, ShieldCheck } from "lucide-react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 
@@ -85,10 +85,19 @@ export default async function EmpleadosPage() {
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {empleados.map((empleado) => (
+            {empleados.map((empleado) => {
+              const roleLower = String(empleado.role || "").toLowerCase()
+              const isAdmin = roleLower === "administrador" || roleLower === "admin"
+              return (
               <Card
                 key={empleado.id}
-                className={`hover:shadow-lg transition-shadow ${empleado.baneado ? "bg-gray-100 border-gray-300" : ""}`}
+                className={`hover:shadow-lg transition-shadow ${
+                  empleado.baneado
+                    ? "bg-gray-100 border-gray-300"
+                    : isAdmin
+                      ? "bg-blue-50 border-blue-200"
+                      : ""
+                }`}
               >
                 <CardHeader className="pb-3">
                   <div className="flex justify-between items-start">
@@ -97,13 +106,25 @@ export default async function EmpleadosPage() {
                         {empleado.nombre} {empleado.apellidos}
                       </CardTitle>
                       <p className="text-gray-600">{empleado.email}</p>
-                      {empleado.baneado && (
-                        <Badge variant="destructive" className="mt-2">
-                          Baneado
-                        </Badge>
-                      )}
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {isAdmin && (
+                          <Badge className="bg-blue-600 text-white">
+                            <ShieldCheck className="h-3 w-3 mr-1" />
+                            Administrador
+                          </Badge>
+                        )}
+                        {empleado.baneado && (
+                          <Badge variant="destructive">
+                            Baneado
+                          </Badge>
+                        )}
+                      </div>
                     </div>
-                    <Users className="h-6 w-6 text-gray-400" />
+                    {isAdmin ? (
+                      <ShieldCheck className="h-6 w-6 text-blue-600" />
+                    ) : (
+                      <Users className="h-6 w-6 text-gray-400" />
+                    )}
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -156,7 +177,7 @@ export default async function EmpleadosPage() {
                   </div>
                 </CardContent>
               </Card>
-            ))}
+            )})}
           </div>
         )}
       </div>
