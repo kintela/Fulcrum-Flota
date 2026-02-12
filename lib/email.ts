@@ -442,3 +442,130 @@ Este es un mensaje automático.
     return { success: false, error: error instanceof Error ? error.message : 'Error desconocido' }
   }
 }
+
+// Email de alertas ITV (vencidas y próximas)
+export async function enviarEmailAlertasITV(
+  emailDestino: string | string[],
+  payload: {
+    vencidas: Array<{
+      matricula: string
+      marca: string
+      modelo: string
+      fechaproximarevision: string
+      dias?: number
+    }>
+    proximas: Array<{
+      matricula: string
+      marca: string
+      modelo: string
+      fechaproximarevision: string
+      dias?: number
+    }>
+    fechaLimite: Date
+  }
+) {
+  try {
+    const transporter = createEmailTransporter()
+
+    const formatDate = (fecha: string) =>
+      new Date(fecha).toLocaleDateString("es-ES", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      })
+
+    const renderLista = (
+      items: Array<{ matricula: string; marca: string; modelo: string; fechaproximarevision: string; dias?: number }>,
+      tipo: "vencida" | "proxima"
+    ) => {
+      if (items.length === 0) return ""
+      const titulo = tipo === "vencida" ? "ITVs Vencidas" : "ITVs Próximas (≤ 30 días)"
+      const color = tipo === "vencida" ? "#ef4444" : "#f59e0b"
+      const descripcion =
+        tipo === "vencida"
+          ? "Estas ITVs ya superaron la fecha de próxima revisión."
+          : "Estas ITVs están dentro del plazo de 30 días para la próxima revisión."
+
+      return `
+        <div style="margin: 20px 0;">
+          <h3 style="color: ${color}; margin-bottom: 6px;">${titulo} (${items.length})</h3>
+          <p style="margin: 0 0 10px 0; color: #6b7280; font-size: 13px;">${descripcion}</p>
+          <table style="width:100%; border-collapse: collapse; font-size: 14px;">
+            <thead>
+              <tr style="text-align:left; background:#f3f4f6;">
+                <th style="padding:8px;">Vehículo</th>
+                <th style="padding:8px;">Próxima revisión</th>
+                <th style="padding:8px;">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${items
+                .map((itv) => {
+                  const dias = typeof itv.dias === "number" ? itv.dias : null
+                  const estadoTexto =
+                    tipo === "vencida"
+                      ? `Vencida hace ${Math.abs(dias ?? 0)} días`
+                      : `En ${dias ?? ""} días`
+                  return `
+                    <tr style="border-bottom:1px solid #e5e7eb;">
+                      <td style="padding:8px;">${itv.matricula} · ${itv.marca} ${itv.modelo}</td>
+                      <td style="padding:8px;">${formatDate(itv.fechaproximarevision)}</td>
+                      <td style="padding:8px; color:${color}; font-weight:600;">${estadoTexto}</td>
+                    </tr>
+                  `
+                })
+                .join("")}
+            </tbody>
+          </table>
+        </div>
+      `
+    }
+
+    const contenidoHTML = `
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Alertas ITV</title>
+      </head>
+      <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background:#f5f5f5; padding:20px;">
+        <div style="max-width:600px; margin:0 auto; background:#ffffff; border-radius:10px; padding:24px; box-shadow:0 2px 10px rgba(0,0,0,0.08);">
+          <h2 style="margin:0 0 8px 0; color:#111827;">🚗 Alertas ITV</h2>
+          <p style="margin:0 0 16px 0; color:#6b7280;">
+            Resumen de ITVs vencidas y próximas a vencer (hasta ${payload.fechaLimite.toLocaleDateString("es-ES")}).
+          </p>
+          ${renderLista(payload.vencidas, "vencida")}
+          ${renderLista(payload.proximas, "proxima")}
+          <p style="margin-top:24px; color:#9ca3af; font-size:12px;">
+            Este es un mensaje automático. Por favor, no responda a este email.
+          </p>
+        </div>
+      </body>
+      </html>
+    `
+
+    const asunto = `📅 Alertas ITV · Vencidas: ${payload.vencidas.length} · Próximas: ${payload.proximas.length}`
+
+    const destinatarios = Array.isArray(emailDestino) ? emailDestino : [emailDestino]
+    const opcionesEnvio: any = {
+      from: { name: fromName, address: fromEmail },
+      subject: asunto,
+      html: contenidoHTML,
+    }
+
+    opcionesEnvio.to = destinatarios.length > 1 ? destinatarios : destinatarios[0]
+
+    const info = await transporter.sendMail(opcionesEnvio)
+
+    console.log("📧 Email alertas ITV enviado:", info.messageId)
+
+    return { success: true, messageId: info.messageId }
+  } catch (error) {
+    console.error("❌ Error enviando email alertas ITV:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Error enviando email de alertas ITV",
+    }
+  }
+}

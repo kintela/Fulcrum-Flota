@@ -173,7 +173,7 @@ export default async function EditarCochePage({ params }: { params: { id: string
             <SeguroManager matricula={coche.matricula} />
 
             {/* Gestión de ITVs */}
-            <ITVManager matricula={coche.matricula} />
+            <ITVManager matricula={coche.matricula} isEditing />
 
             {/* Gestión de SOLRED */}
             <SolredManager matricula={coche.matricula} />

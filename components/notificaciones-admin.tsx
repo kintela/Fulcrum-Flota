@@ -22,11 +22,24 @@ interface ResultadoPrueba {
   timestamp: string
 }
 
+interface ResultadoITV {
+  success: boolean
+  message: string
+  data?: {
+    itvsVencidas: number
+    itvsProximas: number
+    notificacionesEnviadas: number
+    erroresEnvio: number
+  }
+  timestamp: string
+}
+
 export default function NotificacionesAdmin() {
   const [cargando, setCargando] = useState(false)
   const [resultado, setResultado] = useState<ResultadoPrueba | null>(null)
   const [estadisticas, setEstadisticas] = useState<EstadisticasNotificaciones | null>(null)
   const [resultadoActivacion, setResultadoActivacion] = useState<any | null>(null)
+  const [resultadoITV, setResultadoITV] = useState<ResultadoITV | null>(null)
 
   const probarConfiguracion = async () => {
     setCargando(true)
@@ -105,6 +118,29 @@ export default function NotificacionesAdmin() {
       setResultadoActivacion(data)
     } catch (e:any) {
       setResultadoActivacion({ success:false, error:'Error ejecutando activación', details: e?.message, timestamp: new Date().toISOString() })
+    }
+    setCargando(false)
+  }
+
+  const ejecutarAlertasITV = async () => {
+    setCargando(true)
+    try {
+      const response = await fetch('/api/cron/itv-alertas', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: 'run' })
+      })
+
+      const data = await response.json()
+      setResultadoITV(data)
+    } catch (error) {
+      setResultadoITV({
+        success: false,
+        message: 'Error ejecutando alertas ITV',
+        timestamp: new Date().toISOString()
+      })
     }
     setCargando(false)
   }
@@ -288,10 +324,29 @@ export default function NotificacionesAdmin() {
             </Button>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Alertas ITV</CardTitle>
+            <CardDescription>
+              Ejecuta ahora las alertas de ITVs vencidas y próximas
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              onClick={ejecutarAlertasITV}
+              disabled={cargando}
+              variant="secondary"
+              className="w-full"
+            >
+              {cargando ? 'Ejecutando...' : 'Ejecutar ITV'}
+            </Button>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Resultados combinados */}
-      {(resultado || resultadoActivacion) && (
+      {(resultado || resultadoActivacion || resultadoITV) && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -352,6 +407,30 @@ export default function NotificacionesAdmin() {
                   <div className="text-muted-foreground text-xs flex gap-4 mt-1">
                     {resultadoActivacion.emailsEnviados !== undefined && <span>Emails: {resultadoActivacion.emailsEnviados}</span>}
                     {resultadoActivacion.whatsappsEnviados !== undefined && <span>WhatsApps: {resultadoActivacion.whatsappsEnviados}</span>}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {resultadoITV && (
+              <div className="space-y-2 border-t pt-4">
+                <div className="flex items-center justify-between">
+                  <div className="font-semibold">Alertas ITV</div>
+                  <div className="text-xs text-muted-foreground">
+                    Ejecutado el {new Date(resultadoITV.timestamp).toLocaleString('es-ES')}
+                  </div>
+                </div>
+                <p className={resultadoITV.success ? 'text-green-600' : 'text-red-600'}>
+                  {resultadoITV.message}
+                </p>
+                {resultadoITV.data && (
+                  <div className="grid gap-2 text-sm text-muted-foreground">
+                    <div>ITVs vencidas: {resultadoITV.data.itvsVencidas}</div>
+                    <div>ITVs próximas: {resultadoITV.data.itvsProximas}</div>
+                    <div>Notificaciones enviadas: {resultadoITV.data.notificacionesEnviadas}</div>
+                    {resultadoITV.data.erroresEnvio > 0 && (
+                      <div className="text-red-600">Errores de envío: {resultadoITV.data.erroresEnvio}</div>
+                    )}
                   </div>
                 )}
               </div>
