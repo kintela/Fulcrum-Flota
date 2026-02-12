@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
       fecha_inicio: new Date(fechaVencida.getTime() - (8 * 60 * 60 * 1000)).toISOString(), // 8 horas antes
       fecha_fin: fechaVencida.toISOString(),
       estado: 'activa',
-      notificacion_enviada: null
+      notificacion_reserva_vencida_enviada: null
     }
 
     console.log('📝 Creando reserva de prueba:', reservaPrueba)

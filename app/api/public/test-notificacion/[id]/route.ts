@@ -39,8 +39,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         fecha_inicio,
         fecha_fin,
         estado,
-        notificacion_enviada,
-        fecha_notificacion,
+        notificacion_reserva_vencida_enviada,
+        fecha_notificacion_reserva_vencida,
         updated_at,
         empleados!inner (
           id,

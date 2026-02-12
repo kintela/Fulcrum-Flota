@@ -307,8 +307,8 @@ export async function completarReserva(
     if (reservaError || !reserva) {
       return { success: false, error: 'Reserva no encontrada o no autorizada' }
     }
-    if (reserva.estado !== 'activa') {
-      return { success: false, error: 'Sólo se pueden completar reservas activas' }
+    if (reserva.estado !== 'activa' && reserva.estado !== 'vencida') {
+      return { success: false, error: 'Sólo se pueden completar reservas activas o vencidas' }
     }
     const updateData: any = { estado: 'completada' }
     const obs = observacion?.trim()
@@ -400,7 +400,7 @@ export async function ampliarReservaTemporal(reservaId: number, nuevaFechaFin: s
       .from("reservas")
       .select("id, fecha_inicio, fecha_fin, bloqueo_desde")
       .eq("matricula", reserva.matricula)
-      .in("estado", ["activa", "pendiente"])
+      .in("estado", ["activa", "pendiente", "vencida"])
       .neq("id", reservaId)
 
     if (otrasError) {
@@ -485,7 +485,7 @@ export async function activarReservasPendientes(opciones?: { manual?: boolean })
     // Nota: reducimos el SELECT para evitar fallar si ciertos campos no existen todavía (ej: whatsapp)
     const { data: pendientes, error } = await supabase
       .from('reservas')
-      .select('id, fecha_inicio, fecha_fin, matricula, empleado_id, coches(marca,modelo), empleados(email,nombre,apellidos,movil)')
+      .select('id, fecha_inicio, fecha_fin, matricula, empleado_id, notificacion_inicio_reserva_enviada, fecha_notificacion_inicio_reserva, coches(marca,modelo), empleados(email,nombre,apellidos,movil)')
       .eq('estado', 'pendiente')
       .lte('fecha_inicio', umbralAviso.toISOString())
 
@@ -520,7 +520,7 @@ export async function activarReservasPendientes(opciones?: { manual?: boolean })
         const email = (r as any).empleados?.email
         const nombre = (r as any).empleados?.nombre || ''
         const coche = (r as any).coches
-        if (email && coche) {
+        if (email && coche && !(r as any).notificacion_inicio_reserva_enviada) {
           const resEmail = await enviarEmailInicioReserva(
             email,
             nombre,
@@ -530,6 +530,13 @@ export async function activarReservasPendientes(opciones?: { manual?: boolean })
           )
           if (resEmail.success) {
             emailsEnviados++
+            await supabase
+              .from('reservas')
+              .update({ 
+                notificacion_inicio_reserva_enviada: true,
+                fecha_notificacion_inicio_reserva: new Date().toISOString()
+              })
+              .eq('id', r.id)
           }
         }
         // Envío de WhatsApp solo en ejecución manual (no cron) y si hay teléfono

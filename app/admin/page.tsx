@@ -94,9 +94,13 @@ export default function AdminPage() {
                       Agrega campos de notificación a la tabla reservas_temporales
                     </p>
                     <code className="text-xs text-blue-800 dark:text-blue-200 mt-2 block">
-                      ALTER TABLE reservas_temporales ADD COLUMN notificacion_enviada BOOLEAN DEFAULT FALSE;
+                      ALTER TABLE reservas_temporales ADD COLUMN notificacion_inicio_reserva_enviada BOOLEAN DEFAULT FALSE;
                       <br />
-                      ALTER TABLE reservas_temporales ADD COLUMN fecha_notificacion TIMESTAMP WITH TIME ZONE;
+                      ALTER TABLE reservas_temporales ADD COLUMN fecha_notificacion_inicio_reserva TIMESTAMP WITH TIME ZONE;
+                      <br />
+                      ALTER TABLE reservas_temporales ADD COLUMN notificacion_reserva_vencida_enviada BOOLEAN DEFAULT FALSE;
+                      <br />
+                      ALTER TABLE reservas_temporales ADD COLUMN fecha_notificacion_reserva_vencida TIMESTAMP WITH TIME ZONE;
                     </code>
                   </div>
                 </div>

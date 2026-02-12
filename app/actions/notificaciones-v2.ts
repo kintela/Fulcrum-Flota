@@ -40,8 +40,8 @@ export async function verificarReservasVencidasV2() {
         empleado_id,
         fecha_fin,
         estado,
-        notificacion_enviada,
-        fecha_notificacion,
+        notificacion_reserva_vencida_enviada,
+        fecha_notificacion_reserva_vencida,
         empleados!inner (
           nombre,
           apellidos,
@@ -52,7 +52,7 @@ export async function verificarReservasVencidasV2() {
       .eq('estado', 'activa')
       .lt('fecha_fin', haceUnaHora.toISOString())
       // Solo buscar las que NO han sido notificadas
-      .or('notificacion_enviada.is.null,notificacion_enviada.eq.false')
+      .or('notificacion_reserva_vencida_enviada.is.null,notificacion_reserva_vencida_enviada.eq.false')
 
     if (error) {
       console.error('❌ Error consultando reservas candidatas:', error)
@@ -86,13 +86,14 @@ export async function verificarReservasVencidasV2() {
         const { data: reclamada, error: errorClaim } = await supabase
           .from('reservas')
           .update({ 
-            notificacion_enviada: `processing_${ejecutionId}`,
-            fecha_notificacion: ahora.toISOString()
+            estado: 'vencida',
+            notificacion_reserva_vencida_enviada: true,
+            fecha_notificacion_reserva_vencida: ahora.toISOString()
           })
           .eq('id', reserva.id)
           .eq('estado', 'activa')
           // Solo actualizar si NO ha sido procesada por otra ejecución
-          .or('notificacion_enviada.is.null,notificacion_enviada.eq.false')
+          .or('notificacion_reserva_vencida_enviada.is.null,notificacion_reserva_vencida_enviada.eq.false')
           .select()
 
         if (errorClaim || !reclamada || reclamada.length === 0) {
@@ -161,31 +162,18 @@ export async function verificarReservasVencidasV2() {
 
         // PASO 2.5: Finalizar el procesamiento
         if (emailEnviado || whatsappEnviado) {
-          // No cambiamos estado automáticamente; sólo marcamos notificación.
-          const { error: updateFinalError } = await supabase
-            .from('reservas')
-            .update({ 
-              notificacion_enviada: true
-            })
-            .eq('id', reserva.id)
-
-          if (updateFinalError) {
-            console.error(`❌ Error registrando notificación para reserva ${reserva.id}:`, updateFinalError)
-            erroresEnvio++
-          } else {
-            reservasNotificadas++
-            const canales = []
-            if (emailEnviado) canales.push('email')
-            if (whatsappEnviado) canales.push('WhatsApp')
-            console.log(`✅ Reserva ${reserva.id} notificada por ${canales.join(' y ')} (estado permanece ${reserva.estado})`)
-          }
+          reservasNotificadas++
+          const canales = []
+          if (emailEnviado) canales.push('email')
+          if (whatsappEnviado) canales.push('WhatsApp')
+          console.log(`✅ Reserva ${reserva.id} notificada por ${canales.join(' y ')} (estado permanece ${reserva.estado})`)
         } else {
           // Revertir el claim si no se pudo enviar nada
           await supabase
             .from('reservas')
             .update({ 
-              notificacion_enviada: false,
-              fecha_notificacion: null
+              notificacion_reserva_vencida_enviada: false,
+              fecha_notificacion_reserva_vencida: null
             })
             .eq('id', reserva.id)
           
@@ -202,8 +190,8 @@ export async function verificarReservasVencidasV2() {
           await supabase
             .from('reservas')
             .update({ 
-              notificacion_enviada: false,
-              fecha_notificacion: null
+              notificacion_reserva_vencida_enviada: false,
+              fecha_notificacion_reserva_vencida: null
             })
             .eq('id', reserva.id)
         } catch (revertError) {

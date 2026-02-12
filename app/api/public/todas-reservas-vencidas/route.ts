@@ -17,8 +17,8 @@ export async function GET() {
         empleado_id,
         fecha_fin,
         estado,
-        notificacion_enviada,
-        fecha_notificacion,
+        notificacion_reserva_vencida_enviada,
+        fecha_notificacion_reserva_vencida,
         empleados!inner (
           id,
           nombre,
@@ -53,10 +53,10 @@ export async function GET() {
         fechaFin: reserva.fecha_fin,
         fechaFinLocal: fechaFin.toLocaleString('es-ES', { timeZone: 'Europe/Madrid' }),
         estado: reserva.estado,
-        notificacion_enviada: reserva.notificacion_enviada,
+        notificacion_reserva_vencida_enviada: reserva.notificacion_reserva_vencida_enviada,
         horasTranscurridas: Math.round(horasTranscurridas * 100) / 100,
         estaVencida,
-        deberiaNotificar: estaVencida && reserva.estado === 'activa' && !reserva.notificacion_enviada
+        deberiaNotificar: estaVencida && reserva.estado === 'activa' && !reserva.notificacion_reserva_vencida_enviada
       }
     }) || []
 

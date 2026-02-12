@@ -2,13 +2,13 @@
 
 ## Descripción
 
-Sistema automatizado para notificar a los usuarios cuando tienen vehículos reservados que han excedido el tiempo límite (1 hora después de la finalización programada) y **marcarlas automáticamente como completadas**.
+Sistema automatizado para notificar a los usuarios cuando una reserva vence y para avisar al inicio de la reserva.
 
 ## Características
 
 - ✅ **Detección automática** de reservas vencidas
 - ✅ **Notificaciones por email** usando Office 365 SMTP
-- ✅ **Cambio automático de estado** a "completada" cuando se envía notificación
+- ✅ **Sin cambio automático de estado** (solo notificación)
 - ✅ **Plantillas HTML profesionales** para los emails
 - ✅ **Programación automática** con cron jobs
 - ✅ **Panel de administración** para monitoreo y pruebas
@@ -50,18 +50,27 @@ Ejecuta el siguiente script SQL en tu panel de Supabase:
 
 ```sql
 -- Agregar campos para el sistema de notificaciones
-ALTER TABLE reservas_temporales 
-ADD COLUMN IF NOT EXISTS notificacion_enviada BOOLEAN DEFAULT FALSE;
+ALTER TABLE reservas 
+ADD COLUMN IF NOT EXISTS notificacion_inicio_reserva_enviada BOOLEAN DEFAULT FALSE;
 
-ALTER TABLE reservas_temporales 
-ADD COLUMN IF NOT EXISTS fecha_notificacion TIMESTAMP WITH TIME ZONE;
+ALTER TABLE reservas 
+ADD COLUMN IF NOT EXISTS fecha_notificacion_inicio_reserva TIMESTAMP WITH TIME ZONE;
+
+ALTER TABLE reservas 
+ADD COLUMN IF NOT EXISTS notificacion_reserva_vencida_enviada BOOLEAN DEFAULT FALSE;
+
+ALTER TABLE reservas 
+ADD COLUMN IF NOT EXISTS fecha_notificacion_reserva_vencida TIMESTAMP WITH TIME ZONE;
 
 -- Crear índices para mejorar el rendimiento
 CREATE INDEX IF NOT EXISTS idx_reservas_notificacion 
-ON reservas_temporales(notificacion_enviada, fecha_fin);
+ON reservas(notificacion_reserva_vencida_enviada, fecha_fin);
 
-CREATE INDEX IF NOT EXISTS idx_reservas_fecha_notificacion 
-ON reservas_temporales(fecha_notificacion);
+CREATE INDEX IF NOT EXISTS idx_reservas_fecha_notificacion_reserva_vencida 
+ON reservas(fecha_notificacion_reserva_vencida);
+
+CREATE INDEX IF NOT EXISTS idx_reservas_fecha_notificacion_inicio 
+ON reservas(fecha_notificacion_inicio_reserva);
 ```
 
 ### 4. Instalación de Dependencias
@@ -155,9 +164,9 @@ scripts/
 ## Lógica de Funcionamiento
 
 1. **Verificación:** El sistema busca reservas que:
-   - Tengan `fecha_fin` anterior a hace 1 hora
+   - Tengan `fecha_fin` anterior o igual a ahora
    - Estén en estado "activa"
-   - No hayan sido notificadas (`notificacion_enviada = false`)
+   - No hayan sido notificadas (`notificacion_reserva_vencida_enviada = false`)
 
 2. **Notificación y Finalización:** Para cada reserva encontrada:
    - Envía email al usuario responsable

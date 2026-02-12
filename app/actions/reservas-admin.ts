@@ -295,11 +295,11 @@ export async function completarReservaTemporalAdmin(
       }
     }
 
-    // Solo permitir completar reservas activas vencidas
-    if (reserva.estado !== 'activa') {
+    // Solo permitir completar reservas activas o vencidas
+    if (reserva.estado !== 'activa' && reserva.estado !== 'vencida') {
       return {
         success: false,
-        error: "Solo se pueden completar reservas activas"
+        error: "Solo se pueden completar reservas activas o vencidas"
       }
     }
 

@@ -20,7 +20,7 @@ export async function GET() {
         empleado_id,
         fecha_fin,
         estado,
-        notificacion_enviada,
+        notificacion_reserva_vencida_enviada,
         empleados!inner (
           nombre,
           apellidos,
@@ -29,7 +29,7 @@ export async function GET() {
         )
       `)
       .eq('estado', 'activa')
-      .or('notificacion_enviada.is.null,notificacion_enviada.eq.false')
+      .or('notificacion_reserva_vencida_enviada.is.null,notificacion_reserva_vencida_enviada.eq.false')
 
     if (error) {
       return NextResponse.json({
@@ -61,12 +61,12 @@ export async function GET() {
           fecha_fin_parsed: fechaFin.toISOString(),
           fecha_fin_local: fechaFin.toLocaleString('es-ES', { timeZone: 'Europe/Madrid' }),
           estado: reserva.estado,
-          notificacion_enviada: reserva.notificacion_enviada,
+          notificacion_reserva_vencida_enviada: reserva.notificacion_reserva_vencida_enviada,
           horasVencida: Math.round(horasVencida * 100) / 100,
           estaVencida,
           pasa_filtro_tiempo: estaVencida,
-          pasa_filtro_notificacion: reserva.notificacion_enviada !== true,
-          deberia_notificar: estaVencida && reserva.notificacion_enviada !== true
+          pasa_filtro_notificacion: reserva.notificacion_reserva_vencida_enviada !== true,
+          deberia_notificar: estaVencida && reserva.notificacion_reserva_vencida_enviada !== true
         }
         
         reservasDebug.push(debug)
@@ -86,7 +86,7 @@ export async function GET() {
       },
       consulta_sql: {
         filtro_estado: 'activa',
-        filtro_notificacion: 'notificacion_enviada.is.null OR notificacion_enviada.eq.false',
+        filtro_notificacion: 'notificacion_reserva_vencida_enviada.is.null OR notificacion_reserva_vencida_enviada.eq.false',
         reservas_encontradas: todasReservasActivas?.length || 0
       },
       resultado_filtrado: {
