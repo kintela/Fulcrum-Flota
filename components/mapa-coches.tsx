@@ -1344,22 +1344,29 @@ const selectedMatriculaRef = useRef<string>("all")
                  const bloqueadaPorVencida = !!estadoReserva?.vencida
                  const bloqueadaPorBaneado = usuarioBaneado
                  return (
-                  <Button
-                    onClick={handleAbrirReservaTemporal}
-                    disabled={isReserving || isReleasing || bloqueadaPorVencida || bloqueadaPorBaneado}
-                    className="bg-blue-600 hover:bg-blue-700 text-white"
-                    size="sm"
-                    title={
-                      bloqueadaPorBaneado
-                        ? "Usuario baneado: no puedes crear reservas"
-                        : bloqueadaPorVencida
-                          ? "Reserva vencida pendiente de completar"
-                          : "Crear reserva temporal"
-                    }
-                  >
-                    <Calendar className="h-4 w-4 mr-2" />
-                    Reserva Temporal
-                  </Button>
+                  <div className="flex items-center gap-3">
+                    <Button
+                      onClick={handleAbrirReservaTemporal}
+                      disabled={isReserving || isReleasing || bloqueadaPorVencida || bloqueadaPorBaneado}
+                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                      size="sm"
+                      title={
+                        bloqueadaPorBaneado
+                          ? "Usuario baneado: no puedes crear reservas"
+                          : bloqueadaPorVencida
+                            ? "Reserva vencida pendiente de completar"
+                            : "Crear reserva temporal"
+                      }
+                    >
+                      <Calendar className="h-4 w-4 mr-2" />
+                      Reserva Temporal
+                    </Button>
+                    {bloqueadaPorBaneado && (
+                      <span className="text-xs text-red-600 font-medium">
+                        Usuario baneado. Contacta con Aitor Hormaeche.
+                      </span>
+                    )}
+                  </div>
                  )
                })()}
 

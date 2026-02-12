@@ -199,13 +199,20 @@ export default function EditarEmpleadoPage({ params }: EditarEmpleadoPageProps) 
 
               <div className="rounded-md border border-gray-200 bg-gray-50 p-4">
                 <div className="flex items-start gap-3">
-                  <Checkbox id="baneado" name="baneado" defaultChecked={!!empleado.baneado} />
+                  <Checkbox
+                    id="baneado"
+                    name="baneado"
+                    defaultChecked={!!empleado.baneado}
+                    disabled={String(empleado.role || "").toLowerCase() === "administrador" || String(empleado.role || "").toLowerCase() === "admin"}
+                  />
                   <div>
                     <Label htmlFor="baneado" className="text-sm font-medium">
                       Empleado baneado
                     </Label>
                     <p className="text-xs text-gray-600 mt-1">
-                      Un empleado baneado no puede crear nuevas reservas.
+                      {String(empleado.role || "").toLowerCase() === "administrador" || String(empleado.role || "").toLowerCase() === "admin"
+                        ? "Los administradores no pueden ser baneados."
+                        : "Un empleado baneado no puede crear nuevas reservas."}
                     </p>
                   </div>
                 </div>
