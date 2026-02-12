@@ -5,6 +5,7 @@
   "framework": "nextjs",
   "crons": [
     { "path": "/api/cron/notificaciones", "schedule": "*/30 * * * *" },          
-    { "path": "/api/cron/activar-reservas-pendientes", "schedule": "*/30 * * * *" }
+    { "path": "/api/cron/activar-reservas-pendientes", "schedule": "*/30 * * * *" },
+    { "path": "/api/cron/itv-alertas", "schedule": "*/30 * * * *" }
   ]
 }
