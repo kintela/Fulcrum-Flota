@@ -569,3 +569,137 @@ export async function enviarEmailAlertasITV(
     }
   }
 }
+
+// Email de alertas de mantenimiento
+export async function enviarEmailAlertasMantenimiento(
+  emailDestino: string,
+  payload: {
+    vencidas: Array<{
+      matricula: string
+      marca: string
+      modelo: string
+      fecha_proximo: string
+      kms_proximo: number
+      dias?: number
+    }>
+    proximas: Array<{
+      matricula: string
+      marca: string
+      modelo: string
+      fecha_proximo: string
+      kms_proximo: number
+      dias?: number
+    }>
+    fechaLimite: Date
+  }
+) {
+  try {
+    const transporter = createEmailTransporter()
+
+    const formatDate = (fecha: string) =>
+      new Date(fecha).toLocaleDateString("es-ES", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      })
+
+    const renderLista = (
+      items: Array<{
+        matricula: string
+        marca: string
+        modelo: string
+        fecha_proximo: string
+        kms_proximo: number
+        dias?: number
+      }>,
+      tipo: "vencida" | "proxima"
+    ) => {
+      if (items.length === 0) return ""
+      const titulo = tipo === "vencida" ? "Mantenimientos Vencidos" : "Mantenimientos Próximos (≤ 30 días)"
+      const color = tipo === "vencida" ? "#ef4444" : "#f59e0b"
+      const descripcion =
+        tipo === "vencida"
+          ? "Estos mantenimientos ya han superado la fecha recomendada."
+          : "Estos mantenimientos están dentro del plazo de 30 días para realizarse."
+
+      return `
+        <div style="margin: 20px 0;">
+          <h3 style="color: ${color}; margin-bottom: 6px;">${titulo} (${items.length})</h3>
+          <p style="margin: 0 0 10px 0; color: #6b7280; font-size: 13px;">${descripcion}</p>
+          <table style="width:100%; border-collapse: collapse; font-size: 14px;">
+            <thead>
+              <tr style="text-align:left; background:#f3f4f6;">
+                <th style="padding:8px;">Vehículo</th>
+                <th style="padding:8px;">Próximo mantenimiento</th>
+                <th style="padding:8px;">Kms recomendados</th>
+                <th style="padding:8px;">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${items
+                .map((mantenimiento) => {
+                  const dias = typeof mantenimiento.dias === "number" ? mantenimiento.dias : null
+                  const estadoTexto =
+                    tipo === "vencida"
+                      ? `Vencido hace ${Math.abs(dias ?? 0)} días`
+                      : `En ${dias ?? ""} días`
+                  return `
+                    <tr style="border-bottom:1px solid #e5e7eb;">
+                      <td style="padding:8px;">${mantenimiento.matricula} · ${mantenimiento.marca} ${mantenimiento.modelo}</td>
+                      <td style="padding:8px;">${formatDate(mantenimiento.fecha_proximo)}</td>
+                      <td style="padding:8px;">${mantenimiento.kms_proximo.toLocaleString("es-ES")} km</td>
+                      <td style="padding:8px; color:${color}; font-weight:600;">${estadoTexto}</td>
+                    </tr>
+                  `
+                })
+                .join("")}
+            </tbody>
+          </table>
+        </div>
+      `
+    }
+
+    const contenidoHTML = `
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Alertas de Mantenimiento</title>
+      </head>
+      <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background:#f5f5f5; padding:20px;">
+        <div style="max-width:600px; margin:0 auto; background:#ffffff; border-radius:10px; padding:24px; box-shadow:0 2px 10px rgba(0,0,0,0.08);">
+          <h2 style="margin:0 0 8px 0; color:#111827;">🔧 Alertas de Mantenimiento</h2>
+          <p style="margin:0 0 16px 0; color:#6b7280;">
+            Resumen de mantenimientos vencidos y próximos (hasta ${payload.fechaLimite.toLocaleDateString("es-ES")}).
+          </p>
+          ${renderLista(payload.vencidas, "vencida")}
+          ${renderLista(payload.proximas, "proxima")}
+          <p style="margin-top:24px; color:#9ca3af; font-size:12px;">
+            Este es un mensaje automático. Por favor, no responda a este email.
+          </p>
+        </div>
+      </body>
+      </html>
+    `
+
+    const asunto = `🔧 Alertas Mantenimiento · Vencidos: ${payload.vencidas.length} · Próximos: ${payload.proximas.length}`
+
+    const info = await transporter.sendMail({
+      from: { name: fromName, address: fromEmail },
+      to: emailDestino,
+      subject: asunto,
+      html: contenidoHTML,
+    })
+
+    console.log("📧 Email alertas mantenimiento enviado:", info.messageId)
+
+    return { success: true, messageId: info.messageId }
+  } catch (error) {
+    console.error("❌ Error enviando email alertas mantenimiento:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Error enviando email de alertas mantenimiento",
+    }
+  }
+}
