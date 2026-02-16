@@ -291,6 +291,10 @@ async function getDashboardData(userRole: string, userEmail?: string) {
         detalles: [],
       },
       alquilerAlerts: {
+        total: 0,
+        vencidos: 0,
+        proximosVencer: 0,
+        detalles: [],
       },
     }
   }
