@@ -25,6 +25,10 @@ const emailConfig: EmailConfig = {
 // Remitente visible: puede ser distinto al usuario de autenticación (Send As en O365)
 const fromEmail = process.env.FROM_EMAIL || process.env.EMAIL_USER || ''
 const fromName = process.env.FROM_NAME || 'Fulcrum Flota'
+const avisoFooterUrl = "https://flota.fulcrum.ee"
+const avisoFooterLabel = "Fulcrum Flota"
+const avisoFooterHtml = `<a href="${avisoFooterUrl}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;">${avisoFooterLabel}</a> · Aviso automático`
+const avisoFooterText = `${avisoFooterLabel} · Aviso automático\n${avisoFooterUrl}`
 
 // Crear el transportador de email
 export const createEmailTransporter = () => {
@@ -206,7 +210,7 @@ export async function enviarEmailReservaVencida(
           
           
           <div class="footer">
-            <p><strong>Fulcrum Flota</strong></p>
+            <p>${avisoFooterHtml}</p>
           </div>
         </div>
       </body>
@@ -235,9 +239,7 @@ el vehículo. Si necesitas extenderla, solicita una ampliación antes de finaliz
 Si tiene alguna consulta o necesita extender la reserva, por favor contacte con Roberto Quintela.
 
 ---
-Gestor de Flota Fulcrum
-Este es un mensaje automático. Por favor, no responda a este email.
-Para consultas, contacte con Roberto Quintela.
+${avisoFooterText}
     `;
 
     const mailOptions = {
@@ -420,11 +422,10 @@ Fin previsto: ${finFmt}
 Recuerda marcarla como completada cuando devuelvas el vehículo
 
 ---
-Fulcrum Flota
-Este es un mensaje automático.
+${avisoFooterText}
     `
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /><title>Inicio de Reserva</title><style>body{font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#333;max-width:620px;margin:0 auto;padding:24px;background:#f5f7fa} .card{background:#fff;border-radius:10px;padding:28px;box-shadow:0 2px 8px rgba(0,0,0,0.06)} h1{margin:0 0 12px;font-size:22px;color:#16a34a} .veh{background:#f0fdf4;border:1px solid #bbf7d0;padding:16px;border-radius:8px;margin:16px 0} .footer{margin-top:32px;font-size:12px;color:#666;text-align:center} .pill{display:inline-block;background:#16a34a;color:#fff;padding:4px 10px;border-radius:999px;font-size:12px;margin-bottom:8px}</style></head><body><div class="card"><span class="pill">Reserva activada</span><h1>Comienza tu reserva</h1><p>Hola <strong>${nombreEmpleado}</strong>,</p><p>Tu reserva ha pasado automáticamente de <strong>pendiente</strong> a <strong>activa</strong>.</p><div class="veh"><strong>Vehículo:</strong> ${vehiculo.marca} ${vehiculo.modelo} (${vehiculo.matricula})<br/><strong>Inicio:</strong> ${inicioFmt}<br/><strong>Fin previsto:</strong> ${finFmt}</div><p>Recuerda marcarla como <em>completada</em> cuando devuelvas el vehículo.</p><div class="footer">Fulcrum Flota · Aviso automático</div></div></body></html>`
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /><title>Inicio de Reserva</title><style>body{font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#333;max-width:620px;margin:0 auto;padding:24px;background:#f5f7fa} .card{background:#fff;border-radius:10px;padding:28px;box-shadow:0 2px 8px rgba(0,0,0,0.06)} h1{margin:0 0 12px;font-size:22px;color:#16a34a} .veh{background:#f0fdf4;border:1px solid #bbf7d0;padding:16px;border-radius:8px;margin:16px 0} .footer{margin-top:32px;font-size:12px;color:#666;text-align:center} .pill{display:inline-block;background:#16a34a;color:#fff;padding:4px 10px;border-radius:999px;font-size:12px;margin-bottom:8px}</style></head><body><div class="card"><span class="pill">Reserva activada</span><h1>Comienza tu reserva</h1><p>Hola <strong>${nombreEmpleado}</strong>,</p><p>Tu reserva ha pasado automáticamente de <strong>pendiente</strong> a <strong>activa</strong>.</p><div class="veh"><strong>Vehículo:</strong> ${vehiculo.marca} ${vehiculo.modelo} (${vehiculo.matricula})<br/><strong>Inicio:</strong> ${inicioFmt}<br/><strong>Fin previsto:</strong> ${finFmt}</div><p>Recuerda marcarla como <em>completada</em> cuando devuelvas el vehículo.</p><div class="footer">${avisoFooterHtml}</div></div></body></html>`
 
     const mailOptions = {
       from: { name: fromName, address: fromEmail },
@@ -537,9 +538,9 @@ export async function enviarEmailAlertasITV(
           </p>
           ${renderLista(payload.vencidas, "vencida")}
           ${renderLista(payload.proximas, "proxima")}
-          <p style="margin-top:24px; color:#9ca3af; font-size:12px;">
-            Este es un mensaje automático. Por favor, no responda a este email.
-          </p>
+          <div style="margin-top:24px; padding-top:16px; border-top:1px solid #e5e7eb; color:#9ca3af; font-size:12px; text-align:center;">
+            ${avisoFooterHtml}
+          </div>
         </div>
       </body>
       </html>
@@ -675,9 +676,9 @@ export async function enviarEmailAlertasMantenimiento(
           </p>
           ${renderLista(payload.vencidas, "vencida")}
           ${renderLista(payload.proximas, "proxima")}
-          <p style="margin-top:24px; color:#9ca3af; font-size:12px;">
-            Este es un mensaje automático. Por favor, no responda a este email.
-          </p>
+          <div style="margin-top:24px; padding-top:16px; border-top:1px solid #e5e7eb; color:#9ca3af; font-size:12px; text-align:center;">
+            ${avisoFooterHtml}
+          </div>
         </div>
       </body>
       </html>
