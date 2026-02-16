@@ -10,8 +10,11 @@ import { format, isBefore, isAfter, startOfDay, isSameDay, addDays } from "date-
 import { es } from "date-fns/locale"
 import { Calendar } from "@/components/ui/calendar"
 import { type DateRange, type OnSelectHandler, type DayButtonProps } from "react-day-picker"
-import { crearReservaTemporal, verificarDisponibilidad } from "@/app/actions/reservas-temporales"
-import { supabase } from "@/lib/supabase"
+import {
+  crearReservaTemporal,
+  verificarDisponibilidad,
+  obtenerBloqueosReservasPorMatricula,
+} from "@/app/actions/reservas-temporales"
 import { DialogDescription } from "@radix-ui/react-dialog"
 import { cn } from "@/lib/utils"
 
@@ -370,19 +373,14 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
   useEffect(() => {
     const cargarBloqueos = async () => {
       try {
-        const { data, error } = await supabase
-          .from("reservas")
-          .select("fecha_inicio, fecha_fin, bloqueo_desde")
-          .eq("matricula", matricula)
-          .in("estado", ["activa", "pendiente", "vencida"])
-
-        if (error || !data) {
-          console.warn("No se pudieron cargar bloqueos de reservas:", error)
+        const resultado = await obtenerBloqueosReservasPorMatricula(matricula)
+        if (!resultado.success || !resultado.data) {
+          console.warn("No se pudieron cargar bloqueos de reservas:", resultado.error)
           setBloqueos([])
           return
         }
 
-        const ventanas = data.map((r) => {
+        const ventanas = resultado.data.map((r: any) => {
           const inicioReal = new Date(r.fecha_inicio)
           const desde = r.bloqueo_desde ? new Date(r.bloqueo_desde) : inicioReal
           const hasta = new Date(r.fecha_fin)

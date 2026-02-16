@@ -1,4 +1,4 @@
-import { supabase } from "./supabase"
+import { supabaseServer as supabase } from "./supabase-server"
 import { Session } from "next-auth"
 
 // Tipos de roles disponibles

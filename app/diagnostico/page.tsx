@@ -4,7 +4,6 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { supabase } from "@/lib/supabase"
 
 export default function DiagnosticoPage() {
   const [data, setData] = useState<any>(null)
@@ -15,63 +14,12 @@ export default function DiagnosticoPage() {
     async function fetchData() {
       try {
         setLoading(true)
-
-        // Obtener todos los coches
-        const { data: coches, error: cochesError } = await supabase.from("coches").select("*")
-
-        if (cochesError) throw new Error(cochesError.message)
-
-        // Obtener todos los empleados
-        const { data: empleados, error: empleadosError } = await supabase.from("empleados").select("*")
-
-        if (empleadosError) throw new Error(empleadosError.message)
-
-        // Crear mapa de empleados para búsqueda rápida
-        const empleadosMap = new Map()
-        empleados.forEach((empleado) => {
-          empleadosMap.set(empleado.id, empleado)
-        })
-
-        // Procesar datos para diagnóstico
-        const cochesConDetalles = coches.map((coche) => {
-          // Buscar el empleado asociado si asignadoa es un número
-          let empleadoInfo = null
-          if (coche.asignadoa && !isNaN(Number(coche.asignadoa))) {
-            empleadoInfo = empleadosMap.get(Number(coche.asignadoa))
-          }
-
-          return {
-            ...coche,
-            estado: coche.donante
-              ? "Donante"
-              : coche.asignadoa !== null && coche.asignadoa !== undefined && coche.asignadoa !== ""
-                ? "Asignado"
-                : "Disponible",
-            empleadoAsignado: empleadoInfo
-              ? `${empleadoInfo.nombre} ${empleadoInfo.apellidos} (ID: ${empleadoInfo.id})`
-              : coche.asignadoa || "No asignado",
-          }
-        })
-
-        // Calcular estadísticas
-        const donantesCount = coches.filter((c) => c.donante === true).length
-        const asignadosCount = coches.filter(
-          (c) => !c.donante && c.asignadoa !== null && c.asignadoa !== undefined && c.asignadoa !== "",
-        ).length
-        const disponiblesCount = coches.filter(
-          (c) => !c.donante && (c.asignadoa === null || c.asignadoa === undefined || c.asignadoa === ""),
-        ).length
-
-        setData({
-          estadisticas: {
-            total: coches.length,
-            donantes: donantesCount,
-            asignados: asignadosCount,
-            disponibles: disponiblesCount,
-          },
-          coches: cochesConDetalles,
-          empleados,
-        })
+        const response = await fetch("/api/diagnostico", { cache: "no-store" })
+        const body = await response.json()
+        if (!response.ok) {
+          throw new Error(body?.error || "Error al cargar diagnóstico")
+        }
+        setData(body)
       } catch (err) {
         console.error("Error fetching data:", err)
         setError(err instanceof Error ? err.message : "Error desconocido")

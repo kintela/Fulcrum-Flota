@@ -1,6 +1,6 @@
 "use server"
 
-import { supabase } from "@/lib/supabase"
+import { supabaseServer as supabase } from "@/lib/supabase-server"
 
 export async function verificarDatos() {
   console.log("=== VERIFICANDO DATOS EN LAS TABLAS ===")

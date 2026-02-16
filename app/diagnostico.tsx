@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { supabase } from "@/lib/supabase"
 
 export default function DiagnosticoPage() {
   const [coches, setCoches] = useState<any[]>([])
@@ -18,12 +17,12 @@ export default function DiagnosticoPage() {
     async function fetchData() {
       try {
         setLoading(true)
-        const { data, error } = await supabase.from("coches").select("*")
-
-        if (error) {
-          console.error("Error fetching data:", error)
-          return
+        const response = await fetch("/api/diagnostico", { cache: "no-store" })
+        const body = await response.json()
+        if (!response.ok) {
+          throw new Error(body?.error || "Error cargando diagnóstico")
         }
+        const data = body.coches || []
 
         setCoches(data || [])
 

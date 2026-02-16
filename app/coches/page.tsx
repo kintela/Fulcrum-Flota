@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Car, Plus, Filter, Users, Calendar, AlertTriangle, Clock, CreditCard, Truck } from "lucide-react"
 import Link from "next/link"
-import { supabase } from "@/lib/supabase"
+import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { obtenerFotosCoche } from "@/lib/storage"
 import { CarThumbnail } from "@/components/car-thumbnail"
 

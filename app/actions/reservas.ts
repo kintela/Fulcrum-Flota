@@ -1,6 +1,6 @@
 "use server"
 
-import { supabase } from "@/lib/supabase"
+import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
 
@@ -148,7 +148,8 @@ export async function liberarCoche(matricula: string) {
 
     // Los administradores pueden liberar cualquier coche, 
     // los empleados solo pueden liberar sus propios coches
-    const isAdmin = empleado.role && empleado.role.toLowerCase() === 'admin'
+    const roleValue = String(empleado.role || "").toLowerCase()
+    const isAdmin = roleValue === "admin" || roleValue === "administrador"
     
     if (!isAdmin && Number(coche.asignadoa) !== empleado.id) {
       return {
