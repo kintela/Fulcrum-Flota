@@ -1,6 +1,6 @@
 "use server"
 
-import { supabase } from "./supabase"
+import { supabaseServer as supabase } from "./supabase-server"
 
 /**
  * Registra automáticamente un usuario nuevo en la tabla empleados

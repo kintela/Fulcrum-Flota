@@ -1,6 +1,6 @@
 "use server"
 
-import { supabase } from "@/lib/supabase"
+import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { enviarEmailAlertasITV } from "@/lib/email"
 
 interface ITVConCoche {

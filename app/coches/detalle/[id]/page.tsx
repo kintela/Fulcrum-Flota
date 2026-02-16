@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ArrowLeft, Car, Calendar, User, Wrench, CreditCard } from "lucide-react"
 import Link from "next/link"
-import { supabase } from "@/lib/supabase"
+import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { FotosManager } from "@/components/fotos-manager"
 import { MantenimientoManager } from "@/components/mantenimiento-manager"
 

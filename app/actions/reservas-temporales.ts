@@ -1,6 +1,6 @@
 "use server"
 
-import { supabase } from "@/lib/supabase"
+import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { enviarEmailInicioReserva } from "@/lib/email"
 import { sendWhatsAppMessage, formatSpanishPhone } from "@/lib/whatsapp"
 
@@ -479,6 +479,67 @@ export async function verificarDisponibilidad(matricula: string, fechaInicio: st
       success: false,
       error: "Error inesperado al verificar disponibilidad"
     }
+  }
+}
+
+export async function obtenerBloqueosReservasPorMatricula(matricula: string) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return { success: false, error: "Usuario no autenticado" as const }
+    }
+
+    const { data, error } = await supabase
+      .from("reservas")
+      .select("fecha_inicio, fecha_fin, bloqueo_desde")
+      .eq("matricula", matricula)
+      .in("estado", ["activa", "pendiente", "vencida"])
+
+    if (error) {
+      console.error("Error obteniendo bloqueos de reservas:", error)
+      return { success: false, error: "Error al obtener bloqueos de reservas" as const }
+    }
+
+    return { success: true, data: data || [] }
+  } catch (error) {
+    console.error("Error en obtenerBloqueosReservasPorMatricula:", error)
+    return { success: false, error: "Error inesperado al obtener bloqueos" as const }
+  }
+}
+
+export async function obtenerEstadoReservasPorMatriculas(matriculas: string[]) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return { success: false, error: "Usuario no autenticado" as const }
+    }
+
+    const matriculasUnicas = Array.from(new Set((matriculas || []).filter(Boolean)))
+    if (matriculasUnicas.length === 0) {
+      return { success: true, data: {} as Record<string, any[]> }
+    }
+
+    const { data, error } = await supabase
+      .from("reservas")
+      .select("matricula, estado, fecha_inicio, fecha_fin, bloqueo_desde, margen_bloqueo, empleado_id")
+      .in("matricula", matriculasUnicas)
+      .in("estado", ["activa", "pendiente", "vencida"])
+
+    if (error) {
+      console.error("Error obteniendo estado de reservas por matrículas:", error)
+      return { success: false, error: "Error al obtener estado de reservas" as const }
+    }
+
+    const agrupado = (data || []).reduce<Record<string, any[]>>((acc, row) => {
+      if (!acc[row.matricula]) acc[row.matricula] = []
+      acc[row.matricula].push(row)
+      return acc
+    }, {})
+
+    return { success: true, data: agrupado }
+  } catch (error) {
+    console.error("Error en obtenerEstadoReservasPorMatriculas:", error)
+    return { success: false, error: "Error inesperado al obtener estado de reservas" as const }
   }
 }
 

@@ -1,10 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
-
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
+import { supabaseServer as supabase } from "@/lib/supabase-server"
+import { getAuthSession } from "@/lib/get-session"
 
 export async function POST(request: NextRequest, { params }: { params: { matricula: string } }) {
   try {
+    const session = await getAuthSession()
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+    }
+
     const { matricula } = params
     const { latitud, longitud, direccion_actual } = await request.json()
 
@@ -47,6 +51,11 @@ export async function POST(request: NextRequest, { params }: { params: { matricu
 
 export async function DELETE(request: NextRequest, { params }: { params: { matricula: string } }) {
   try {
+    const session = await getAuthSession()
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+    }
+
     const { matricula } = params
 
     // Eliminar ubicación en la base de datos

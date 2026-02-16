@@ -1,7 +1,7 @@
 "use client"
 
 import { useSession } from "next-auth/react"
-import { UserRole } from "@/lib/roles"
+import type { UserRole } from "@/lib/roles"
 import { ReactNode } from "react"
 import { Shield, AlertCircle } from "lucide-react"
 

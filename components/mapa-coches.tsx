@@ -8,9 +8,8 @@ import { Button } from "@/components/ui/button"
 import { MapPin, RefreshCw, Navigation, AlertCircle, Car, UserCheck, UserX, Calendar, Ban } from "lucide-react"
 import { liberarCoche } from "@/app/actions/reservas"
 import { actualizarUbicacionCoche } from "@/app/actions/ubicacion"
-import { verificarDisponibilidad } from "@/app/actions/reservas-temporales"
+import { obtenerEstadoReservasPorMatriculas } from "@/app/actions/reservas-temporales"
 import { ReservaModal } from "@/components/reserva-modal"
-import { supabase } from "@/lib/supabase"
 
 interface Coche {
   matricula: string
@@ -271,20 +270,12 @@ const selectedMatriculaRef = useRef<string>("all")
       }
     >()
 
-    const promesas = matriculas.map(async (matricula) => {
-      try {
-        const { data: reservas, error } = await supabase
-          .from("reservas")
-          .select("id, estado, fecha_inicio, fecha_fin, bloqueo_desde, margen_bloqueo, empleado_id")
-          .eq("matricula", matricula)
-          .in("estado", ["activa", "pendiente", "vencida"])
+    try {
+      const resultado = await obtenerEstadoReservasPorMatriculas(matriculas)
+      const reservasPorMatricula: Record<string, any[]> = resultado.success && resultado.data ? resultado.data : {}
 
-        if (error) {
-          console.warn(`Error verificando reservas para ${matricula}:`, error)
-          nuevasReservas.set(matricula, { enCurso: false, vencida: false, programada: false, bloquea: false, empleadoId: null })
-          return
-        }
-
+      matriculas.forEach((matricula) => {
+        const reservas = reservasPorMatricula?.[matricula] || []
         const ahora = new Date()
         let enCurso = false
         let vencida = false
@@ -296,7 +287,7 @@ const selectedMatriculaRef = useRef<string>("all")
         let empleadoId: number | null | undefined
         let empleadoPrioridad = -1
 
-        reservas?.forEach((r) => {
+        reservas.forEach((r: any) => {
           const inicio = new Date(r.fecha_inicio)
           const fin = new Date(r.fecha_fin)
           const bloqueo = r.bloqueo_desde ? new Date(r.bloqueo_desde) : null
@@ -340,13 +331,14 @@ const selectedMatriculaRef = useRef<string>("all")
         if (enCurso) bloquea = true
 
         nuevasReservas.set(matricula, { enCurso, vencida, programada, bloquea, bloqueoDesde, proximaInicio, proximaFin, empleadoId })
-      } catch (error) {
-        console.warn(`Error verificando reservas para ${matricula}:`, error)
+      })
+    } catch (error) {
+      console.warn("Error verificando reservas:", error)
+      matriculas.forEach((matricula) => {
         nuevasReservas.set(matricula, { enCurso: false, vencida: false, programada: false, bloquea: false, empleadoId: null })
-      }
-    })
+      })
+    }
 
-    await Promise.all(promesas)
     setReservasActivas(nuevasReservas)
   }, [])
 
