@@ -7,6 +7,9 @@ export async function GET() {
   try {
     // Verificar qué variables de entorno están disponibles
     const envVars = {
+      NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL ? '✅ Definida' : '❌ No definida',
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? '✅ Definida' : '❌ No definida',
+      SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ? '✅ Definida' : '❌ No definida',
       EMAIL_USER: process.env.EMAIL_USER ? '✅ Definida' : '❌ No definida',
       EMAIL_PASSWORD: process.env.EMAIL_PASSWORD ? '✅ Definida' : '❌ No definida',
       TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID ? '✅ Definida' : '❌ No definida',
@@ -18,6 +21,10 @@ export async function GET() {
 
     // Valores parciales (primeros y últimos caracteres) para seguridad
     const envValues = {
+      NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL ?
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL.substring(0, 12)}...` :
+        'undefined',
+      SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ? 'defined' : 'undefined',
       EMAIL_USER: process.env.EMAIL_USER ? 
         `${process.env.EMAIL_USER.substring(0, 3)}...${process.env.EMAIL_USER.substring(process.env.EMAIL_USER.length - 3)}` : 
         'undefined',

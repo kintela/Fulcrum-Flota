@@ -202,6 +202,16 @@ export async function obtenerReservasUsuario() {
 
   } catch (error) {
     console.error("Error en obtenerReservasUsuario:", error)
+    const message = error instanceof Error ? error.message : ""
+    if (
+      message.includes("SUPABASE_SERVICE_ROLE_KEY no está configurada") ||
+      message.includes("NEXT_PUBLIC_SUPABASE_URL no está configurada")
+    ) {
+      return {
+        success: false,
+        error: "Error de configuración del servidor en producción (variables de Supabase no definidas)"
+      }
+    }
     return {
       success: false,
       error: "Error inesperado al obtener las reservas"

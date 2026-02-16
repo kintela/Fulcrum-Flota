@@ -30,6 +30,9 @@ function DashboardStats({
 }) {
   // Solo mostrar estadísticas detalladas a administradores
   if (userRole !== 'administrador') {
+    const totalAlertasUsuario =
+      Number(itvAlerts?.total ?? 0) + Number(solredAlerts?.total ?? 0) + Number(alquilerAlerts?.total ?? 0)
+
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         {/* Mis Coches Asignados */}
@@ -83,13 +86,13 @@ function DashboardStats({
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center">
-              <div className={`p-3 rounded-lg ${(itvAlerts.total + solredAlerts.total + alquilerAlerts.total) > 0 ? "bg-red-50" : "bg-gray-50"}`}>
-                <AlertTriangle className={`h-6 w-6 ${(itvAlerts.total + solredAlerts.total + alquilerAlerts.total) > 0 ? "text-red-600" : "text-gray-400"}`} />
+              <div className={`p-3 rounded-lg ${totalAlertasUsuario > 0 ? "bg-red-50" : "bg-gray-50"}`}>
+                <AlertTriangle className={`h-6 w-6 ${totalAlertasUsuario > 0 ? "text-red-600" : "text-gray-400"}`} />
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Mis Alertas</p>
-                <p className={`text-2xl font-bold ${(itvAlerts.total + solredAlerts.total + alquilerAlerts.total) > 0 ? "text-red-600" : "text-gray-900"}`}>
-                  {itvAlerts.total + solredAlerts.total + alquilerAlerts.total}
+                <p className={`text-2xl font-bold ${totalAlertasUsuario > 0 ? "text-red-600" : "text-gray-900"}`}>
+                  {totalAlertasUsuario}
                 </p>
               </div>
             </div>
