@@ -401,19 +401,33 @@ const selectedMatriculaRef = useRef<string>("all")
           const position = { lat, lng }
           const empleadoInfo = getEmpleadoInfo(coche)
           const isAssigned = !!empleadoInfo || !!coche.asignadoa
+          const estadoReserva = reservasActivas.get(coche.matricula)
+          const reservaEmpleado = estadoReserva?.empleadoId ? empleadosMap.get(Number(estadoReserva.empleadoId)) : null
           
           // Determinar si es un vehículo del usuario actual
           // 1. Por asignación permanente: verificar si está asignado a su email
-          // 2. Por reserva temporal: verificar si tiene una reserva activa de este coche
-          const isUserVehicle = userEmail && empleadoInfo && empleadoInfo.email === userEmail
-          const tieneReservaActiva = misReservas?.some(reserva => 
-            reserva.matricula === coche.matricula && reserva.estado === 'activa'
+          // 2. Por reserva temporal: verificar si tiene una reserva activa/pendiente/vencida de este coche
+          const isUserVehicle = !!(
+            userEmail &&
+            empleadoInfo?.email &&
+            String(empleadoInfo.email).toLowerCase() === userEmail.toLowerCase()
           )
+          const reservaEsDelUsuario = !!(
+            userEmail &&
+            reservaEmpleado?.email &&
+            String(reservaEmpleado.email).toLowerCase() === userEmail.toLowerCase()
+          )
+          const tieneReservaUsuario = misReservas?.some(
+            (reserva) =>
+              reserva.matricula === coche.matricula &&
+              (reserva.estado === "activa" || reserva.estado === "pendiente" || reserva.estado === "vencida"),
+          ) || reservaEsDelUsuario
+          const tieneReservaVencida = !!estadoReserva?.vencida
           
-          // Es "mi coche" si está asignado permanentemente O tengo una reserva activa
-          const esMiCoche = isUserVehicle || tieneReservaActiva
+          // Es "mi coche" si está asignado permanentemente O tengo una reserva (activa/pendiente/vencida)
+          const esMiCoche = isUserVehicle || !!tieneReservaUsuario
           
-          //console.log(`🎯 ${coche.matricula} - isUserVehicle:`, isUserVehicle, 'tieneReservaActiva:', tieneReservaActiva, 'esMiCoche:', esMiCoche)
+          //console.log(`🎯 ${coche.matricula} - isUserVehicle:`, isUserVehicle, 'tieneReservaUsuario:', tieneReservaUsuario, 'esMiCoche:', esMiCoche)
 
           // Determinar el color del marcador
           let fillColor = "#3b82f6" // Azul por defecto (disponible)
@@ -421,6 +435,8 @@ const selectedMatriculaRef = useRef<string>("all")
           // Si es el coche del usuario actual (cancelando reserva), siempre rojo
           if (miCocheMatricula && coche.matricula === miCocheMatricula) {
             fillColor = "#dc2626" // Rojo para el coche del usuario actual
+          } else if (tieneReservaVencida) {
+            fillColor = "#dc2626" // Rojo intenso para reservas vencidas pendientes
           } else if (esMiCoche) {
             fillColor = "#dc2626" // Rojo para vehículos del usuario (asignación permanente O reserva temporal)
           } else if (isAssigned) {
@@ -429,11 +445,15 @@ const selectedMatriculaRef = useRef<string>("all")
 
           // Determinar si el usuario puede reubicar este vehículo
           // Administradores: pueden reubicar cualquier vehículo
-          // Usuarios: solo pueden reubicar sus vehículos asignados
-          const canRelocate = isAdmin || (userRole === 'usuario' && esMiCoche)
+          // Resto de usuarios: pueden reubicar sus vehículos asignados o reservados
+          const canRelocate = isAdmin || esMiCoche
 
-          // Crear marcador con tamaño especial para "mis coches"
-          const markerSize = esMiCoche || (miCocheMatricula && coche.matricula === miCocheMatricula) ? 14 : 10
+          // Marcador más grande para reservas vencidas; tamaño medio para "mis coches"
+          const markerSize = tieneReservaVencida
+            ? 18
+            : esMiCoche || (miCocheMatricula && coche.matricula === miCocheMatricula)
+              ? 14
+              : 10
           
           const marker = new window.google.maps.Marker({
             position,
@@ -444,7 +464,7 @@ const selectedMatriculaRef = useRef<string>("all")
               path: window.google.maps.SymbolPath.CIRCLE,
               scale: markerSize, // Tamaño dinámico: 14 para mis coches, 10 para otros
               fillColor: fillColor,
-              fillOpacity: 0.8,
+              fillOpacity: tieneReservaVencida ? 0.95 : 0.8,
               strokeColor: "#ffffff",
               strokeWeight: 2,
             },
@@ -470,6 +490,7 @@ const selectedMatriculaRef = useRef<string>("all")
                       ${isAssigned ? "Asignado" : "Disponible"}
                     </span>
                   </p>
+                  ${tieneReservaVencida ? `<p style="margin: 4px 0; color: #dc2626;"><strong>Reserva:</strong> Vencida pendiente de completar</p>` : ""}
                   ${empleadoInfo ? `<p style="margin: 4px 0; color: #6b7280;"><strong>Asignado a:</strong> ${empleadoInfo.nombre} ${empleadoInfo.apellidos || ""}</p>` : ""}
                   ${coche.direccion_actual ? `<p style="margin: 4px 0; color: #6b7280;"><strong>Ubicación:</strong> ${coche.direccion_actual}</p>` : ""}
                   ${canRelocate ? `<p style="margin: 6px 0; color: #10b981; font-size: 12px;"><strong>💡 Tip:</strong> Mantén pulsado el marcador y arrástralo para reubicar</p>` : ""}
@@ -597,7 +618,7 @@ const selectedMatriculaRef = useRef<string>("all")
         }
       }
     },
-    [cochesVisibles, getEmpleadoInfo, clearMarkers, isGoogleMapsReady, userRole, userEmail, miCocheMatricula, misReservas, isAdmin],
+    [cochesVisibles, getEmpleadoInfo, empleadosMap, clearMarkers, isGoogleMapsReady, userEmail, miCocheMatricula, misReservas, isAdmin, reservasActivas],
   )
 
   // Función para actualizar la ubicación de un vehículo

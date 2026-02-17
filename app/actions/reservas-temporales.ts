@@ -19,6 +19,135 @@ export interface CrearReservaData {
   observaciones?: string
 }
 
+interface EmpleadoSesion {
+  id: number
+  nombre?: string | null
+  apellidos?: string | null
+  baneado?: boolean | null
+  email?: string | null
+}
+
+function normalizarEmail(email: string) {
+  return email.trim().toLowerCase()
+}
+
+async function obtenerEmpleadosSesion(session: { user?: { email?: string | null; empleadoId?: number | null } }) {
+  if (!session?.user?.email) {
+    return {
+      success: false as const,
+      error: "Usuario no autenticado",
+      empleados: [] as EmpleadoSesion[],
+      principal: null as EmpleadoSesion | null,
+    }
+  }
+
+  const emailNormalizado = normalizarEmail(session.user.email)
+  const empleadoIdSesion = typeof session.user.empleadoId === "number" ? session.user.empleadoId : null
+
+  const { data: empleadosPorEmail, error: empleadosPorEmailError } = await supabase
+    .from("empleados")
+    .select("id, nombre, apellidos, baneado, email")
+    .ilike("email", emailNormalizado)
+
+  if (empleadosPorEmailError) {
+    return {
+      success: false as const,
+      error: "Error al resolver el empleado del usuario",
+      empleados: [] as EmpleadoSesion[],
+      principal: null as EmpleadoSesion | null,
+    }
+  }
+
+  const candidatos: EmpleadoSesion[] = (empleadosPorEmail || []).filter(
+    (e) => normalizarEmail(String(e.email || "")) === emailNormalizado,
+  )
+
+  if (candidatos.length === 0) {
+    const { data: todosEmpleados } = await supabase.from("empleados").select("id, nombre, apellidos, baneado, email")
+    for (const empleado of todosEmpleados || []) {
+      if (normalizarEmail(String(empleado.email || "")) === emailNormalizado) {
+        candidatos.push(empleado as EmpleadoSesion)
+      }
+    }
+  }
+
+  if (empleadoIdSesion !== null && !candidatos.some((e) => e.id === empleadoIdSesion)) {
+    const { data: empleadoSesion } = await supabase
+      .from("empleados")
+      .select("id, nombre, apellidos, baneado, email")
+      .eq("id", empleadoIdSesion)
+      .maybeSingle()
+
+    if (empleadoSesion) {
+      candidatos.push(empleadoSesion as EmpleadoSesion)
+    }
+  }
+
+  const empleados = Array.from(new Map(candidatos.map((e) => [e.id, e])).values()).sort((a, b) => a.id - b.id)
+
+  if (empleados.length === 0) {
+    return {
+      success: false as const,
+      error: "No se encontró el empleado asociado a este usuario",
+      empleados,
+      principal: null as EmpleadoSesion | null,
+    }
+  }
+
+  const principal = (empleadoIdSesion ? empleados.find((e) => e.id === empleadoIdSesion) : undefined) || empleados[0]
+
+  return {
+    success: true as const,
+    error: null as string | null,
+    empleados,
+    principal,
+  }
+}
+
+async function obtenerReservaUsuarioPorId(
+  reservaId: number,
+  empleadoIds: number[],
+  emailNormalizado: string,
+) {
+  const { data: reserva, error: reservaError } = await supabase
+    .from("reservas")
+    .select(`
+      *,
+      empleados (
+        id,
+        email
+      )
+    `)
+    .eq("id", reservaId)
+    .single()
+
+  if (reservaError || !reserva) {
+    return {
+      success: false as const,
+      error: "Reserva no encontrada o no autorizada",
+      reserva: null,
+    }
+  }
+
+  const empleadoIdReserva = Number((reserva as any).empleado_id)
+  const emailReserva = normalizarEmail(String((reserva as any).empleados?.email || ""))
+  const autorizada = empleadoIds.includes(empleadoIdReserva) || (emailReserva !== "" && emailReserva === emailNormalizado)
+
+  if (!autorizada) {
+    return {
+      success: false as const,
+      error: "Reserva no encontrada o no autorizada",
+      reserva: null,
+    }
+  }
+
+  return {
+    success: true as const,
+    error: null as string | null,
+    reserva,
+  }
+}
+
 export async function crearReservaTemporal(data: CrearReservaData) {
   try {
     // Obtener información del usuario logueado
@@ -31,19 +160,14 @@ export async function crearReservaTemporal(data: CrearReservaData) {
       }
     }
 
-    // Buscar el empleado por email
-    const { data: empleado, error: empleadoError } = await supabase
-      .from("empleados")
-      .select("id, nombre, apellidos, baneado")
-      .eq('email', session.user.email)
-      .single()
-    
-    if (empleadoError || !empleado) {
+    const empleadosSesion = await obtenerEmpleadosSesion(session)
+    if (!empleadosSesion.success || !empleadosSesion.principal) {
       return {
         success: false,
-        error: "No se encontró el empleado asociado a este usuario"
+        error: empleadosSesion.error || "No se encontró el empleado asociado a este usuario"
       }
     }
+    const empleado = empleadosSesion.principal
 
     if (empleado.baneado) {
       return {
@@ -156,22 +280,18 @@ export async function obtenerReservasUsuario() {
       }
     }
 
-    // Buscar el empleado por email
-    const { data: empleado, error: empleadoError } = await supabase
-      .from("empleados")
-      .select("id")
-      .eq('email', session.user.email)
-      .single()
-    
-    if (empleadoError || !empleado) {
+    const empleadosSesion = await obtenerEmpleadosSesion(session)
+    if (!empleadosSesion.success || empleadosSesion.empleados.length === 0) {
       return {
         success: false,
-        error: "No se encontró el empleado asociado a este usuario"
+        error: empleadosSesion.error || "No se encontró el empleado asociado a este usuario"
       }
     }
+    const emailNormalizado = normalizarEmail(String(session.user.email || ""))
+    const empleadoIds = empleadosSesion.empleados.map((e) => e.id)
 
     // Obtener las reservas del usuario con información del coche
-    const { data: reservas, error: reservasError } = await supabase
+    const { data: reservasPorId, error: reservasError } = await supabase
       .from("reservas")
       .select(`
         *,
@@ -184,7 +304,7 @@ export async function obtenerReservasUsuario() {
           direccion_actual
         )
       `)
-      .eq('empleado_id', empleado.id)
+      .in("empleado_id", empleadoIds)
       .order('fecha_inicio', { ascending: true })
 
     if (reservasError) {
@@ -192,6 +312,37 @@ export async function obtenerReservasUsuario() {
       return {
         success: false,
         error: "Error al obtener las reservas"
+      }
+    }
+
+    let reservas = reservasPorId || []
+
+    // Fallback defensivo: por si el empleado_id del usuario y el de la reserva no encajan,
+    // recuperar por email del empleado propietario de la reserva.
+    if (reservas.length === 0) {
+      const { data: reservasConEmpleado, error: reservasConEmpleadoError } = await supabase
+        .from("reservas")
+        .select(`
+          *,
+          coches (
+            matricula,
+            marca,
+            modelo,
+            latitud,
+            longitud,
+            direccion_actual
+          ),
+          empleados (
+            id,
+            email
+          )
+        `)
+        .order("fecha_inicio", { ascending: true })
+
+      if (!reservasConEmpleadoError && reservasConEmpleado) {
+        reservas = reservasConEmpleado.filter(
+          (reserva: any) => normalizarEmail(String(reserva?.empleados?.email || "")) === emailNormalizado,
+        )
       }
     }
 
@@ -231,34 +382,25 @@ export async function cancelarReserva(reservaId: number) {
       }
     }
 
-    // Buscar el empleado por email
-    const { data: empleado, error: empleadoError } = await supabase
-      .from("empleados")
-      .select("id")
-      .eq('email', session.user.email)
-      .single()
-    
-    if (empleadoError || !empleado) {
+    const empleadosSesion = await obtenerEmpleadosSesion(session)
+    if (!empleadosSesion.success || empleadosSesion.empleados.length === 0) {
       return {
         success: false,
-        error: "No se encontró el empleado asociado a este usuario"
+        error: empleadosSesion.error || "No se encontró el empleado asociado a este usuario"
       }
     }
+    const emailNormalizado = normalizarEmail(String(session.user.email || ""))
+    const empleadoIds = empleadosSesion.empleados.map((e) => e.id)
 
     // Verificar que la reserva existe y pertenece al usuario
-    const { data: reserva, error: reservaError } = await supabase
-      .from("reservas")
-      .select("*")
-      .eq('id', reservaId)
-      .eq('empleado_id', empleado.id)
-      .single()
-    
-    if (reservaError || !reserva) {
+    const reservaUsuario = await obtenerReservaUsuarioPorId(reservaId, empleadoIds, emailNormalizado)
+    if (!reservaUsuario.success || !reservaUsuario.reserva) {
       return {
         success: false,
-        error: "Reserva no encontrada o no autorizada"
+        error: reservaUsuario.error || "Reserva no encontrada o no autorizada"
       }
     }
+    const reserva = reservaUsuario.reserva as any
 
   // Solo permitir cancelar reservas activas o pendientes
   if (!(reserva.estado === 'activa' || reserva.estado === 'pendiente')) {
@@ -307,23 +449,17 @@ export async function completarReserva(
     if (!session?.user?.email) {
       return { success: false, error: 'Usuario no autenticado' }
     }
-    const { data: empleado, error: empleadoError } = await supabase
-      .from('empleados')
-      .select('id')
-      .eq('email', session.user.email)
-      .single()
-    if (empleadoError || !empleado) {
-      return { success: false, error: 'No se encontró el empleado asociado a este usuario' }
+    const empleadosSesion = await obtenerEmpleadosSesion(session)
+    if (!empleadosSesion.success || empleadosSesion.empleados.length === 0) {
+      return { success: false, error: empleadosSesion.error || 'No se encontró el empleado asociado a este usuario' }
     }
-    const { data: reserva, error: reservaError } = await supabase
-      .from('reservas')
-      .select('*')
-      .eq('id', reservaId)
-      .eq('empleado_id', empleado.id)
-      .single()
-    if (reservaError || !reserva) {
-      return { success: false, error: 'Reserva no encontrada o no autorizada' }
+    const emailNormalizado = normalizarEmail(String(session.user.email || ""))
+    const empleadoIds = empleadosSesion.empleados.map((e) => e.id)
+    const reservaUsuario = await obtenerReservaUsuarioPorId(reservaId, empleadoIds, emailNormalizado)
+    if (!reservaUsuario.success || !reservaUsuario.reserva) {
+      return { success: false, error: reservaUsuario.error || 'Reserva no encontrada o no autorizada' }
     }
+    const reserva = reservaUsuario.reserva as any
     if (reserva.estado !== 'activa' && reserva.estado !== 'vencida') {
       return { success: false, error: 'Sólo se pueden completar reservas activas o vencidas' }
     }
@@ -368,26 +504,18 @@ export async function ampliarReservaTemporal(reservaId: number, nuevaFechaFin: s
       return { success: false, error: "Usuario no autenticado" }
     }
 
-    const { data: empleado, error: empleadoError } = await supabase
-      .from("empleados")
-      .select("id")
-      .eq("email", session.user.email)
-      .single()
-
-    if (empleadoError || !empleado) {
-      return { success: false, error: "No se encontró el empleado asociado a este usuario" }
+    const empleadosSesion = await obtenerEmpleadosSesion(session)
+    if (!empleadosSesion.success || empleadosSesion.empleados.length === 0) {
+      return { success: false, error: empleadosSesion.error || "No se encontró el empleado asociado a este usuario" }
     }
+    const emailNormalizado = normalizarEmail(String(session.user.email || ""))
+    const empleadoIds = empleadosSesion.empleados.map((e) => e.id)
 
-    const { data: reserva, error: reservaError } = await supabase
-      .from("reservas")
-      .select("id, matricula, fecha_inicio, fecha_fin, estado")
-      .eq("id", reservaId)
-      .eq("empleado_id", empleado.id)
-      .single()
-
-    if (reservaError || !reserva) {
-      return { success: false, error: "Reserva no encontrada o no autorizada" }
+    const reservaUsuario = await obtenerReservaUsuarioPorId(reservaId, empleadoIds, emailNormalizado)
+    if (!reservaUsuario.success || !reservaUsuario.reserva) {
+      return { success: false, error: reservaUsuario.error || "Reserva no encontrada o no autorizada" }
     }
+    const reserva = reservaUsuario.reserva as any
 
     if (!(reserva.estado === "pendiente" || reserva.estado === "activa")) {
       return { success: false, error: "Solo se pueden ampliar reservas pendientes o activas" }
