@@ -90,12 +90,10 @@ export default function ReservasTemporalesList({
   const [estadoLimpiezaCompletar, setEstadoLimpiezaCompletar] = useState<"" | "bien" | "regular" | "mal">("")
 
   const handleCapturarUbicacion = async (matricula: string, reservaId: number) => {
-    console.log('🔧 Capturando ubicación para:', matricula, reservaId)
     setCapturandoUbicacion(reservaId)
     
     try {
       const resultado = await capturarYAsignarUbicacion(matricula)
-      console.log('📍 Resultado captura ubicación:', resultado)
       
       if (resultado.success) {
         alert(`📍 Ubicación capturada exitosamente para ${matricula}`)
@@ -246,13 +244,6 @@ export default function ReservasTemporalesList({
                     ? 'bg-orange-100 text-orange-800 hover:bg-orange-100'
                     : undefined
                   
-                  // Debug log
-                  console.log(`🔍 Reserva ${reserva.id} (${matricula}):`, {
-                    estado: reserva.estado,
-                    puedeCancelarse,
-                    estadoInfo
-                  })
-                  
                   return (
                     <div key={reserva.id} className="bg-gray-50 p-4 rounded-lg">
                       <div className="flex items-start justify-between">
@@ -384,7 +375,6 @@ export default function ReservasTemporalesList({
                                           className="text-blue-600 hover:text-blue-700 hover:bg-blue-100 w-full"
                                           disabled={capturandoUbicacion === reserva.id}
                                           onClick={() => {
-                                            console.log('🔴 CLICK BOTÓN UBICACIÓN - Matrícula:', matricula, 'Reserva ID:', reserva.id)
                                             handleCapturarUbicacion(matricula, reserva.id)
                                           }}
                                         >
