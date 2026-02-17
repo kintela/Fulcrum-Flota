@@ -18,7 +18,7 @@ CREATE TABLE reservas (
     CONSTRAINT fk_reservas_matricula 
         FOREIGN KEY (matricula) 
         REFERENCES coches(matricula) 
-        ON DELETE CASCADE 
+        ON DELETE RESTRICT 
         ON UPDATE CASCADE,
     
     CONSTRAINT fk_reservas_empleado 

@@ -4,6 +4,7 @@ import Link from "next/link"
 import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { obtenerFotosCoche } from "@/lib/storage"
 import { CarThumbnail } from "@/components/car-thumbnail"
+import { DeleteCocheButton } from "@/components/delete-coche-button"
 
 // Tipo para los parámetros de búsqueda
 interface SearchParams {
@@ -103,8 +104,12 @@ async function getCoches(filter?: string, q?: string) {
       })
     }
 
-    // Obtenemos TODOS los coches sin filtros iniciales para evitar problemas de conversión de tipos
-    const { data: coches, error } = await supabase.from("coches").select("*").order("matricula", { ascending: true })
+    // Obtenemos solo coches no eliminados (borrado lógico)
+    const { data: coches, error } = await supabase
+      .from("coches")
+      .select("*")
+      .eq("eliminado", false)
+      .order("matricula", { ascending: true })
 
     if (error) {
       console.error("Error fetching coches:", error)
@@ -588,19 +593,22 @@ export default async function CochesPage({ searchParams }: { searchParams: Searc
                       )}
                     </div>
 
-                    <div className="flex justify-end space-x-2">
-                      <Link
-                        href={`/coches/detalle/${encodeURIComponent(coche.matricula)}`}
-                        className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-1 rounded text-sm"
-                      >
-                        Ver detalles
-                      </Link>
-                      <Link
-                        href={`/coches/editar/${encodeURIComponent(coche.matricula)}`}
-                        className="bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1 rounded text-sm"
-                      >
-                        Editar
-                      </Link>
+                    <div className="flex items-center justify-between">
+                      <DeleteCocheButton matricula={coche.matricula} />
+                      <div className="flex space-x-2">
+                        <Link
+                          href={`/coches/detalle/${encodeURIComponent(coche.matricula)}`}
+                          className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-1 rounded text-sm"
+                        >
+                          Ver detalles
+                        </Link>
+                        <Link
+                          href={`/coches/editar/${encodeURIComponent(coche.matricula)}`}
+                          className="bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1 rounded text-sm"
+                        >
+                          Editar
+                        </Link>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
