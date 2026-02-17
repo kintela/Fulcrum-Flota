@@ -464,8 +464,8 @@ export function MisReservas({
     }
   }
 
-  const reservasActivas = reservas.filter(r => r.estado === 'activa' || r.estado === 'pendiente')
-  const reservasHistoricas = reservas.filter(r => r.estado !== 'activa' && r.estado !== 'pendiente')
+  const reservasActivas = reservas.filter(r => r.estado === 'activa' || r.estado === 'pendiente' || r.estado === 'vencida')
+  const reservasHistoricas = reservas.filter(r => r.estado !== 'activa' && r.estado !== 'pendiente' && r.estado !== 'vencida')
   const matriculaSeleccionada = historialSeleccionado?.coches.matricula ?? null
   const fichaSeleccionada = matriculaSeleccionada ? fichaCocheCache[matriculaSeleccionada] : null
   const itvStatusSeleccionado = fichaSeleccionada?.proximaRevisionITV
