@@ -18,12 +18,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Calendar, Clock, Car, X, RefreshCw, AlertTriangle, MapPin, Loader2, Plus, CreditCard, Truck } from "lucide-react"
+import { Calendar, Clock, Car, X, RefreshCw, AlertTriangle, Loader2, Plus, CreditCard, Truck } from "lucide-react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { obtenerReservasUsuario, cancelarReserva, completarReserva, ampliarReservaTemporal } from "@/app/actions/reservas-temporales"
 import { ubicarCocheEnSede } from "@/app/actions/ubicacion"
-import { capturarYAsignarUbicacion } from "@/lib/ubicacion-utils"
 import { obtenerFotosCoche } from "@/lib/storage"
 import { CarThumbnail } from "@/components/car-thumbnail"
 import { obtenerFichaCoche, type CocheFicha } from "@/app/actions/coches"
@@ -88,7 +87,9 @@ export function MisReservas({
   const [cancellingId, setCancellingId] = useState<number | null>(null)
   const [showCancelDialog, setShowCancelDialog] = useState(false)
   const [reservaToCancel, setReservaToCancel] = useState<Reserva | null>(null)
-  const [capturandoUbicacion, setCapturandoUbicacion] = useState<number | null>(null)
+  const [observacionCancelar, setObservacionCancelar] = useState("")
+  const [quejaCancelar, setQuejaCancelar] = useState("")
+  const [estadoLimpiezaCancelar, setEstadoLimpiezaCancelar] = useState<"" | "bien" | "regular" | "mal">("")
   const [completingId, setCompletingId] = useState<number | null>(null)
   const [ubicandoId, setUbicandoId] = useState<number | null>(null)
   const [showCompleteDialog, setShowCompleteDialog] = useState(false)
@@ -213,17 +214,25 @@ export function MisReservas({
     }
   }, [historialSeleccionado, fichaCocheCache])
 
-  const handleCancelarReserva = async (reservaId: number) => {
+  const handleCancelarReserva = async (
+    reservaId: number,
+    observacion?: string,
+    queja?: string,
+    estadoLimpieza?: "bien" | "regular" | "mal"
+  ) => {
     setCancellingId(reservaId)
     
     try {
-      const resultado = await cancelarReserva(reservaId)
+      const resultado = await cancelarReserva(reservaId, observacion, queja, estadoLimpieza)
       
       if (resultado.success) {
         // Actualizar la lista de reservas
         await cargarReservas()
         setShowCancelDialog(false)
         setReservaToCancel(null)
+        setObservacionCancelar("")
+        setQuejaCancelar("")
+        setEstadoLimpiezaCancelar("")
         // Limpiar el coche en cancelación
         onCocheEnCancelacion?.(null)
       } else {
@@ -239,6 +248,9 @@ export function MisReservas({
 
   const handleConfirmarCancelacion = (reserva: Reserva) => {
     setReservaToCancel(reserva)
+    setObservacionCancelar("")
+    setQuejaCancelar("")
+    setEstadoLimpiezaCancelar("")
     setShowCancelDialog(true)
     // Notificar al dashboard qué coche está en cancelación
     onCocheEnCancelacion?.(reserva.coches.matricula)
@@ -247,6 +259,9 @@ export function MisReservas({
   const handleCerrarDialog = () => {
     setShowCancelDialog(false)
     setReservaToCancel(null)
+    setObservacionCancelar("")
+    setQuejaCancelar("")
+    setEstadoLimpiezaCancelar("")
     // Limpiar el coche en cancelación
     onCocheEnCancelacion?.(null)
   }
@@ -374,27 +389,6 @@ export function MisReservas({
       setExtendError("Error inesperado al ampliar la reserva")
     } finally {
       setExtendingId(null)
-    }
-  }
-
-  const handleCapturarUbicacion = async (matricula: string, reservaId: number) => {
-    console.log('🔧 [MisReservas] Capturando ubicación para:', matricula, reservaId)
-    setCapturandoUbicacion(reservaId)
-    
-    try {
-      const resultado = await capturarYAsignarUbicacion(matricula)
-      console.log('📍 [MisReservas] Resultado captura ubicación:', resultado)
-      
-      if (resultado.success) {
-        alert(`📍 Ubicación capturada exitosamente para ${matricula}`)
-      } else {
-        alert(`❌ Error: ${resultado.mensaje}`)
-      }
-    } catch (error) {
-      console.error('❌ [MisReservas] Error capturando ubicación:', error)
-      alert('❌ Error inesperado al capturar la ubicación')
-    } finally {
-      setCapturandoUbicacion(null)
     }
   }
 
@@ -965,20 +959,29 @@ export function MisReservas({
         </Dialog>
 
         {/* Diálogo de confirmación para cancelar reserva */}
-        <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <AlertDialog
+          open={showCancelDialog}
+          onOpenChange={(open) => {
+            if (!open) {
+              handleCerrarDialog()
+            } else {
+              setShowCancelDialog(true)
+            }
+          }}
+        >
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle asChild>
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="h-5 w-5 text-red-600" />
-                  Confirmar cancelación
+                  Cancelar reserva
                 </div>
               </AlertDialogTitle>
               <AlertDialogDescription asChild>
-                <div className="space-y-2">
-                  <p>¿Estás seguro de que quieres cancelar esta reserva?</p>
+                <div className="space-y-3">
+                  <p>¿Quieres añadir una observación para esta cancelación?</p>
                   {reservaToCancel && (
-                    <div className="mt-3 p-3 bg-gray-50 rounded-md border">
+                    <div className="mt-2 p-3 bg-gray-50 rounded-md border">
                       <p className="font-semibold text-gray-900">
                         {reservaToCancel.coches.matricula} - {reservaToCancel.coches.marca} {reservaToCancel.coches.modelo}
                       </p>
@@ -995,61 +998,67 @@ export function MisReservas({
                       )}
                     </div>
                   )}
-                  
-                  {/* Sección de capturar ubicación */}
-                  {reservaToCancel && (
-                    <div className="bg-blue-50 p-4 rounded-md border border-blue-200">
-                      <p className="text-sm text-blue-700 mb-3">
-                        💡 <strong>¿Dónde está el vehículo?</strong> Antes de cancelar, puedes registrar automáticamente la ubicación actual del vehículo:
-                      </p>
-                      
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-blue-600 hover:text-blue-700 hover:bg-blue-100 w-full"
-                        disabled={capturandoUbicacion === reservaToCancel.id}
-                        onClick={() => {
-                          console.log('� [MisReservas] Capturando ubicación - Matrícula:', reservaToCancel.coches.matricula, 'Reserva ID:', reservaToCancel.id)
-                          handleCapturarUbicacion(reservaToCancel.coches.matricula, reservaToCancel.id)
-                        }}
-                      >
-                        {capturandoUbicacion === reservaToCancel.id ? (
-                          <div className="flex items-center gap-2">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Obteniendo ubicación GPS...
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <MapPin className="h-4 w-4" />
-                            � Registrar ubicación actual del vehículo
-                          </div>
-                        )}
-                      </Button>
-                    </div>
-                  )}
-                  
-                  <p className="text-sm text-red-600 font-medium">
-                    Esta acción no se puede deshacer.
-                  </p>
+                  <div>
+                    <Label htmlFor="observacion-cancelar">Observaciones (opcional)</Label>
+                    <Textarea
+                      id="observacion-cancelar"
+                      value={observacionCancelar}
+                      onChange={(e) => setObservacionCancelar(e.target.value)}
+                      placeholder="Escribe una observación..."
+                      className="mt-2"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="queja-cancelar">Quejas (opcional)</Label>
+                    <Textarea
+                      id="queja-cancelar"
+                      value={quejaCancelar}
+                      onChange={(e) => setQuejaCancelar(e.target.value)}
+                      placeholder="Escribe una queja..."
+                      className="mt-2"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="estado-limpieza-cancelar">Estado de limpieza (opcional)</Label>
+                    <select
+                      id="estado-limpieza-cancelar"
+                      value={estadoLimpiezaCancelar}
+                      onChange={(e) => setEstadoLimpiezaCancelar(e.target.value as any)}
+                      className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                    >
+                      <option value="">Sin seleccionar</option>
+                      <option value="bien">bien</option>
+                      <option value="regular">regular</option>
+                      <option value="mal">mal</option>
+                    </select>
+                  </div>
                 </div>
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel onClick={handleCerrarDialog}>
-                No, mantener reserva
+                Cancelar
               </AlertDialogCancel>
               <AlertDialogAction
-                onClick={() => reservaToCancel && handleCancelarReserva(reservaToCancel.id)}
+                onClick={() =>
+                  reservaToCancel &&
+                  handleCancelarReserva(
+                    reservaToCancel.id,
+                    observacionCancelar,
+                    quejaCancelar,
+                    estadoLimpiezaCancelar || undefined
+                  )
+                }
                 className="bg-red-600 hover:bg-red-700"
                 disabled={cancellingId !== null}
               >
                 {cancellingId === reservaToCancel?.id ? (
                   <>
                     <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    Cancelando...
+                    Guardando...
                   </>
                 ) : (
-                  'Sí, cancelar reserva'
+                  'Cancelar reserva'
                 )}
               </AlertDialogAction>
             </AlertDialogFooter>
