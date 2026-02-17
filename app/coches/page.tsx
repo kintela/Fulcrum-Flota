@@ -461,8 +461,6 @@ export default async function CochesPage({ searchParams }: { searchParams: Searc
                         />
                         {empleadoAsignado ? (
                           <p className="text-sm text-blue-600 font-medium text-right mt-1">{empleadoAsignado}</p>
-                        ) : coche.alquiler ? (
-                          <p className="text-sm text-purple-600 font-medium mt-1">Alquiler</p>
                         ) : (
                           <p className="text-sm text-gray-400 mt-1">Sin asignar</p>
                         )}
