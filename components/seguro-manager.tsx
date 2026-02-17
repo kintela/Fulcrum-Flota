@@ -355,7 +355,7 @@ export function SeguroManager({ matricula, isEditing = false }: SeguroManagerPro
                       </div>
 
                       <div>
-                        <Label htmlFor="importe_anual">Importe Anual (€)</Label>
+                        <Label htmlFor="importe_anual">Importe Anual (€) *</Label>
                         <Input
                           id="importe_anual"
                           name="importe_anual"

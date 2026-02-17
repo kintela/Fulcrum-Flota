@@ -171,7 +171,7 @@ export default async function EditarCochePage({ params }: { params: { id: string
           {/* Managers adicionales */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Gestión de Seguros */}
-            <SeguroManager matricula={coche.matricula} />
+            <SeguroManager matricula={coche.matricula} isEditing />
 
             {/* Gestión de ITVs */}
             <ITVManager matricula={coche.matricula} isEditing />
