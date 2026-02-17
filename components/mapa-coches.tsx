@@ -1214,17 +1214,23 @@ const selectedMatriculaRef = useRef<string>("all")
   return (
     <Card className="w-full">
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle className="flex items-center gap-2 leading-tight">
             <MapPin className="h-5 w-5" />
             Mapa de Vehículos
           </CardTitle>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handleCenter} disabled={isLoading || !mapInstance.current}>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full sm:w-auto"
+              onClick={handleCenter}
+              disabled={isLoading || !mapInstance.current}
+            >
               <Navigation className="h-4 w-4 mr-2" />
               Centrar
             </Button>
-            <Button variant="outline" size="sm" onClick={handleRefresh}>
+            <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={handleRefresh}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Actualizar
             </Button>
@@ -1235,12 +1241,12 @@ const selectedMatriculaRef = useRef<string>("all")
         <div className="space-y-4">
           {/* Selector de vehículo - USANDO SELECT NATIVO */}
           <div className="bg-white p-4 rounded-lg border">
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap">
               <div className="flex items-center gap-2">
                 <Car className="h-4 w-4 text-gray-500" />
                 <span className="text-sm font-medium text-gray-700">Buscar vehículo:</span>
               </div>
-              <div className="flex-1 max-w-xs">
+              <div className="w-full sm:flex-1 sm:max-w-xs">
                 <select
                   key={selectKey} // Clave para forzar re-renderizado completo
                   value={selectedMatricula}
@@ -1299,7 +1305,7 @@ const selectedMatriculaRef = useRef<string>("all")
               
               {/* Indicador de filtro activo */}
               {filterMode !== "all" && (
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <div className={`w-3 h-3 rounded-full ${
                     filterMode === "available" ? "bg-blue-500" :
                     filterMode === "assigned" ? "bg-green-500" :
@@ -1357,7 +1363,7 @@ const selectedMatriculaRef = useRef<string>("all")
                  const bloqueadaPorVencida = !!estadoReserva?.vencida
                  const bloqueadaPorBaneado = usuarioBaneado
                  return (
-                  <div className="flex items-center gap-3">
+                  <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto">
                     <Button
                       onClick={handleAbrirReservaTemporal}
                       disabled={isReserving || isReleasing || bloqueadaPorVencida || bloqueadaPorBaneado}
@@ -1394,7 +1400,7 @@ const selectedMatriculaRef = useRef<string>("all")
                  const asignado = !!cocheSeleccionado.asignadoa
                  return asignado || bloqueadoPorReserva
                })() && (
-                <div className="bg-gray-50 border border-gray-200 rounded-md p-3">
+                <div className="basis-full bg-gray-50 border border-gray-200 rounded-md p-3">
                   <div className="flex items-center gap-2 text-gray-600">
                     <Ban className="h-4 w-4" />
                     <span className="text-sm">Este vehículo tiene restricciones</span>
@@ -1647,8 +1653,8 @@ const selectedMatriculaRef = useRef<string>("all")
 
           {/* Leyenda */}
           {isAdmin && (
-          <div className="flex items-center justify-between bg-white p-3 rounded-lg border">
-            <div className="flex items-center gap-6 text-sm text-gray-600">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between bg-white p-3 rounded-lg border overflow-hidden">
+            <div className="min-w-0 flex flex-wrap items-start gap-x-4 gap-y-2 text-sm text-gray-600">
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
                 <span>Disponible</span>
@@ -1670,7 +1676,7 @@ const selectedMatriculaRef = useRef<string>("all")
                 <span>Sin ubicación</span>
               </div>
               {userRole && (
-                <div className="flex items-center gap-2 text-xs">
+                <div className="basis-full flex min-w-0 items-start gap-2 text-xs">
                   <span className="text-green-600">🖱️</span>
                   <span className="text-green-600">
                     {userRole === 'administrador' 
@@ -1682,7 +1688,7 @@ const selectedMatriculaRef = useRef<string>("all")
             </div>
             
             {/* Información de filtrado */}
-            <div className="text-xs text-gray-400">
+            <div className="text-xs text-gray-400 sm:text-right">
               {filterMode !== "all" 
                 ? (() => {
                     let count = 0
