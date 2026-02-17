@@ -2,6 +2,7 @@
 
 import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { revalidatePath } from "next/cache"
+import { TIPOS_SEGURO, esTipoSeguroValido } from "@/lib/seguros"
 
 // Obtener seguro activo por matrícula
 export async function obtenerSeguroActivo(matricula: string) {
@@ -70,6 +71,14 @@ export async function crearSeguro(formData: FormData) {
   try {
     const matricula = formData.get("matricula") as string
     const activo = formData.get("activo") === "on"
+    const tipo = (formData.get("tipo") as string) || TIPOS_SEGURO[0]
+
+    if (!esTipoSeguroValido(tipo)) {
+      return {
+        success: false,
+        error: `Tipo de seguro no válido. Valores permitidos: ${TIPOS_SEGURO.join(", ")}`,
+      }
+    }
 
     // Si el nuevo seguro es activo, desactivar los seguros activos existentes
     if (activo) {
@@ -82,7 +91,7 @@ export async function crearSeguro(formData: FormData) {
       fecha_contratacion: formData.get("fecha_contratacion") as string,
       fecha_vencimiento: formData.get("fecha_vencimiento") as string,
       compania: formData.get("compania") as string,
-      tipo: formData.get("tipo") as string,
+      tipo,
       importe_anual: formData.get("importe_anual") ? Number.parseFloat(formData.get("importe_anual") as string) : null,
       telefono_asistencia1: formData.get("telefono_asistencia") as string,
       telefono_asistencia2: formData.get("telefono_asistencia2") as string,
@@ -136,6 +145,14 @@ export async function actualizarSeguro(id: number, formData: FormData) {
   try {
     const matricula = formData.get("matricula") as string
     const activo = formData.get("activo") === "on"
+    const tipo = (formData.get("tipo") as string) || TIPOS_SEGURO[0]
+
+    if (!esTipoSeguroValido(tipo)) {
+      return {
+        success: false,
+        error: `Tipo de seguro no válido. Valores permitidos: ${TIPOS_SEGURO.join(", ")}`,
+      }
+    }
 
     // Si el seguro actualizado es activo, desactivar los demás seguros activos
     if (activo) {
@@ -147,7 +164,7 @@ export async function actualizarSeguro(id: number, formData: FormData) {
       fecha_contratacion: formData.get("fecha_contratacion") as string,
       fecha_vencimiento: formData.get("fecha_vencimiento") as string,
       compania: formData.get("compania") as string,
-      tipo: formData.get("tipo") as string,
+      tipo,
       importe_anual: formData.get("importe_anual") ? Number.parseFloat(formData.get("importe_anual") as string) : null,
       telefono_asistencia1: formData.get("telefono_asistencia") as string,
       telefono_asistencia2: formData.get("telefono_asistencia2") as string,
