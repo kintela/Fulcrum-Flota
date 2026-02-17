@@ -13,6 +13,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Checkbox } from "@/components/ui/checkbox"
 import { Plus, Edit2, Trash2, Shield, Phone } from "lucide-react"
 import { obtenerHistorialSeguros, crearSeguro, actualizarSeguro, eliminarSeguro } from "@/app/actions/seguros"
+import { TIPOS_SEGURO } from "@/lib/seguros"
 
 // Actualizar la interfaz Seguro para usar los nombres correctos de las columnas
 interface Seguro {
@@ -50,7 +51,7 @@ export function SeguroManager({ matricula, isEditing = false }: SeguroManagerPro
     fecha_contratacion: "",
     fecha_vencimiento: "",
     compania: "",
-    tipo: "Terceros",
+    tipo: TIPOS_SEGURO[0],
     importe_anual: undefined,
     telefono_asistencia: "",
     telefono_asistencia2: "",
@@ -74,7 +75,7 @@ export function SeguroManager({ matricula, isEditing = false }: SeguroManagerPro
         fecha_contratacion: editingSeguro.fecha_contratacion || "",
         fecha_vencimiento: editingSeguro.fecha_vencimiento || "",
         compania: editingSeguro.compania || "",
-        tipo: editingSeguro.tipo || "Terceros",
+        tipo: editingSeguro.tipo || TIPOS_SEGURO[0],
         importe_anual: editingSeguro.importe_anual,
         telefono_asistencia: editingSeguro.telefono_asistencia1 || "",
         telefono_asistencia2: editingSeguro.telefono_asistencia2 || "",
@@ -89,7 +90,7 @@ export function SeguroManager({ matricula, isEditing = false }: SeguroManagerPro
         fecha_contratacion: "",
         fecha_vencimiento: "",
         compania: "",
-        tipo: "Terceros",
+        tipo: TIPOS_SEGURO[0],
         importe_anual: undefined,
         telefono_asistencia: "",
         telefono_asistencia2: "",
@@ -154,7 +155,7 @@ export function SeguroManager({ matricula, isEditing = false }: SeguroManagerPro
     formDataObj.append("fecha_contratacion", formData.fecha_contratacion || "")
     formDataObj.append("fecha_vencimiento", formData.fecha_vencimiento || "")
     formDataObj.append("compania", formData.compania || "")
-    formDataObj.append("tipo", formData.tipo || "Terceros")
+    formDataObj.append("tipo", formData.tipo || TIPOS_SEGURO[0])
 
     if (formData.importe_anual !== undefined) {
       formDataObj.append("importe_anual", formData.importe_anual.toString())
@@ -343,19 +344,20 @@ export function SeguroManager({ matricula, isEditing = false }: SeguroManagerPro
                         <select
                           id="tipo"
                           name="tipo"
-                          value={formData.tipo || "Terceros"}
+                          value={formData.tipo || TIPOS_SEGURO[0]}
                           onChange={handleInputChange}
                           className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         >
-                          <option value="Terceros">Terceros</option>
-                          <option value="Terceros Ampliado">Terceros Ampliado</option>
-                          <option value="Todo Riesgo">Todo Riesgo</option>
-                          <option value="Todo Riesgo con Franquicia">Todo Riesgo con Franquicia</option>
+                          {TIPOS_SEGURO.map((tipoSeguro) => (
+                            <option key={tipoSeguro} value={tipoSeguro}>
+                              {tipoSeguro}
+                            </option>
+                          ))}
                         </select>
                       </div>
 
                       <div>
-                        <Label htmlFor="importe_anual">Importe Anual (€)</Label>
+                        <Label htmlFor="importe_anual">Importe Anual (€) *</Label>
                         <Input
                           id="importe_anual"
                           name="importe_anual"

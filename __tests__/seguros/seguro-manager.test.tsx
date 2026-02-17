@@ -128,7 +128,7 @@ describe("SeguroManager", () => {
     expect(screen.getByLabelText("Fecha de Contratación *")).toBeInTheDocument()
     expect(screen.getByLabelText("Fecha de Vencimiento *")).toBeInTheDocument()
     expect(screen.getByLabelText("Tipo de Seguro")).toBeInTheDocument()
-    expect(screen.getByLabelText("Importe Anual (€)")).toBeInTheDocument()
+    expect(screen.getByLabelText("Importe Anual (€) *")).toBeInTheDocument()
     expect(screen.getByLabelText("Teléfono de Asistencia")).toBeInTheDocument()
     expect(screen.getByLabelText("Teléfono de Asistencia Alternativo")).toBeInTheDocument()
     expect(screen.getByLabelText("Observaciones")).toBeInTheDocument()
@@ -150,7 +150,7 @@ describe("SeguroManager", () => {
     fireEvent.change(screen.getByLabelText("Compañía Aseguradora *"), { target: { value: "Test Insurance" } })
     fireEvent.change(screen.getByLabelText("Fecha de Contratación *"), { target: { value: "2023-06-01" } })
     fireEvent.change(screen.getByLabelText("Fecha de Vencimiento *"), { target: { value: "2024-06-01" } })
-    fireEvent.change(screen.getByLabelText("Importe Anual (€)"), { target: { value: "450" } })
+    fireEvent.change(screen.getByLabelText("Importe Anual (€) *"), { target: { value: "450" } })
     fireEvent.change(screen.getByLabelText("Teléfono de Asistencia"), { target: { value: "900999888" } })
     fireEvent.change(screen.getByLabelText("Observaciones"), {
       target: { value: "Observaciones de prueba para el test" },

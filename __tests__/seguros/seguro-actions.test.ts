@@ -143,6 +143,25 @@ describe("Acciones de Seguros", () => {
       expect(supabase.insert).not.toHaveBeenCalled()
     })
 
+    it("valida que el tipo de seguro sea válido", async () => {
+      const mockFormData = new FormData()
+      mockFormData.append("matricula", "1234ABC")
+      mockFormData.append("numero_poliza", "POL-12345")
+      mockFormData.append("fecha_contratacion", "2023-01-01")
+      mockFormData.append("fecha_vencimiento", "2024-01-01")
+      mockFormData.append("compania", "Mapfre")
+      mockFormData.append("tipo", "Invalido")
+
+      const result = await crearSeguro(mockFormData)
+
+      expect(result).toEqual({
+        success: false,
+        error:
+          "Tipo de seguro no válido. Valores permitidos: Terceros, Terceros Ampliado, Todo Riesgo, Todo Riesgo con Franquicia",
+      })
+      expect(supabase.insert).not.toHaveBeenCalled()
+    })
+
     it("maneja errores de base de datos", async () => {
       const mockFormData = new FormData()
       mockFormData.append("matricula", "1234ABC")
