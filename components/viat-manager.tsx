@@ -15,41 +15,38 @@ import {
   asignarTarjetaViat,
   desasignarTarjetaViat,
   crearTarjetaViat,
-  obtenerHistorialViatEmpleado,
+  obtenerHistorialViatCoche,
 } from "@/app/actions/viats"
 
 interface ViatManagerProps {
-  empleadoId: number | null
+  matricula?: string | null
   isEditing?: boolean
-  onViatChange?: (viatId: number | null, observaciones?: string) => void
-  showEmployeeAssignment?: boolean
 }
 
 interface TarjetaViat {
-  id: number
+  id: string
   fechacaducidad: string
   activo: boolean
-  created_at: string
-  updated_at: string
+  created_at?: string
+  updated_at?: string
 }
 
 interface AsignacionViat {
   id: number
-  viat_id: number
-  empleado_id: number
+  viat_id: string
+  matricula: string
   fecha_asignacion: string
   fecha_desasignacion: string | null
-  activa: boolean
   observaciones: string | null
-  viats: TarjetaViat
+  viats: TarjetaViat | null
 }
 
-export function ViatManager({
-  empleadoId,
-  isEditing = false,
-  onViatChange,
-  showEmployeeAssignment = true,
-}: ViatManagerProps) {
+function normalizarMatricula(matricula?: string | null) {
+  return (matricula || "").trim().toUpperCase()
+}
+
+export function ViatManager({ matricula, isEditing = false }: ViatManagerProps) {
+  const matriculaNormalizada = normalizarMatricula(matricula)
   const [tarjetasViat, setTarjetasViat] = useState<TarjetaViat[]>([])
   const [tarjetaAsignada, setTarjetaAsignada] = useState<AsignacionViat | null>(null)
   const [historial, setHistorial] = useState<AsignacionViat[]>([])
@@ -63,22 +60,36 @@ export function ViatManager({
 
   useEffect(() => {
     cargarDatos()
-  }, [empleadoId])
+  }, [matriculaNormalizada])
 
   const cargarDatos = async () => {
     try {
       setIsLoading(true)
+      setError(null)
       const tarjetas = await obtenerTarjetasViat()
       setTarjetasViat(tarjetas)
 
-      if (empleadoId && showEmployeeAssignment) {
+      if (matriculaNormalizada) {
         const [asignada, historialData] = await Promise.all([
-          obtenerTarjetaViatAsignada(empleadoId),
-          obtenerHistorialViatEmpleado(empleadoId),
+          obtenerTarjetaViatAsignada(matriculaNormalizada),
+          obtenerHistorialViatCoche(matriculaNormalizada),
         ])
 
-        setTarjetaAsignada(asignada)
-        setHistorial(historialData)
+        setTarjetaAsignada(asignada as AsignacionViat | null)
+        setHistorial((historialData as AsignacionViat[]) || [])
+
+        if (asignada?.viat_id) {
+          setTarjetaSeleccionada(asignada.viat_id)
+          setObservaciones(asignada.observaciones || "")
+        } else {
+          setTarjetaSeleccionada("")
+          setObservaciones("")
+        }
+      } else {
+        setTarjetaAsignada(null)
+        setHistorial([])
+        setTarjetaSeleccionada("")
+        setObservaciones("")
       }
     } catch (error) {
       console.error("Error al cargar datos ViaT:", error)
@@ -89,32 +100,18 @@ export function ViatManager({
   }
 
   const handleAsignarTarjeta = async () => {
-    if (!empleadoId || !tarjetaSeleccionada) return
+    if (!matriculaNormalizada || !tarjetaSeleccionada) return
 
     try {
       setIsLoading(true)
       setError(null)
 
-      // Si hay callback, notificar el cambio
-      if (onViatChange) {
-        onViatChange(Number.parseInt(tarjetaSeleccionada), observaciones)
-      }
+      const resultado = await asignarTarjetaViat(matriculaNormalizada, tarjetaSeleccionada, observaciones)
 
-      // Si se debe mostrar la asignación de empleado, crear la relación
-      if (showEmployeeAssignment) {
-        const resultado = await asignarTarjetaViat(empleadoId, Number.parseInt(tarjetaSeleccionada), observaciones)
-
-        if (resultado.success) {
-          await cargarDatos()
-          setTarjetaSeleccionada("")
-          setObservaciones("")
-        } else {
-          setError(resultado.error || "Error al asignar la tarjeta ViaT")
-        }
+      if (resultado.success) {
+        await cargarDatos()
       } else {
-        // Solo limpiar el formulario si no hay asignación de empleado
-        setTarjetaSeleccionada("")
-        setObservaciones("")
+        setError(resultado.error || "Error al asignar la tarjeta ViaT")
       }
     } catch (error) {
       console.error("Error al asignar tarjeta ViaT:", error)
@@ -125,26 +122,17 @@ export function ViatManager({
   }
 
   const handleDesasignarTarjeta = async () => {
-    if (!empleadoId) return
+    if (!matriculaNormalizada) return
 
     try {
       setIsLoading(true)
       setError(null)
+      const resultado = await desasignarTarjetaViat(matriculaNormalizada)
 
-      // Si hay callback, notificar el cambio
-      if (onViatChange) {
-        onViatChange(null)
-      }
-
-      // Si se debe mostrar la asignación de empleado, desasignar
-      if (showEmployeeAssignment) {
-        const resultado = await desasignarTarjetaViat(empleadoId)
-
-        if (resultado.success) {
-          await cargarDatos()
-        } else {
-          setError(resultado.error || "Error al desasignar la tarjeta ViaT")
-        }
+      if (resultado.success) {
+        await cargarDatos()
+      } else {
+        setError(resultado.error || "Error al desasignar la tarjeta ViaT")
       }
     } catch (error) {
       console.error("Error al desasignar tarjeta ViaT:", error)
@@ -169,14 +157,9 @@ export function ViatManager({
       if (resultado.success) {
         await cargarDatos()
         setMostrarFormularioNueva(false)
+        setTarjetaSeleccionada(nuevoNumeroTarjeta)
         setNuevoNumeroTarjeta("")
         setNuevaFechaCaducidad("")
-
-        // Si hay callback y empleado, asignar automáticamente la nueva tarjeta
-        if (onViatChange && empleadoId && !showEmployeeAssignment) {
-          setTarjetaSeleccionada(nuevoNumeroTarjeta)
-          onViatChange(Number.parseInt(nuevoNumeroTarjeta), "")
-        }
       } else {
         setError(resultado.error || "Error al crear la tarjeta ViaT")
       }
@@ -197,10 +180,6 @@ export function ViatManager({
   }
 
   const formatearNumeroTarjeta = (numero: string) => {
-    // Formatear el número de tarjeta para mostrar solo los últimos 4 dígitos
-    if (numero.length === 16) {
-      return `**** **** **** ${numero.slice(-4)}`
-    }
     return numero
   }
 
@@ -212,23 +191,11 @@ export function ViatManager({
   }
 
   const handleTarjetaSeleccionadaChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value
-    setTarjetaSeleccionada(value)
-
-    // Si hay callback, notificar el cambio inmediatamente
-    if (onViatChange && !showEmployeeAssignment) {
-      onViatChange(value ? Number.parseInt(value) : null, observaciones)
-    }
+    setTarjetaSeleccionada(e.target.value)
   }
 
   const handleObservacionesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const value = e.target.value
-    setObservaciones(value)
-
-    // Si hay callback y tarjeta seleccionada, notificar el cambio
-    if (onViatChange && !showEmployeeAssignment && tarjetaSeleccionada) {
-      onViatChange(Number.parseInt(tarjetaSeleccionada), value)
-    }
+    setObservaciones(e.target.value)
   }
 
   if (isLoading && tarjetasViat.length === 0) {
@@ -262,16 +229,8 @@ export function ViatManager({
           </div>
         )}
 
-        {/* Campos ocultos para el formulario */}
-        {!showEmployeeAssignment && (
-          <>
-            <input type="hidden" name="viat_id" value={tarjetaSeleccionada} />
-            <input type="hidden" name="observaciones_viat" value={observaciones} />
-          </>
-        )}
-
         {/* Tarjeta actualmente asignada */}
-        {tarjetaAsignada && showEmployeeAssignment && (
+        {tarjetaAsignada ? (
           <div className="p-4 bg-green-50 border border-green-200 rounded-md">
             <div className="flex items-center justify-between">
               <div>
@@ -279,24 +238,27 @@ export function ViatManager({
                 <div className="mt-2 space-y-1 text-sm text-green-700">
                   <p className="flex items-center gap-2">
                     <CreditCard className="h-4 w-4" />
-                    Número: {formatearNumeroTarjeta(tarjetaAsignada.viat_id.toString())}
+                    Número: {formatearNumeroTarjeta(tarjetaAsignada.viat_id)}
                   </p>
-                  <p className="flex items-center gap-2">
-                    <CalendarDays className="h-4 w-4" />
-                    Caducidad: {formatearFecha(tarjetaAsignada.viats.fechacaducidad)}
-                    {estaVencida(tarjetaAsignada.viats.fechacaducidad) && (
-                      <Badge variant="destructive" className="ml-2">
-                        <AlertTriangle className="h-3 w-3 mr-1" />
-                        Vencida
-                      </Badge>
-                    )}
-                  </p>
+                  {tarjetaAsignada.viats && (
+                    <p className="flex items-center gap-2">
+                      <CalendarDays className="h-4 w-4" />
+                      Caducidad: {formatearFecha(tarjetaAsignada.viats.fechacaducidad)}
+                      {estaVencida(tarjetaAsignada.viats.fechacaducidad) && (
+                        <Badge variant="destructive" className="ml-2">
+                          <AlertTriangle className="h-3 w-3 mr-1" />
+                          Vencida
+                        </Badge>
+                      )}
+                    </p>
+                  )}
                   <p>Asignada: {formatearFecha(tarjetaAsignada.fecha_asignacion)}</p>
                   {tarjetaAsignada.observaciones && <p>Observaciones: {tarjetaAsignada.observaciones}</p>}
                 </div>
               </div>
               {isEditing && (
                 <Button
+                  type="button"
                   variant="outline"
                   size="sm"
                   onClick={handleDesasignarTarjeta}
@@ -309,13 +271,15 @@ export function ViatManager({
               )}
             </div>
           </div>
+        ) : (
+          <div className="p-4 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-600">Sin tarjeta ViaT asignada</div>
         )}
 
         {/* Formulario para asignar nueva tarjeta */}
-        {isEditing && (!tarjetaAsignada || !showEmployeeAssignment) && (
+        {isEditing && matriculaNormalizada && (
           <div className="space-y-4">
             <div>
-              <Label htmlFor="tarjeta-viat">Seleccionar Tarjeta ViaT</Label>
+              <Label htmlFor="tarjeta-viat">Seleccionar Tarjeta Existente</Label>
               <select
                 id="tarjeta-viat"
                 value={tarjetaSeleccionada}
@@ -325,7 +289,7 @@ export function ViatManager({
                 <option value="">Seleccionar tarjeta...</option>
                 {tarjetasViat.map((tarjeta) => (
                   <option key={tarjeta.id} value={tarjeta.id}>
-                    {formatearNumeroTarjeta(tarjeta.id.toString())} - Caduca: {formatearFecha(tarjeta.fechacaducidad)}
+                    {formatearNumeroTarjeta(tarjeta.id)} - Caduca: {formatearFecha(tarjeta.fechacaducidad)}
                     {estaVencida(tarjeta.fechacaducidad) ? " (VENCIDA)" : ""}
                   </option>
                 ))}
@@ -344,11 +308,9 @@ export function ViatManager({
               />
             </div>
 
-            {showEmployeeAssignment && (
-              <Button onClick={handleAsignarTarjeta} disabled={!tarjetaSeleccionada || isLoading} className="w-full">
-                {isLoading ? "Asignando..." : "Asignar Tarjeta ViaT"}
-              </Button>
-            )}
+            <Button type="button" onClick={handleAsignarTarjeta} disabled={!tarjetaSeleccionada || isLoading} className="w-full">
+              {isLoading ? "Guardando..." : "Guardar Tarjeta ViaT"}
+            </Button>
           </div>
         )}
 
@@ -356,7 +318,7 @@ export function ViatManager({
         {isEditing && (
           <div className="border-t pt-4">
             {!mostrarFormularioNueva ? (
-              <Button variant="outline" onClick={() => setMostrarFormularioNueva(true)} className="w-full">
+              <Button type="button" variant="outline" onClick={() => setMostrarFormularioNueva(true)} className="w-full">
                 <Plus className="h-4 w-4 mr-2" />
                 Crear Nueva Tarjeta ViaT
               </Button>
@@ -391,6 +353,7 @@ export function ViatManager({
 
                 <div className="flex gap-2">
                   <Button
+                    type="button"
                     onClick={handleCrearTarjeta}
                     disabled={
                       !nuevoNumeroTarjeta || !nuevaFechaCaducidad || nuevoNumeroTarjeta.length !== 16 || isLoading
@@ -400,6 +363,7 @@ export function ViatManager({
                     {isLoading ? "Creando..." : "Crear Tarjeta"}
                   </Button>
                   <Button
+                    type="button"
                     variant="outline"
                     onClick={() => {
                       setMostrarFormularioNueva(false)
@@ -418,7 +382,7 @@ export function ViatManager({
         )}
 
         {/* Historial de asignaciones */}
-        {historial.length > 0 && showEmployeeAssignment && (
+        {historial.length > 0 && (
           <div className="border-t pt-4">
             <h4 className="font-medium mb-3">Historial de Tarjetas ViaT</h4>
             <div className="space-y-2 max-h-40 overflow-y-auto">
@@ -426,19 +390,19 @@ export function ViatManager({
                 <div
                   key={asignacion.id}
                   className={`p-3 rounded-md text-sm ${
-                    asignacion.activa ? "bg-green-50 border border-green-200" : "bg-gray-50 border border-gray-200"
+                    !asignacion.fecha_desasignacion
+                      ? "bg-green-50 border border-green-200"
+                      : "bg-gray-50 border border-gray-200"
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-medium">
-                      Tarjeta: {formatearNumeroTarjeta(asignacion.viat_id.toString())}
-                    </span>
-                    <Badge variant={asignacion.activa ? "default" : "secondary"}>
-                      {asignacion.activa ? "Activa" : "Inactiva"}
+                    <span className="font-medium">Tarjeta: {formatearNumeroTarjeta(asignacion.viat_id)}</span>
+                    <Badge variant={!asignacion.fecha_desasignacion ? "default" : "secondary"}>
+                      {!asignacion.fecha_desasignacion ? "Activa" : "Inactiva"}
                     </Badge>
                   </div>
                   <div className="mt-1 text-gray-600">
-                    <p>Caducidad: {formatearFecha(asignacion.viats.fechacaducidad)}</p>
+                    {asignacion.viats && <p>Caducidad: {formatearFecha(asignacion.viats.fechacaducidad)}</p>}
                     <p>Asignada: {formatearFecha(asignacion.fecha_asignacion)}</p>
                     {asignacion.fecha_desasignacion && (
                       <p>Desasignada: {formatearFecha(asignacion.fecha_desasignacion)}</p>
@@ -451,10 +415,9 @@ export function ViatManager({
           </div>
         )}
 
-        {/* Mensaje cuando no hay empleado seleccionado */}
-        {!empleadoId && isEditing && showEmployeeAssignment && (
+        {!matriculaNormalizada && isEditing && (
           <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-            <p className="text-yellow-800 text-sm">Selecciona un empleado para gestionar las tarjetas ViaT</p>
+            <p className="text-yellow-800 text-sm">Guarda el coche con matrícula para poder gestionar la tarjeta ViaT</p>
           </div>
         )}
       </CardContent>

@@ -183,7 +183,7 @@ export default async function EditarCochePage({ params }: { params: { id: string
             <SolredManager matricula={coche.matricula} />
 
             {/* Gestión de VIAT */}
-            <ViatManager matricula={coche.matricula} />
+            <ViatManager matricula={coche.matricula} isEditing />
           </div>
 
           {/* Editor de ubicación - Al final */}
