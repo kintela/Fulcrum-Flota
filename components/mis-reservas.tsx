@@ -18,11 +18,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Calendar, Clock, Car, X, RefreshCw, AlertTriangle, Loader2, Plus, CreditCard, Truck } from "lucide-react"
+import { Calendar, Clock, Car, X, RefreshCw, AlertTriangle, MapPin, Loader2, Plus, CreditCard, Truck } from "lucide-react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { obtenerReservasUsuario, cancelarReserva, completarReserva, ampliarReservaTemporal } from "@/app/actions/reservas-temporales"
 import { ubicarCocheEnSede } from "@/app/actions/ubicacion"
+import { capturarYAsignarUbicacion } from "@/lib/ubicacion-utils"
 import { obtenerFotosCoche } from "@/lib/storage"
 import { CarThumbnail } from "@/components/car-thumbnail"
 import { obtenerFichaCoche, type CocheFicha } from "@/app/actions/coches"
@@ -87,6 +88,7 @@ export function MisReservas({
   const [cancellingId, setCancellingId] = useState<number | null>(null)
   const [showCancelDialog, setShowCancelDialog] = useState(false)
   const [reservaToCancel, setReservaToCancel] = useState<Reserva | null>(null)
+  const [capturandoUbicacion, setCapturandoUbicacion] = useState<number | null>(null)
   const [observacionCancelar, setObservacionCancelar] = useState("")
   const [quejaCancelar, setQuejaCancelar] = useState("")
   const [estadoLimpiezaCancelar, setEstadoLimpiezaCancelar] = useState<"" | "bien" | "regular" | "mal">("")
@@ -389,6 +391,38 @@ export function MisReservas({
       setExtendError("Error inesperado al ampliar la reserva")
     } finally {
       setExtendingId(null)
+    }
+  }
+
+  const handleCapturarUbicacion = async (reserva: Reserva) => {
+    setCapturandoUbicacion(reserva.id)
+
+    try {
+      const resultado = await capturarYAsignarUbicacion(reserva.coches.matricula)
+
+      if (resultado.success) {
+        if (resultado.ubicacion) {
+          onUbicacionInicial?.(reserva.coches.matricula, {
+            latitud: resultado.ubicacion.latitud,
+            longitud: resultado.ubicacion.longitud,
+            direccion_actual: reserva.coches.direccion_actual || undefined,
+          })
+        }
+        alert(`📍 Ubicación capturada y guardada para ${reserva.coches.matricula}`)
+      } else {
+        const msg = resultado.mensaje || "Error al capturar la ubicación"
+        if (msg.toLowerCase().includes("permiso denegado")) {
+          alert(
+            "No hay permiso de ubicación. Al volver a pulsar, tu navegador puede pedir permiso si está pendiente. Si ya fue bloqueado, actívalo desde el icono de ubicación del navegador para este sitio."
+          )
+        } else {
+          alert(`❌ ${msg}`)
+        }
+      }
+    } catch {
+      alert("❌ Error inesperado al capturar la ubicación")
+    } finally {
+      setCapturandoUbicacion(null)
     }
   }
 
@@ -1032,6 +1066,32 @@ export function MisReservas({
                       <option value="mal">mal</option>
                     </select>
                   </div>
+                  {reservaToCancel && (
+                    <div className="bg-blue-50 p-4 rounded-md border border-blue-200">
+                      <p className="text-sm text-blue-700 mb-3">
+                        <strong>Ubicación automática:</strong> usa la localización del navegador para guardar dónde dejas el coche.
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-blue-600 hover:text-blue-700 hover:bg-blue-100 w-full"
+                        disabled={capturandoUbicacion === reservaToCancel.id}
+                        onClick={() => handleCapturarUbicacion(reservaToCancel)}
+                      >
+                        {capturandoUbicacion === reservaToCancel.id ? (
+                          <div className="flex items-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Obteniendo ubicación...
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-4 w-4" />
+                            Registrar ubicación actual del vehículo
+                          </div>
+                        )}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </AlertDialogDescription>
             </AlertDialogHeader>
@@ -1125,6 +1185,32 @@ export function MisReservas({
                       <option value="mal">mal</option>
                     </select>
                   </div>
+                  {reservaToComplete && (
+                    <div className="bg-blue-50 p-4 rounded-md border border-blue-200">
+                      <p className="text-sm text-blue-700 mb-3">
+                        <strong>Ubicación automática:</strong> usa la localización del navegador para guardar dónde dejas el coche.
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-blue-600 hover:text-blue-700 hover:bg-blue-100 w-full"
+                        disabled={capturandoUbicacion === reservaToComplete.id}
+                        onClick={() => handleCapturarUbicacion(reservaToComplete)}
+                      >
+                        {capturandoUbicacion === reservaToComplete.id ? (
+                          <div className="flex items-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Obteniendo ubicación...
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-4 w-4" />
+                            Registrar ubicación actual del vehículo
+                          </div>
+                        )}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </AlertDialogDescription>
             </AlertDialogHeader>
