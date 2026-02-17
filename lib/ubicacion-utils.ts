@@ -90,12 +90,7 @@ export async function actualizarUbicacionCoche(matricula: string, ubicacion: Ubi
  */
 export async function capturarYAsignarUbicacion(matricula: string): Promise<{ success: boolean; mensaje: string; ubicacion?: Ubicacion }> {
   try {
-    console.log(`📍 Obteniendo ubicación actual para el coche ${matricula}...`)
-    
     const ubicacion = await obtenerUbicacionActual()
-    
-    console.log(`📍 Ubicación obtenida:`, ubicacion)
-    
     await actualizarUbicacionCoche(matricula, ubicacion)
     
     return {
@@ -104,8 +99,6 @@ export async function capturarYAsignarUbicacion(matricula: string): Promise<{ su
       ubicacion
     }
   } catch (error) {
-    console.error('Error capturando ubicación:', error)
-    
     return {
       success: false,
       mensaje: error instanceof Error ? error.message : 'Error desconocido al capturar la ubicación'

@@ -370,7 +370,12 @@ export async function obtenerReservasUsuario() {
   }
 }
 
-export async function cancelarReserva(reservaId: number) {
+export async function cancelarReserva(
+  reservaId: number,
+  observacion?: string,
+  queja?: string,
+  estadoLimpieza?: "bien" | "regular" | "mal"
+) {
   try {
     // Obtener información del usuario logueado
     const session = await getServerSession(authOptions)
@@ -402,18 +407,33 @@ export async function cancelarReserva(reservaId: number) {
     }
     const reserva = reservaUsuario.reserva as any
 
-  // Solo permitir cancelar reservas activas o pendientes
-  if (!(reserva.estado === 'activa' || reserva.estado === 'pendiente')) {
+    // Solo permitir cancelar reservas activas o pendientes
+    if (!(reserva.estado === 'activa' || reserva.estado === 'pendiente')) {
       return {
         success: false,
-    error: "Solo se pueden cancelar reservas activas o pendientes"
+        error: "Solo se pueden cancelar reservas activas o pendientes"
       }
+    }
+
+    const updateData: any = { estado: "cancelada" }
+    const obs = observacion?.trim()
+    if (obs) {
+      const anterior = reserva.observaciones ? String(reserva.observaciones).trim() : ""
+      updateData.observaciones = anterior ? `${anterior}\n${obs}` : obs
+    }
+    const q = queja?.trim()
+    if (q) {
+      const anteriorQuejas = reserva.quejas ? String(reserva.quejas).trim() : ""
+      updateData.quejas = anteriorQuejas ? `${anteriorQuejas}\n${q}` : q
+    }
+    if (estadoLimpieza && ["bien", "regular", "mal"].includes(estadoLimpieza)) {
+      updateData.limpieza = estadoLimpieza
     }
 
     // Actualizar el estado de la reserva a cancelada
     const { error: updateError } = await supabase
       .from("reservas")
-      .update({ estado: 'cancelada' })
+      .update(updateData)
       .eq('id', reservaId)
     
     if (updateError) {
