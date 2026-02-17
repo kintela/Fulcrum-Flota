@@ -11,7 +11,7 @@ interface TarjetaSolredInfo {
 }
 
 interface TarjetaViatInfo {
-  id: number
+  id: string | number
   fechacaducidad?: string | null
 }
 
@@ -42,14 +42,16 @@ export async function obtenerFichaCoche(matricula: string) {
       return { success: false, error: "Usuario no autenticado" as const }
     }
 
-    if (!matricula) {
+    const matriculaNormalizada = matricula?.trim().toUpperCase()
+
+    if (!matriculaNormalizada) {
       return { success: false, error: "Matrícula no válida" as const }
     }
 
     const { data: coche, error: cocheError } = await supabase
       .from("coches")
       .select("*")
-      .eq("matricula", matricula)
+      .eq("matricula", matriculaNormalizada)
       .single()
 
     if (cocheError || !coche) {
@@ -84,22 +86,22 @@ export async function obtenerFichaCoche(matricula: string) {
     }
 
     let tarjetaViat: TarjetaViatInfo | null = null
-    if (empleadoId !== null) {
-      const { data: viatData } = await supabase
-        .from("viat_empleados")
-        .select("viats(id, fechacaducidad)")
-        .eq("empleado_id", empleadoId)
-        .single()
+    const { data: viatData, error: viatError } = await supabase
+      .from("viat_coches")
+      .select("viat_id, viats(id, fechacaducidad)")
+      .eq("matricula", matriculaNormalizada)
+      .is("fecha_desasignacion", null)
+      .limit(1)
+      .single()
 
-      if (viatData?.viats) {
-        tarjetaViat = viatData.viats as TarjetaViatInfo
-      }
+    if (!viatError && viatData) {
+      tarjetaViat = (viatData.viats as TarjetaViatInfo | null) ?? ({ id: viatData.viat_id } as TarjetaViatInfo)
     }
 
     const { data: itvData } = await supabase
       .from("itvs")
       .select("fechaproximarevision, fecharevision")
-      .eq("matricula", matricula)
+      .eq("matricula", matriculaNormalizada)
       .order("fecharevision", { ascending: false })
       .limit(1)
 
@@ -108,7 +110,7 @@ export async function obtenerFichaCoche(matricula: string) {
     const { data: solredData } = await supabase
       .from("solred_coches")
       .select("tarjetassolred(numero_tarjeta, pin, fechavencimiento)")
-      .eq("matricula", matricula)
+      .eq("matricula", matriculaNormalizada)
       .eq("activa", true)
       .single()
 
@@ -117,7 +119,7 @@ export async function obtenerFichaCoche(matricula: string) {
     const { data: seguroData } = await supabase
       .from("seguros")
       .select("fecha_vencimiento, telefono_asistencia1")
-      .eq("matricula", matricula)
+      .eq("matricula", matriculaNormalizada)
       .eq("activo", true)
       .single()
 

@@ -3,6 +3,10 @@
 import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { revalidatePath } from "next/cache"
 
+function normalizarMatricula(matricula: string) {
+  return matricula.trim().toUpperCase()
+}
+
 export async function obtenerTarjetasViat() {
   try {
     const { data, error } = await supabase.from("viats").select("*").eq("activo", true).order("id", { ascending: true })
@@ -19,38 +23,63 @@ export async function obtenerTarjetasViat() {
   }
 }
 
-export async function obtenerTarjetaViatAsignada(empleadoId: number) {
+export async function obtenerTarjetaViatAsignada(matricula: string) {
   try {
+    const matriculaNormalizada = normalizarMatricula(matricula || "")
+    if (!matriculaNormalizada) return null
+
     const { data, error } = await supabase
-      .from("viat_empleados")
-      .select(`
+      .from("viat_coches")
+      .select(
+        `
         *,
         viats (*)
-      `)
-      .eq("empleado_id", empleadoId)
-      .single()
+      `,
+      )
+      .eq("matricula", matriculaNormalizada)
+      .is("fecha_desasignacion", null)
+      .order("fecha_asignacion", { ascending: false })
+      .limit(1)
+      .maybeSingle()
 
     if (error && error.code !== "PGRST116") {
       console.error("Error al obtener tarjeta ViaT asignada:", error)
       return null
     }
 
-    return data
+    return data || null
   } catch (error) {
     console.error("Error en obtenerTarjetaViatAsignada:", error)
     return null
   }
 }
 
-export async function asignarTarjetaViat(empleadoId: number, viatId: number, observaciones?: string) {
+export async function asignarTarjetaViat(matricula: string, viatId: string, observaciones?: string) {
   try {
+    const matriculaNormalizada = normalizarMatricula(matricula || "")
+    const viatIdNormalizado = (viatId || "").trim()
+
+    if (!matriculaNormalizada) {
+      return {
+        success: false,
+        error: "La matrícula es obligatoria",
+      }
+    }
+
+    if (!viatIdNormalizado) {
+      return {
+        success: false,
+        error: "Debes seleccionar una tarjeta ViaT",
+      }
+    }
+
     // Verificar que la tarjeta ViaT existe y está activa
     const { data: viat, error: viatError } = await supabase
       .from("viats")
-      .select("*")
-      .eq("id", viatId)
+      .select("id")
+      .eq("id", viatIdNormalizado)
       .eq("activo", true)
-      .single()
+      .maybeSingle()
 
     if (viatError || !viat) {
       return {
@@ -59,25 +88,26 @@ export async function asignarTarjetaViat(empleadoId: number, viatId: number, obs
       }
     }
 
-    // Verificar que el empleado existe
-    const { data: empleado, error: empleadoError } = await supabase
-      .from("empleados")
-      .select("id")
-      .eq("id", empleadoId)
-      .single()
+    // Verificar que el coche existe
+    const { data: coche, error: cocheError } = await supabase
+      .from("coches")
+      .select("matricula")
+      .eq("matricula", matriculaNormalizada)
+      .maybeSingle()
 
-    if (empleadoError || !empleado) {
+    if (cocheError || !coche) {
       return {
         success: false,
-        error: "El empleado no existe",
+        error: "El coche no existe",
       }
     }
 
-    // Verificar que la tarjeta no esté ya asignada a otro empleado
+    // Verificar que la tarjeta no esté activa en otro coche
     const { data: asignacionExistente, error: asignacionError } = await supabase
-      .from("viat_empleados")
-      .select("*")
-      .eq("viat_id", viatId)
+      .from("viat_coches")
+      .select("id, matricula, observaciones")
+      .eq("viat_id", viatIdNormalizado)
+      .is("fecha_desasignacion", null)
 
     if (asignacionError && asignacionError.code !== "PGRST116") {
       console.error("Error al verificar asignación existente:", asignacionError)
@@ -87,24 +117,67 @@ export async function asignarTarjetaViat(empleadoId: number, viatId: number, obs
       }
     }
 
-    if (asignacionExistente && asignacionExistente.length > 0) {
+    const activaEnOtroCoche = (asignacionExistente || []).find((a) => a.matricula !== matriculaNormalizada)
+    if (activaEnOtroCoche) {
       return {
         success: false,
-        error: "Esta tarjeta ViaT ya está asignada a otro empleado",
+        error: `Esta tarjeta ViaT ya está asignada al coche ${activaEnOtroCoche.matricula}`,
       }
     }
 
-    // Eliminar cualquier asignación previa del empleado
-    await supabase.from("viat_empleados").delete().eq("empleado_id", empleadoId)
+    // Si ya está asignada al mismo coche, actualizar observaciones y salir
+    const mismaAsignacion = (asignacionExistente || []).find((a) => a.matricula === matriculaNormalizada)
+    if (mismaAsignacion) {
+      if (observaciones !== undefined) {
+        const { error: updateObsError } = await supabase
+          .from("viat_coches")
+          .update({ observaciones: observaciones || null })
+          .eq("id", mismaAsignacion.id)
+
+        if (updateObsError) {
+          console.error("Error al actualizar observaciones ViaT:", updateObsError)
+          return {
+            success: false,
+            error: `Error al actualizar observaciones: ${updateObsError.message}`,
+          }
+        }
+      }
+
+      revalidatePath("/coches")
+      revalidatePath(`/coches/detalle/${matriculaNormalizada}`)
+      revalidatePath(`/coches/editar/${matriculaNormalizada}`)
+
+      return {
+        success: true,
+        data: mismaAsignacion,
+      }
+    }
+
+    // Cerrar asignación activa anterior de este coche (mantener historial)
+    const fechaActual = new Date().toISOString().split("T")[0]
+    const { error: cerrarError } = await supabase
+      .from("viat_coches")
+      .update({ fecha_desasignacion: fechaActual })
+      .eq("matricula", matriculaNormalizada)
+      .is("fecha_desasignacion", null)
+
+    if (cerrarError) {
+      console.error("Error al cerrar asignación ViaT anterior:", cerrarError)
+      return {
+        success: false,
+        error: `Error al cerrar asignación anterior: ${cerrarError.message}`,
+      }
+    }
 
     // Crear nueva asignación
     const { data, error } = await supabase
-      .from("viat_empleados")
+      .from("viat_coches")
       .insert([
         {
-          viat_id: viatId,
-          empleado_id: empleadoId,
-          fecha_asignacion: new Date().toISOString(),
+          viat_id: viatIdNormalizado,
+          matricula: matriculaNormalizada,
+          fecha_asignacion: fechaActual,
+          fecha_desasignacion: null,
           observaciones: observaciones || null,
         },
       ])
@@ -119,6 +192,9 @@ export async function asignarTarjetaViat(empleadoId: number, viatId: number, obs
     }
 
     revalidatePath("/coches")
+    revalidatePath(`/coches/detalle/${matriculaNormalizada}`)
+    revalidatePath(`/coches/editar/${matriculaNormalizada}`)
+
     return {
       success: true,
       data: data[0],
@@ -132,9 +208,23 @@ export async function asignarTarjetaViat(empleadoId: number, viatId: number, obs
   }
 }
 
-export async function desasignarTarjetaViat(empleadoId: number) {
+export async function desasignarTarjetaViat(matricula: string) {
   try {
-    const { data, error } = await supabase.from("viat_empleados").delete().eq("empleado_id", empleadoId).select()
+    const matriculaNormalizada = normalizarMatricula(matricula || "")
+    if (!matriculaNormalizada) {
+      return {
+        success: false,
+        error: "La matrícula es obligatoria",
+      }
+    }
+
+    const fechaActual = new Date().toISOString().split("T")[0]
+    const { data, error } = await supabase
+      .from("viat_coches")
+      .update({ fecha_desasignacion: fechaActual })
+      .eq("matricula", matriculaNormalizada)
+      .is("fecha_desasignacion", null)
+      .select()
 
     if (error) {
       console.error("Error al desasignar tarjeta ViaT:", error)
@@ -145,9 +235,12 @@ export async function desasignarTarjetaViat(empleadoId: number) {
     }
 
     revalidatePath("/coches")
+    revalidatePath(`/coches/detalle/${matriculaNormalizada}`)
+    revalidatePath(`/coches/editar/${matriculaNormalizada}`)
+
     return {
       success: true,
-      data: data,
+      data,
     }
   } catch (error) {
     console.error("Error en desasignarTarjetaViat:", error)
@@ -192,12 +285,14 @@ export async function crearTarjetaViat(numeroTarjeta: string, fechaCaducidad: st
       }
     }
 
+    const numeroTarjetaNormalizado = numeroTarjeta.trim()
+
     // Verificar que el número de tarjeta no exista ya
     const { data: tarjetaExistente, error: existeError } = await supabase
       .from("viats")
       .select("id")
-      .eq("id", Number.parseInt(numeroTarjeta))
-      .single()
+      .eq("id", numeroTarjetaNormalizado)
+      .maybeSingle()
 
     if (existeError && existeError.code !== "PGRST116") {
       console.error("Error al verificar tarjeta existente:", existeError)
@@ -218,7 +313,7 @@ export async function crearTarjetaViat(numeroTarjeta: string, fechaCaducidad: st
       .from("viats")
       .insert([
         {
-          id: Number.parseInt(numeroTarjeta),
+          id: numeroTarjetaNormalizado,
           fechacaducidad: fechaCaducidad,
           activo: true,
         },
@@ -247,15 +342,21 @@ export async function crearTarjetaViat(numeroTarjeta: string, fechaCaducidad: st
   }
 }
 
-export async function obtenerHistorialViatEmpleado(empleadoId: number) {
+export async function obtenerHistorialViatCoche(matricula: string) {
   try {
+    const matriculaNormalizada = normalizarMatricula(matricula || "")
+    if (!matriculaNormalizada) return []
+
     const { data, error } = await supabase
-      .from("viat_empleados")
-      .select(`
+      .from("viat_coches")
+      .select(
+        `
         *,
         viats (*)
-      `)
-      .eq("empleado_id", empleadoId)
+      `,
+      )
+      .eq("matricula", matriculaNormalizada)
+      .not("fecha_desasignacion", "is", null)
       .order("fecha_asignacion", { ascending: false })
 
     if (error) {
@@ -265,7 +366,10 @@ export async function obtenerHistorialViatEmpleado(empleadoId: number) {
 
     return data || []
   } catch (error) {
-    console.error("Error en obtenerHistorialViatEmpleado:", error)
+    console.error("Error en obtenerHistorialViatCoche:", error)
     return []
   }
 }
+
+// Alias temporal para compatibilidad de imports antiguos.
+export const obtenerHistorialViatEmpleado = obtenerHistorialViatCoche

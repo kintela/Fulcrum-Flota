@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Car, Plus, Filter, Users, Calendar, AlertTriangle, Clock, CreditCard, Truck } from "lucide-react"
+import { Car, Plus, Filter, Users, Calendar, AlertTriangle, Clock, CreditCard, Truck, Search } from "lucide-react"
 import Link from "next/link"
 import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { obtenerFotosCoche } from "@/lib/storage"
@@ -8,6 +8,7 @@ import { CarThumbnail } from "@/components/car-thumbnail"
 // Tipo para los parámetros de búsqueda
 interface SearchParams {
   filter?: string
+  q?: string
 }
 
 // Función para calcular el estado de la fecha de ITV
@@ -34,7 +35,63 @@ function formatDate(dateString: string): string {
   })
 }
 
-async function getCoches(filter?: string) {
+function normalizarTexto(value: unknown): string {
+  return String(value ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+}
+
+function extraerValoresBuscables(value: unknown, values: string[]) {
+  if (value === null || value === undefined) {
+    return
+  }
+
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    values.push(String(value))
+    return
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((item) => extraerValoresBuscables(item, values))
+    return
+  }
+
+  if (typeof value === "object") {
+    Object.values(value as Record<string, unknown>).forEach((item) => extraerValoresBuscables(item, values))
+  }
+}
+
+function coincideBusquedaLibre(coche: Record<string, unknown>, query: string): boolean {
+  const queryNormalizada = normalizarTexto(query)
+  if (!queryNormalizada) {
+    return true
+  }
+
+  const values: string[] = []
+  extraerValoresBuscables(coche, values)
+
+  return values.some((value) => normalizarTexto(value).includes(queryNormalizada))
+}
+
+function buildCochesHref(filter?: string, q?: string): string {
+  const params = new URLSearchParams()
+  const textoBusqueda = q?.trim()
+
+  if (filter) {
+    params.set("filter", filter)
+  }
+
+  if (textoBusqueda) {
+    params.set("q", textoBusqueda)
+  }
+
+  const queryString = params.toString()
+  return queryString ? `/coches?${queryString}` : "/coches"
+}
+
+async function getCoches(filter?: string, q?: string) {
   try {
     // Primero obtenemos todos los empleados para crear un mapa
     const { data: empleados } = await supabase.from("empleados").select("id, nombre, apellidos")
@@ -119,21 +176,27 @@ async function getCoches(filter?: string) {
       })
     }
 
-    // Obtener tarjetas ViaT asignadas para todos los coches
-    const { data: tarjetasViat } = await supabase.from("viat_empleados").select(`
-        empleado_id,
+    // Obtener tarjetas ViaT activas asignadas por matrícula
+    const { data: tarjetasViat } = await supabase
+      .from("viat_coches")
+      .select(`
+        matricula,
         viat_id,
         viats (
           id,
           fechacaducidad
         )
       `)
+      .is("fecha_desasignacion", null)
 
-    // Crear un mapa de tarjetas ViaT por empleado
+    // Crear un mapa de tarjetas ViaT por matrícula
     const viatMap = new Map()
     if (tarjetasViat) {
       tarjetasViat.forEach((relacion) => {
-        viatMap.set(relacion.empleado_id.toString(), relacion.viats)
+        if (relacion.matricula) {
+          const matriculaNormalizada = String(relacion.matricula).trim().toUpperCase()
+          viatMap.set(matriculaNormalizada, relacion.viats || { id: relacion.viat_id })
+        }
       })
     }
 
@@ -154,23 +217,21 @@ async function getCoches(filter?: string) {
       const tarjetaSolred = tarjetasMap.get(coche.matricula)
       const seguroActivo = segurosMap.get(coche.matricula)
 
-      // Determinar el nombre del empleado asignado y su tarjeta ViaT
+      // Determinar el nombre del empleado asignado
       let empleadoNombre = null
-      let tarjetaViat = null
+      const tarjetaViat = viatMap.get(String(coche.matricula).trim().toUpperCase()) || null
 
       // Solo procesamos asignadoa si no es null, undefined o cadena vacía
       if (coche.asignadoa !== null && coche.asignadoa !== undefined && coche.asignadoa !== "") {
         // Si es un número, usamos directamente
         if (typeof coche.asignadoa === "number") {
           empleadoNombre = empleadosMap.get(coche.asignadoa.toString()) || `ID: ${coche.asignadoa}`
-          tarjetaViat = viatMap.get(coche.asignadoa.toString())
         }
         // Si es string, intentamos buscar en el mapa o usamos el valor directamente
         else if (typeof coche.asignadoa === "string") {
           // Intentamos convertir a número si parece ser un ID
           if (/^\d+$/.test(coche.asignadoa)) {
             empleadoNombre = empleadosMap.get(coche.asignadoa) || `ID: ${coche.asignadoa}`
-            tarjetaViat = viatMap.get(coche.asignadoa)
           } else {
             // Si no es un número, usamos el texto directamente
             empleadoNombre = coche.asignadoa
@@ -188,9 +249,15 @@ async function getCoches(filter?: string) {
       }
     })
 
+    // Búsqueda libre por cualquier valor serializable del coche enriquecido
+    const textoBusqueda = q?.trim()
+    const cochesTrasBusqueda = textoBusqueda
+      ? cochesConEmpleados.filter((coche) => coincideBusquedaLibre(coche as Record<string, unknown>, textoBusqueda))
+      : cochesConEmpleados
+
     // Obtener primera foto para cada coche
     const cochesConFotos = await Promise.all(
-      cochesConEmpleados.map(async (coche) => {
+      cochesTrasBusqueda.map(async (coche) => {
         let primeraFoto = null
         try {
           const resultado = await obtenerFotosCoche(coche.matricula)
@@ -218,7 +285,9 @@ async function getCoches(filter?: string) {
 export default async function CochesPage({ searchParams }: { searchParams: SearchParams }) {
   // Obtener el filtro de los parámetros de búsqueda
   const filter = searchParams.filter
-  const coches = await getCoches(filter)
+  const q = searchParams.q?.trim() || ""
+  const coches = await getCoches(filter, q)
+  const hasSearch = q.length > 0
 
   // Determinar el título según el filtro
   let title = "Gestión de Coches"
@@ -238,6 +307,10 @@ export default async function CochesPage({ searchParams }: { searchParams: Searc
     subtitle = `Vehículos donantes para piezas (${coches.length} vehículos)`
   }
 
+  if (hasSearch) {
+    subtitle = `${subtitle} · búsqueda: "${q}"`
+  }
+
   return (
     <div className="min-h-screen bg-gray-100 p-8">
       <div className="max-w-7xl mx-auto">
@@ -249,7 +322,7 @@ export default async function CochesPage({ searchParams }: { searchParams: Searc
           <div className="flex gap-2">
             {filter && (
               <Link
-                href="/coches"
+                href={buildCochesHref(undefined, q)}
                 className="flex items-center bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-md"
               >
                 <Filter className="h-5 w-5 mr-2" />
@@ -266,54 +339,84 @@ export default async function CochesPage({ searchParams }: { searchParams: Searc
           </div>
         </div>
 
-        {/* Filtros rápidos */}
-        {!filter && (
-          <div className="flex flex-wrap gap-2 mb-6">
-            <Link
-              href="/coches?filter=assigned"
-              className="bg-orange-100 hover:bg-orange-200 text-orange-800 px-3 py-1.5 rounded-md text-sm flex items-center"
+        {/* Filtros rápidos + búsqueda libre */}
+        <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3 mb-6">
+          {!filter && (
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href={buildCochesHref("assigned", q)}
+                className="bg-orange-100 hover:bg-orange-200 text-orange-800 px-3 py-1.5 rounded-md text-sm flex items-center"
+              >
+                <Users className="h-4 w-4 mr-1.5" />
+                Ver asignados
+              </Link>
+              <Link
+                href={buildCochesHref("available", q)}
+                className="bg-green-100 hover:bg-green-200 text-green-800 px-3 py-1.5 rounded-md text-sm flex items-center"
+              >
+                <Car className="h-4 w-4 mr-1.5" />
+                Ver disponibles
+              </Link>
+              <Link
+                href={buildCochesHref("rental", q)}
+                className="bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-1.5 rounded-md text-sm flex items-center"
+              >
+                <Calendar className="h-4 w-4 mr-1.5" />
+                Ver alquileres
+              </Link>
+              <Link
+                href={buildCochesHref("donor", q)}
+                className="bg-amber-100 hover:bg-amber-200 text-amber-800 px-3 py-1.5 rounded-md text-sm flex items-center"
+              >
+                <Car className="h-4 w-4 mr-1.5" />
+                Ver donantes
+              </Link>
+            </div>
+          )}
+
+          <form action="/coches" method="get" className="w-full xl:w-auto flex flex-col sm:flex-row gap-2">
+            {filter && <input type="hidden" name="filter" value={filter} />}
+            <div className="relative">
+              <Search className="h-4 w-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                name="q"
+                defaultValue={q}
+                placeholder="Filtrar por matrícula, marca, empleado, ViaT, PIN..."
+                className="h-9 w-full sm:w-[360px] rounded-md border border-gray-300 bg-white pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <button
+              type="submit"
+              className="h-9 px-3 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700 whitespace-nowrap"
             >
-              <Users className="h-4 w-4 mr-1.5" />
-              Ver asignados
-            </Link>
-            <Link
-              href="/coches?filter=available"
-              className="bg-green-100 hover:bg-green-200 text-green-800 px-3 py-1.5 rounded-md text-sm flex items-center"
-            >
-              <Car className="h-4 w-4 mr-1.5" />
-              Ver disponibles
-            </Link>
-            <Link
-              href="/coches?filter=rental"
-              className="bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-1.5 rounded-md text-sm flex items-center"
-            >
-              <Calendar className="h-4 w-4 mr-1.5" />
-              Ver alquileres
-            </Link>
-            <Link
-              href="/coches?filter=donor"
-              className="bg-amber-100 hover:bg-amber-200 text-amber-800 px-3 py-1.5 rounded-md text-sm flex items-center"
-            >
-              <Car className="h-4 w-4 mr-1.5" />
-              Ver donantes
-            </Link>
-          </div>
-        )}
+              Buscar
+            </button>
+            {hasSearch && (
+              <Link
+                href={buildCochesHref(filter)}
+                className="h-9 px-3 rounded-md bg-gray-200 text-gray-800 text-sm hover:bg-gray-300 inline-flex items-center justify-center whitespace-nowrap"
+              >
+                Limpiar
+              </Link>
+            )}
+          </form>
+        </div>
 
         {coches.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center">
               <Car className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                {filter ? "No hay vehículos que coincidan con el filtro" : "No hay vehículos registrados"}
+                {filter || hasSearch ? "No hay vehículos que coincidan con el filtro" : "No hay vehículos registrados"}
               </h3>
               <p className="text-gray-600 mb-4">
-                {filter
+                {filter || hasSearch
                   ? "Prueba con otro filtro o agrega nuevos vehículos a la flota."
                   : "Comienza agregando tu primer vehículo a la flota."}
               </p>
               <div className="flex justify-center gap-4">
-                {filter && (
+                {(filter || hasSearch) && (
                   <Link
                     href="/coches"
                     className="inline-flex items-center bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-md"
@@ -327,7 +430,7 @@ export default async function CochesPage({ searchParams }: { searchParams: Searc
                   className="inline-flex items-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md"
                 >
                   <Plus className="h-5 w-5 mr-2" />
-                  {filter ? "Agregar Vehículo" : "Agregar Primer Coche"}
+                  {filter || hasSearch ? "Agregar Vehículo" : "Agregar Primer Coche"}
                 </Link>
               </div>
             </CardContent>
