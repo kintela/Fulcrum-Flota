@@ -176,21 +176,27 @@ async function getCoches(filter?: string, q?: string) {
       })
     }
 
-    // Obtener tarjetas ViaT asignadas para todos los coches
-    const { data: tarjetasViat } = await supabase.from("viat_empleados").select(`
-        empleado_id,
+    // Obtener tarjetas ViaT activas asignadas por matrícula
+    const { data: tarjetasViat } = await supabase
+      .from("viat_coches")
+      .select(`
+        matricula,
         viat_id,
         viats (
           id,
           fechacaducidad
         )
       `)
+      .is("fecha_desasignacion", null)
 
-    // Crear un mapa de tarjetas ViaT por empleado
+    // Crear un mapa de tarjetas ViaT por matrícula
     const viatMap = new Map()
     if (tarjetasViat) {
       tarjetasViat.forEach((relacion) => {
-        viatMap.set(relacion.empleado_id.toString(), relacion.viats)
+        if (relacion.matricula) {
+          const matriculaNormalizada = String(relacion.matricula).trim().toUpperCase()
+          viatMap.set(matriculaNormalizada, relacion.viats || { id: relacion.viat_id })
+        }
       })
     }
 
@@ -211,23 +217,21 @@ async function getCoches(filter?: string, q?: string) {
       const tarjetaSolred = tarjetasMap.get(coche.matricula)
       const seguroActivo = segurosMap.get(coche.matricula)
 
-      // Determinar el nombre del empleado asignado y su tarjeta ViaT
+      // Determinar el nombre del empleado asignado
       let empleadoNombre = null
-      let tarjetaViat = null
+      const tarjetaViat = viatMap.get(String(coche.matricula).trim().toUpperCase()) || null
 
       // Solo procesamos asignadoa si no es null, undefined o cadena vacía
       if (coche.asignadoa !== null && coche.asignadoa !== undefined && coche.asignadoa !== "") {
         // Si es un número, usamos directamente
         if (typeof coche.asignadoa === "number") {
           empleadoNombre = empleadosMap.get(coche.asignadoa.toString()) || `ID: ${coche.asignadoa}`
-          tarjetaViat = viatMap.get(coche.asignadoa.toString())
         }
         // Si es string, intentamos buscar en el mapa o usamos el valor directamente
         else if (typeof coche.asignadoa === "string") {
           // Intentamos convertir a número si parece ser un ID
           if (/^\d+$/.test(coche.asignadoa)) {
             empleadoNombre = empleadosMap.get(coche.asignadoa) || `ID: ${coche.asignadoa}`
-            tarjetaViat = viatMap.get(coche.asignadoa)
           } else {
             // Si no es un número, usamos el texto directamente
             empleadoNombre = coche.asignadoa
