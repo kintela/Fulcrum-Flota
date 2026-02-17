@@ -123,7 +123,7 @@ BEGIN
       FOREIGN KEY (matricula)
       REFERENCES public.coches (matricula)
       ON UPDATE CASCADE
-      ON DELETE CASCADE;
+      ON DELETE RESTRICT;
   END IF;
 END
 $$;

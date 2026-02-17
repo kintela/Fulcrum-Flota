@@ -3,6 +3,7 @@
 import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
+import { revalidatePath } from "next/cache"
 
 interface TarjetaSolredInfo {
   numero_tarjeta?: string | null
@@ -142,5 +143,87 @@ export async function obtenerFichaCoche(matricula: string) {
   } catch (error) {
     console.error("Error en obtenerFichaCoche:", error)
     return { success: false, error: "Error inesperado al cargar la ficha del coche" as const }
+  }
+}
+
+export async function eliminarCoche(matricula: string) {
+  try {
+    const session = await getServerSession(authOptions)
+
+    if (!session?.user?.email) {
+      return { success: false, error: "Usuario no autenticado" as const }
+    }
+
+    const { data: empleado, error: empleadoError } = await supabase
+      .from("empleados")
+      .select("role")
+      .eq("email", session.user.email)
+      .single()
+
+    const roleValue = String(empleado?.role || "").toLowerCase()
+    const isAdmin = roleValue === "admin" || roleValue === "administrador"
+
+    if (empleadoError || !empleado || !isAdmin) {
+      return {
+        success: false,
+        error: "Acceso no autorizado - Solo administradores pueden eliminar coches" as const,
+      }
+    }
+
+    const matriculaNormalizada = (matricula || "").trim().toUpperCase()
+    if (!matriculaNormalizada) {
+      return { success: false, error: "Matrícula no válida" as const }
+    }
+
+    const { data: cocheExistente, error: cocheError } = await supabase
+      .from("coches")
+      .select("matricula, eliminado")
+      .eq("matricula", matriculaNormalizada)
+      .maybeSingle()
+
+    if (cocheError || !cocheExistente) {
+      return { success: false, error: "El coche no existe" as const }
+    }
+
+    if (cocheExistente.eliminado === true) {
+      return { success: true as const }
+    }
+
+    const { error: logicalDeleteError } = await supabase
+      .from("coches")
+      .update({
+        eliminado: true,
+        fecha_eliminacion: new Date().toISOString(),
+        eliminado_por: session.user.email,
+      })
+      .eq("matricula", matriculaNormalizada)
+      .eq("eliminado", false)
+
+    if (logicalDeleteError) {
+      if (
+        logicalDeleteError.message?.toLowerCase().includes("eliminado") ||
+        logicalDeleteError.message?.toLowerCase().includes("fecha_eliminacion") ||
+        logicalDeleteError.message?.toLowerCase().includes("eliminado_por")
+      ) {
+        return {
+          success: false,
+          error:
+            "Faltan las columnas de borrado lógico en coches (eliminado, fecha_eliminacion, eliminado_por)." as const,
+        }
+      }
+
+      return {
+        success: false,
+        error: `Error al eliminar el coche: ${logicalDeleteError.message}` as const,
+      }
+    }
+
+    revalidatePath("/coches")
+    revalidatePath("/")
+
+    return { success: true as const }
+  } catch (error) {
+    console.error("Error en eliminarCoche:", error)
+    return { success: false, error: "Error inesperado al eliminar el coche" as const }
   }
 }
