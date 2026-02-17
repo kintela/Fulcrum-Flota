@@ -25,7 +25,7 @@ const emailConfig: EmailConfig = {
 // Remitente visible: puede ser distinto al usuario de autenticación (Send As en O365)
 const fromEmail = process.env.FROM_EMAIL || process.env.EMAIL_USER || ''
 const fromName = process.env.FROM_NAME || 'Fulcrum Flota'
-const avisoFooterUrl = "https://flota.fulcrum.ee"
+const avisoFooterUrl = "https://flota.fulcrum.es"
 const avisoFooterLabel = "Fulcrum Flota"
 const avisoFooterHtml = `<a href="${avisoFooterUrl}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;">${avisoFooterLabel}</a> · Aviso automático`
 const avisoFooterText = `${avisoFooterLabel} · Aviso automático\n${avisoFooterUrl}`
