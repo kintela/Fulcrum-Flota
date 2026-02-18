@@ -89,6 +89,7 @@ export default function ReservasTemporalesList({
   searchText 
 }: ReservasTemporalesListProps) {
   const [capturandoUbicacion, setCapturandoUbicacion] = useState<number | null>(null)
+  const [ordenarPorFecha, setOrdenarPorFecha] = useState(false)
   const [showCompleteDialog, setShowCompleteDialog] = useState(false)
   const [reservaToComplete, setReservaToComplete] = useState<ReservaTemporal | null>(null)
   const [observacionCompletar, setObservacionCompletar] = useState("")
@@ -183,18 +184,214 @@ export default function ReservasTemporalesList({
     return acc
   }, {} as Record<string, { coche: any, reservas: ReservaTemporal[] }>)
 
-  // Ordenar por matrícula y ordenar reservas dentro de cada grupo por fecha
+  // Ordenar reservas dentro de cada grupo por fecha, y luego ordenar grupos
   const cochesOrdenados = Object.entries(reservasAgrupadas)
-    .sort(([matriculaA], [matriculaB]) => matriculaCollator.compare(matriculaA, matriculaB))
     .map(([matricula, data]) => ({
       matricula,
       coche: data.coche,
-      reservas: data.reservas.sort((a, b) => 
+      reservas: [...data.reservas].sort((a, b) => 
         new Date(a.fecha_inicio).getTime() - new Date(b.fecha_inicio).getTime()
       )
     }))
+    .sort((a, b) => {
+      if (ordenarPorFecha) {
+        const fechaA = a.reservas[0] ? new Date(a.reservas[0].fecha_inicio).getTime() : Number.MAX_SAFE_INTEGER
+        const fechaB = b.reservas[0] ? new Date(b.reservas[0].fecha_inicio).getTime() : Number.MAX_SAFE_INTEGER
+        if (fechaA !== fechaB) return fechaA - fechaB
+      }
+      return matriculaCollator.compare(a.matricula, b.matricula)
+    })
 
-  if (cochesOrdenados.length === 0) {
+  const reservasOrdenadasPorFecha = [...reservasFiltradas].sort((a, b) => {
+    const fechaA = new Date(a.fecha_inicio).getTime()
+    const fechaB = new Date(b.fecha_inicio).getTime()
+    if (fechaA !== fechaB) return fechaA - fechaB
+    return matriculaCollator.compare(normalizarMatricula(a.matricula), normalizarMatricula(b.matricula))
+  })
+
+  const renderReservaDetalle = (
+    reserva: ReservaTemporal,
+    numeroReserva: string,
+    matricula: string,
+    coche: { marca: string; modelo: string },
+  ) => {
+    const estadoInfo = getEstadoReserva(reserva)
+    const puedeCancelarse = puedeSerCancelada(reserva)
+    const puedeCompletar = isAdmin && puedeSerCompletada(reserva)
+    const badgeClassName = (estadoInfo.estado === 'Vencida' || estadoInfo.estado === 'Completada')
+      ? 'bg-orange-100 text-orange-800 hover:bg-orange-100'
+      : undefined
+
+    return (
+      <div className="bg-gray-50 p-4 rounded-lg">
+        <div className="flex items-start justify-between">
+          <div className="flex-1 space-y-3">
+            {/* Número de reserva y estado */}
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-gray-600">
+                Reserva {numeroReserva}
+              </span>
+              <Badge variant={estadoInfo.color as any} className={badgeClassName}>
+                {estadoInfo.estado}
+              </Badge>
+            </div>
+
+            {/* Información del empleado */}
+            <div className="flex items-center gap-3">
+              <User className="h-4 w-4 text-green-600" />
+              <div>
+                <span className="font-medium">
+                  {reserva.empleados.nombre} {reserva.empleados.apellidos}
+                </span>
+                <span className="text-muted-foreground ml-2 text-sm">
+                  ({reserva.empleados.email})
+                </span>
+              </div>
+            </div>
+
+            {/* Fechas de la reserva */}
+            <div className="flex items-center gap-3">
+              <Clock className="h-4 w-4 text-purple-600" />
+              <div className="text-sm">
+                <div>
+                  <span className="font-medium">Desde:</span>{' '}
+                  {format(parseISO(reserva.fecha_inicio), 'dd/MM/yyyy HH:mm', { locale: es })}
+                </div>
+                <div>
+                  <span className="font-medium">Hasta:</span>{' '}
+                  {format(parseISO(reserva.fecha_fin), 'dd/MM/yyyy HH:mm', { locale: es })}
+                </div>
+              </div>
+            </div>
+
+            {/* Observaciones */}
+            {reserva.observaciones && (
+              <div className="bg-white p-3 rounded-md border">
+                <p className="text-sm font-medium text-gray-700">Observaciones:</p>
+                <p className="text-sm text-gray-600 mt-1">{reserva.observaciones}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Solo botón de cancelar - la ubicación estará dentro del dialog */}
+          <div className="flex items-center gap-2 ml-4">
+            {/* Botón de completar (solo admin y vencidas) */}
+            {puedeCompletar && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                disabled={completandoReserva === reserva.id || cancelandoReserva === reserva.id}
+                onClick={() => handleConfirmarCompletar(reserva)}
+              >
+                {completandoReserva === reserva.id ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Completando...
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    Marcar completada
+                  </div>
+                )}
+              </Button>
+            )}
+            {/* Botón de cancelar */}
+            {puedeCancelarse && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    disabled={cancelandoReserva === reserva.id || capturandoUbicacion === reserva.id}
+                  >
+                    {cancelandoReserva === reserva.id ? (
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Cancelando...
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <X className="h-4 w-4" />
+                        Cancelar
+                      </div>
+                    )}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle asChild>
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="h-5 w-5 text-amber-500" />
+                        Confirmar cancelación
+                      </div>
+                    </AlertDialogTitle>
+                    <AlertDialogDescription asChild>
+                      <div>
+                        <p>
+                          ¿Estás seguro de que deseas cancelar la reserva {numeroReserva} del vehículo{' '}
+                          <strong>{matricula}</strong> ({coche.marca} {coche.modelo})?
+                        </p>
+                        <br />
+                        <p>
+                          Esta acción no se puede deshacer y el empleado{' '}
+                          <strong>{reserva.empleados.nombre} {reserva.empleados.apellidos}</strong>{' '}
+                          será notificado de la cancelación.
+                        </p>
+                        <br />
+                        <div className="bg-blue-50 p-4 rounded-md border border-blue-200">
+                          <p className="text-sm text-blue-700 mb-3">
+                            💡 <strong>¿Dónde está el vehículo?</strong> Antes de cancelar, puedes registrar automáticamente la ubicación actual del vehículo:
+                          </p>
+
+                          {/* Botón de capturar ubicación dentro del dialog */}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-100 w-full"
+                            disabled={capturandoUbicacion === reserva.id}
+                            onClick={() => {
+                              handleCapturarUbicacion(matricula, reserva.id)
+                            }}
+                          >
+                            {capturandoUbicacion === reserva.id ? (
+                              <div className="flex items-center gap-2">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Obteniendo ubicación GPS...
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <MapPin className="h-4 w-4" />
+                                Registrar ubicación actual del vehículo
+                              </div>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>No, mantener reserva</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => onCancelarReserva(reserva.id)}
+                      className="bg-red-600 hover:bg-red-700"
+                      disabled={capturandoUbicacion === reserva.id}
+                    >
+                      {capturandoUbicacion === reserva.id ? 'Ubicando...' : 'Sí, cancelar reserva'}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (reservasFiltradas.length === 0) {
     return (
       <Card>
         <CardHeader>
@@ -215,213 +412,81 @@ export default function ReservasTemporalesList({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Calendar className="h-5 w-5" />
-          Reservas Temporales ({cochesOrdenados.length} vehículos, {reservasFiltradas.length} reservas)
-        </CardTitle>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Calendar className="h-5 w-5" />
+            Reservas Temporales ({cochesOrdenados.length} vehículos, {reservasFiltradas.length} reservas)
+          </CardTitle>
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={ordenarPorFecha}
+              onChange={(e) => setOrdenarPorFecha(e.target.checked)}
+              className="h-4 w-4 cursor-pointer rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            Ordenar por fecha
+          </label>
+        </div>
       </CardHeader>
       <CardContent>
-        <div className="grid gap-6">
-          {cochesOrdenados.map(({ matricula, coche, reservas: reservasCoche }) => (
-            <Card key={matricula} className="p-4 border-2">
-              {/* Encabezado del vehículo */}
-              <div className="flex items-center gap-3 mb-4 pb-3 border-b">
-                <Car className="h-5 w-5 text-blue-600" />
-                <div className="flex-1">
-                  <h3 className="font-semibold text-xl">{matricula}</h3>
-                  <p className="text-muted-foreground">
-                    {coche.marca} {coche.modelo}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <div className="text-sm font-medium text-blue-600">
-                    {reservasCoche.length} reserva{reservasCoche.length !== 1 ? 's' : ''}
-                  </div>
-                </div>
-              </div>
-
-              {/* Lista de reservas para este vehículo */}
-              <div className="space-y-4">
-                {reservasCoche.map((reserva, index) => {
-                  const estadoInfo = getEstadoReserva(reserva)
-                  const puedeCancelarse = puedeSerCancelada(reserva)
-                  const puedeCompletar = isAdmin && puedeSerCompletada(reserva)
-                  const badgeClassName = (estadoInfo.estado === 'Vencida' || estadoInfo.estado === 'Completada')
-                    ? 'bg-orange-100 text-orange-800 hover:bg-orange-100'
-                    : undefined
-                  
-                  return (
-                    <div key={reserva.id} className="bg-gray-50 p-4 rounded-lg">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 space-y-3">
-                          {/* Número de reserva y estado */}
-                          <div className="flex items-center gap-3">
-                            <span className="text-sm font-medium text-gray-600">
-                              Reserva #{index + 1}
-                            </span>
-                            <Badge variant={estadoInfo.color as any} className={badgeClassName}>
-                              {estadoInfo.estado}
-                            </Badge>
-                          </div>
-
-                          {/* Información del empleado */}
-                          <div className="flex items-center gap-3">
-                            <User className="h-4 w-4 text-green-600" />
-                            <div>
-                              <span className="font-medium">
-                                {reserva.empleados.nombre} {reserva.empleados.apellidos}
-                              </span>
-                              <span className="text-muted-foreground ml-2 text-sm">
-                                ({reserva.empleados.email})
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Fechas de la reserva */}
-                          <div className="flex items-center gap-3">
-                            <Clock className="h-4 w-4 text-purple-600" />
-                            <div className="text-sm">
-                              <div>
-                                <span className="font-medium">Desde:</span>{' '}
-                                {format(parseISO(reserva.fecha_inicio), 'dd/MM/yyyy HH:mm', { locale: es })}
-                              </div>
-                              <div>
-                                <span className="font-medium">Hasta:</span>{' '}
-                                {format(parseISO(reserva.fecha_fin), 'dd/MM/yyyy HH:mm', { locale: es })}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Observaciones */}
-                          {reserva.observaciones && (
-                            <div className="bg-white p-3 rounded-md border">
-                              <p className="text-sm font-medium text-gray-700">Observaciones:</p>
-                              <p className="text-sm text-gray-600 mt-1">{reserva.observaciones}</p>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Solo botón de cancelar - la ubicación estará dentro del dialog */}
-                        <div className="flex items-center gap-2 ml-4">
-                          {/* Botón de completar (solo admin y vencidas) */}
-                          {puedeCompletar && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
-                              disabled={completandoReserva === reserva.id || cancelandoReserva === reserva.id}
-                              onClick={() => handleConfirmarCompletar(reserva)}
-                            >
-                              {completandoReserva === reserva.id ? (
-                                <div className="flex items-center gap-2">
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                  Completando...
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-2">
-                                  <AlertTriangle className="h-4 w-4" />
-                                  Marcar completada
-                                </div>
-                              )}
-                            </Button>
-                          )}
-                          {/* Botón de cancelar */}
-                          {puedeCancelarse && (
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                  disabled={cancelandoReserva === reserva.id || capturandoUbicacion === reserva.id}
-                                >
-                                  {cancelandoReserva === reserva.id ? (
-                                    <div className="flex items-center gap-2">
-                                      <Loader2 className="h-4 w-4 animate-spin" />
-                                      Cancelando...
-                                    </div>
-                                  ) : (
-                                    <div className="flex items-center gap-2">
-                                      <X className="h-4 w-4" />
-                                      Cancelar
-                                    </div>
-                                  )}
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle asChild>
-                                    <div className="flex items-center gap-2">
-                                      <AlertTriangle className="h-5 w-5 text-amber-500" />
-                                      Confirmar cancelación
-                                    </div>
-                                  </AlertDialogTitle>
-                                  <AlertDialogDescription asChild>
-                                    <div>
-                                      <p>
-                                        ¿Estás seguro de que deseas cancelar la reserva #{index + 1} del vehículo{' '}
-                                        <strong>{matricula}</strong> ({coche.marca} {coche.modelo})?
-                                      </p>
-                                      <br />
-                                      <p>
-                                        Esta acción no se puede deshacer y el empleado{' '}
-                                        <strong>{reserva.empleados.nombre} {reserva.empleados.apellidos}</strong>{' '}
-                                        será notificado de la cancelación.
-                                      </p>
-                                      <br />
-                                      <div className="bg-blue-50 p-4 rounded-md border border-blue-200">
-                                        <p className="text-sm text-blue-700 mb-3">
-                                          💡 <strong>¿Dónde está el vehículo?</strong> Antes de cancelar, puedes registrar automáticamente la ubicación actual del vehículo:
-                                        </p>
-                                        
-                                        {/* Botón de capturar ubicación dentro del dialog */}
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-100 w-full"
-                                          disabled={capturandoUbicacion === reserva.id}
-                                          onClick={() => {
-                                            handleCapturarUbicacion(matricula, reserva.id)
-                                          }}
-                                        >
-                                          {capturandoUbicacion === reserva.id ? (
-                                            <div className="flex items-center gap-2">
-                                              <Loader2 className="h-4 w-4 animate-spin" />
-                                              Obteniendo ubicación GPS...
-                                            </div>
-                                          ) : (
-                                            <div className="flex items-center gap-2">
-                                              <MapPin className="h-4 w-4" />
-                                              Registrar ubicación actual del vehículo
-                                            </div>
-                                          )}
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>No, mantener reserva</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => onCancelarReserva(reserva.id)}
-                                    className="bg-red-600 hover:bg-red-700"
-                                    disabled={capturandoUbicacion === reserva.id}
-                                  >
-                                    {capturandoUbicacion === reserva.id ? 'Ubicando...' : 'Sí, cancelar reserva'}
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          )}
-                        </div>
+        {ordenarPorFecha ? (
+          <div className="grid gap-4">
+            {reservasOrdenadasPorFecha.map((reserva, index) => {
+              const matricula = normalizarMatricula(reserva.matricula)
+              const coche = reserva.coches
+              return (
+                <Card key={reserva.id} className="p-4 border-2">
+                  <div className="flex items-center gap-3 mb-4 pb-3 border-b">
+                    <Car className="h-5 w-5 text-blue-600" />
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-xl">{matricula}</h3>
+                      <p className="text-muted-foreground">
+                        {coche.marca} {coche.modelo}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-medium text-blue-600">
+                        {format(parseISO(reserva.fecha_inicio), 'dd/MM/yyyy HH:mm', { locale: es })}
                       </div>
                     </div>
-                  )
-                })}
-              </div>
-            </Card>
-          ))}
-        </div>
+                  </div>
+                  {renderReservaDetalle(reserva, `#${index + 1}`, matricula, coche)}
+                </Card>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="grid gap-6">
+            {cochesOrdenados.map(({ matricula, coche, reservas: reservasCoche }) => (
+              <Card key={matricula} className="p-4 border-2">
+                {/* Encabezado del vehículo */}
+                <div className="flex items-center gap-3 mb-4 pb-3 border-b">
+                  <Car className="h-5 w-5 text-blue-600" />
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-xl">{matricula}</h3>
+                    <p className="text-muted-foreground">
+                      {coche.marca} {coche.modelo}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-medium text-blue-600">
+                      {reservasCoche.length} reserva{reservasCoche.length !== 1 ? 's' : ''}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Lista de reservas para este vehículo */}
+                <div className="space-y-4">
+                  {reservasCoche.map((reserva, index) => (
+                    <div key={reserva.id}>
+                      {renderReservaDetalle(reserva, `#${index + 1}`, matricula, coche)}
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
       </CardContent>
       <AlertDialog open={showCompleteDialog} onOpenChange={setShowCompleteDialog}>
         <AlertDialogContent>
