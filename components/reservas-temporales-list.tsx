@@ -31,6 +31,8 @@ interface ReservasTemporalesListProps {
   searchText: string
 }
 
+type TipoReservaFiltro = "todas" | "activa" | "pendiente" | "vencida" | "completada" | "cancelada"
+
 const matriculaCollator = new Intl.Collator("es", { numeric: true, sensitivity: "base" })
 
 function normalizarMatricula(matricula: string): string {
@@ -61,6 +63,19 @@ function getEstadoReserva(reserva: ReservaTemporal): { estado: string; color: st
   return { estado: 'Activa', color: 'default', descripcion: 'Reserva en curso' }
 }
 
+function getTipoReserva(reserva: ReservaTemporal): Exclude<TipoReservaFiltro, "todas"> {
+  if (reserva.estado === 'cancelada') return 'cancelada'
+  if (reserva.estado === 'completada') return 'completada'
+
+  const ahora = new Date()
+  const fechaInicio = parseISO(reserva.fecha_inicio)
+  const fechaFin = parseISO(reserva.fecha_fin)
+
+  if (isAfter(ahora, fechaFin)) return 'vencida'
+  if (isBefore(ahora, fechaInicio)) return 'pendiente'
+  return 'activa'
+}
+
 function puedeSerCancelada(reserva: ReservaTemporal): boolean {
   if (reserva.estado !== 'activa') return false
   
@@ -89,6 +104,7 @@ export default function ReservasTemporalesList({
   searchText 
 }: ReservasTemporalesListProps) {
   const [capturandoUbicacion, setCapturandoUbicacion] = useState<number | null>(null)
+  const [tipoFiltro, setTipoFiltro] = useState<TipoReservaFiltro>("todas")
   const [ordenarPorFecha, setOrdenarPorFecha] = useState(false)
   const [showCompleteDialog, setShowCompleteDialog] = useState(false)
   const [reservaToComplete, setReservaToComplete] = useState<ReservaTemporal | null>(null)
@@ -146,7 +162,7 @@ export default function ReservasTemporalesList({
     setEstadoLimpiezaCompletar("")
   }
   // Filtrar reservas por texto de búsqueda
-  const reservasFiltradas = reservas.filter((reserva) => {
+  const reservasFiltradasTexto = reservas.filter((reserva) => {
     if (!searchText.trim()) return true
 
     const searchLower = searchText.toLowerCase().trim()
@@ -169,6 +185,12 @@ export default function ReservasTemporalesList({
     if (reserva.observaciones && reserva.observaciones.toLowerCase().includes(searchLower)) return true
     
     return false
+  })
+
+  // Filtrar por tipo de reserva
+  const reservasFiltradas = reservasFiltradasTexto.filter((reserva) => {
+    if (tipoFiltro === "todas") return true
+    return getTipoReserva(reserva) === tipoFiltro
   })
 
   // Agrupar reservas por matrícula
@@ -417,15 +439,33 @@ export default function ReservasTemporalesList({
             <Calendar className="h-5 w-5" />
             Reservas Temporales ({cochesOrdenados.length} vehículos, {reservasFiltradas.length} reservas)
           </CardTitle>
-          <label className="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={ordenarPorFecha}
-              onChange={(e) => setOrdenarPorFecha(e.target.checked)}
-              className="h-4 w-4 cursor-pointer rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-            />
-            Ordenar por fecha
-          </label>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">Tipo:</span>
+              <select
+                value={tipoFiltro}
+                onChange={(e) => setTipoFiltro(e.target.value as TipoReservaFiltro)}
+                className="h-9 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                aria-label="Filtrar historial por tipo de reserva"
+              >
+                <option value="todas">Todas</option>
+                <option value="activa">Activas</option>
+                <option value="pendiente">Pendientes</option>
+                <option value="vencida">Vencidas</option>
+                <option value="completada">Completadas</option>
+                <option value="cancelada">Canceladas</option>
+              </select>
+            </div>
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={ordenarPorFecha}
+                onChange={(e) => setOrdenarPorFecha(e.target.checked)}
+                className="h-4 w-4 cursor-pointer rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              Ordenar por fecha
+            </label>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
