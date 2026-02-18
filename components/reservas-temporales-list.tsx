@@ -104,6 +104,7 @@ export default function ReservasTemporalesList({
   searchText 
 }: ReservasTemporalesListProps) {
   const [capturandoUbicacion, setCapturandoUbicacion] = useState<number | null>(null)
+  const [anioFiltro, setAnioFiltro] = useState<string>("todos")
   const [tipoFiltro, setTipoFiltro] = useState<TipoReservaFiltro>("todas")
   const [ordenarPorFecha, setOrdenarPorFecha] = useState(false)
   const [showCompleteDialog, setShowCompleteDialog] = useState(false)
@@ -161,6 +162,14 @@ export default function ReservasTemporalesList({
     setQuejaCompletar("")
     setEstadoLimpiezaCompletar("")
   }
+  const aniosDisponibles = Array.from(
+    new Set(
+      reservas
+        .map((reserva) => new Date(reserva.fecha_inicio).getFullYear())
+        .filter((anio) => Number.isFinite(anio)),
+    ),
+  ).sort((a, b) => b - a)
+
   // Filtrar reservas por texto de búsqueda
   const reservasFiltradasTexto = reservas.filter((reserva) => {
     if (!searchText.trim()) return true
@@ -187,8 +196,16 @@ export default function ReservasTemporalesList({
     return false
   })
 
+  // Filtrar por año
+  const reservasFiltradasAnio = reservasFiltradasTexto.filter((reserva) => {
+    if (anioFiltro === "todos") return true
+    const anioInicio = new Date(reserva.fecha_inicio).getFullYear().toString()
+    const anioFin = new Date(reserva.fecha_fin).getFullYear().toString()
+    return anioInicio === anioFiltro || anioFin === anioFiltro
+  })
+
   // Filtrar por tipo de reserva
-  const reservasFiltradas = reservasFiltradasTexto.filter((reserva) => {
+  const reservasFiltradas = reservasFiltradasAnio.filter((reserva) => {
     if (tipoFiltro === "todas") return true
     return getTipoReserva(reserva) === tipoFiltro
   })
@@ -440,6 +457,22 @@ export default function ReservasTemporalesList({
             Reservas Temporales ({cochesOrdenados.length} vehículos, {reservasFiltradas.length} reservas)
           </CardTitle>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">Año:</span>
+              <select
+                value={anioFiltro}
+                onChange={(e) => setAnioFiltro(e.target.value)}
+                className="h-9 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                aria-label="Filtrar historial por año"
+              >
+                <option value="todos">Todos</option>
+                {aniosDisponibles.map((anio) => (
+                  <option key={anio} value={String(anio)}>
+                    {anio}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="flex items-center gap-2">
               <span className="text-sm text-gray-600">Tipo:</span>
               <select
