@@ -786,12 +786,12 @@ const selectedMatriculaRef = useRef<string>("all")
   }, [empleados, userEmail])
 
   const usuarioBaneado = !!empleadoActual?.baneado
-  const cochesAsignados = todosLosCoches.filter((c) => getEmpleadoInfo(c) || c.asignadoa)
-  const cochesReservados = todosLosCoches.filter((c) => {
-    const estadoReserva = reservasActivas.get(c.matricula)
-    const tieneReserva = !!(estadoReserva?.enCurso || estadoReserva?.vencida || estadoReserva?.bloquea) // programada no cuenta salvo margen activo
-    return !c.asignadoa && tieneReserva
-  })
+  const tieneReservaBloqueante = (coche: Coche) => {
+    const estadoReserva = reservasActivas.get(coche.matricula)
+    return !!(estadoReserva?.enCurso || estadoReserva?.vencida || estadoReserva?.bloquea) // programada no cuenta salvo margen activo
+  }
+  const cochesReservados = todosLosCoches.filter((c) => tieneReservaBloqueante(c))
+  const cochesAsignados = todosLosCoches.filter((c) => (getEmpleadoInfo(c) || c.asignadoa) && !tieneReservaBloqueante(c))
   const cochesDisponibles = todosLosCoches.filter((c) => isCocheDisponible(c))
 
   const zoomToVehicles = useCallback(
@@ -1145,8 +1145,8 @@ const selectedMatriculaRef = useRef<string>("all")
 
     const hasLocation = coche.latitud && coche.longitud && !coche.donante
     const isAssigned = getEmpleadoInfo(coche) || coche.asignadoa
-  const estadoReserva = reservasActivas.get(coche.matricula)
-  const isReserved = !coche.asignadoa && (estadoReserva?.enCurso || estadoReserva?.vencida || estadoReserva?.bloquea) // programada no
+    const estadoReserva = reservasActivas.get(coche.matricula)
+    const isReserved = !!(estadoReserva?.enCurso || estadoReserva?.vencida || estadoReserva?.bloquea) // programada no
 
     // Si hay un filtro activo, colorear solo los que coinciden con el filtro
     let matchesFilter = false
