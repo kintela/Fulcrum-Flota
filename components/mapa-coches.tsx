@@ -1246,7 +1246,7 @@ const selectedMatriculaRef = useRef<string>("all")
                 <Car className="h-4 w-4 text-gray-500" />
                 <span className="text-sm font-medium text-gray-700">Buscar vehículo:</span>
               </div>
-              <div className="w-full sm:flex-1 sm:max-w-xs">
+              <div className="w-full sm:flex-1 sm:max-w-xl lg:max-w-2xl">
                 <select
                   key={selectKey} // Clave para forzar re-renderizado completo
                   value={selectedMatricula}
@@ -1273,6 +1273,7 @@ const selectedMatriculaRef = useRef<string>("all")
                         : ""
                     const reservaActiva = !!(estadoReserva?.enCurso || estadoReserva?.vencida || estadoReserva?.bloquea)
                     const personaEtiqueta = (!isDisponible && empleadoNombre) ? empleadoNombre : reservaActiva ? reservaEmpleadoNombre : ""
+                    const descripcionVehiculo = [coche?.marca, coche?.modelo].filter(Boolean).join(" ")
                     
                     // Lógica para el icono diferenciando estados
                     let icono = ""
@@ -1296,7 +1297,7 @@ const selectedMatriculaRef = useRef<string>("all")
                         value={matricula}
                         style={{ color: color }}
                       >
-                        {matricula} {icono || '[Prog]'}{estadoReserva?.vencida ? ' (vencida)' : estadoReserva?.enCurso ? ' (reservada)' : ''}{personaEtiqueta ? ` · ${personaEtiqueta}` : ''}
+                        {matricula}{descripcionVehiculo ? ` - ${descripcionVehiculo}` : ""} {icono || '[Prog]'}{estadoReserva?.vencida ? ' (vencida)' : estadoReserva?.enCurso ? ' (reservada)' : ''}{personaEtiqueta ? ` · ${personaEtiqueta}` : ''}
                       </option>
                     )
                   })}
