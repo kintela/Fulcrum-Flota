@@ -31,6 +31,12 @@ interface ReservasTemporalesListProps {
   searchText: string
 }
 
+const matriculaCollator = new Intl.Collator("es", { numeric: true, sensitivity: "base" })
+
+function normalizarMatricula(matricula: string): string {
+  return (matricula || "").trim().toUpperCase()
+}
+
 function getEstadoReserva(reserva: ReservaTemporal): { estado: string; color: string; descripcion: string } {
   if (reserva.estado === 'cancelada') {
     return { estado: 'Cancelada', color: 'destructive', descripcion: 'Reserva cancelada' }
@@ -166,7 +172,7 @@ export default function ReservasTemporalesList({
 
   // Agrupar reservas por matrícula
   const reservasAgrupadas = reservasFiltradas.reduce((acc, reserva) => {
-    const matricula = reserva.matricula
+    const matricula = normalizarMatricula(reserva.matricula)
     if (!acc[matricula]) {
       acc[matricula] = {
         coche: reserva.coches,
@@ -179,7 +185,7 @@ export default function ReservasTemporalesList({
 
   // Ordenar por matrícula y ordenar reservas dentro de cada grupo por fecha
   const cochesOrdenados = Object.entries(reservasAgrupadas)
-    .sort(([matriculaA], [matriculaB]) => matriculaA.localeCompare(matriculaB))
+    .sort(([matriculaA], [matriculaB]) => matriculaCollator.compare(matriculaA, matriculaB))
     .map(([matricula, data]) => ({
       matricula,
       coche: data.coche,
