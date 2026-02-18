@@ -423,9 +423,11 @@ const selectedMatriculaRef = useRef<string>("all")
               (reserva.estado === "activa" || reserva.estado === "pendiente" || reserva.estado === "vencida"),
           ) || reservaEsDelUsuario
           const tieneReservaVencida = !!estadoReserva?.vencida
+          const tieneReservaBloqueante = !!(estadoReserva?.enCurso || estadoReserva?.vencida || estadoReserva?.bloquea)
           
           // Es "mi coche" si está asignado permanentemente O tengo una reserva (activa/pendiente/vencida)
           const esMiCoche = isUserVehicle || !!tieneReservaUsuario
+          const reservaVencidaMia = tieneReservaVencida && esMiCoche
           
           //console.log(`🎯 ${coche.matricula} - isUserVehicle:`, isUserVehicle, 'tieneReservaUsuario:', tieneReservaUsuario, 'esMiCoche:', esMiCoche)
 
@@ -435,10 +437,12 @@ const selectedMatriculaRef = useRef<string>("all")
           // Si es el coche del usuario actual (cancelando reserva), siempre rojo
           if (miCocheMatricula && coche.matricula === miCocheMatricula) {
             fillColor = "#dc2626" // Rojo para el coche del usuario actual
-          } else if (tieneReservaVencida) {
-            fillColor = "#dc2626" // Rojo intenso para reservas vencidas pendientes
+          } else if (reservaVencidaMia) {
+            fillColor = "#dc2626" // Rojo intenso para reservas vencidas del usuario actual
           } else if (esMiCoche) {
             fillColor = "#dc2626" // Rojo para vehículos del usuario (asignación permanente O reserva temporal)
+          } else if (tieneReservaBloqueante) {
+            fillColor = "#f59e0b" // Ámbar para reservas de otros usuarios
           } else if (isAssigned) {
             fillColor = "#10b981" // Verde para asignados a otros
           }
@@ -448,8 +452,8 @@ const selectedMatriculaRef = useRef<string>("all")
           // Resto de usuarios: pueden reubicar sus vehículos asignados o reservados
           const canRelocate = isAdmin || esMiCoche
 
-          // Marcador más grande para reservas vencidas; tamaño medio para "mis coches"
-          const markerSize = tieneReservaVencida
+          // Marcador más grande solo para reservas vencidas del usuario actual
+          const markerSize = (miCocheMatricula && coche.matricula === miCocheMatricula) || reservaVencidaMia
             ? 18
             : esMiCoche || (miCocheMatricula && coche.matricula === miCocheMatricula)
               ? 14
@@ -464,7 +468,7 @@ const selectedMatriculaRef = useRef<string>("all")
               path: window.google.maps.SymbolPath.CIRCLE,
               scale: markerSize, // Tamaño dinámico: 14 para mis coches, 10 para otros
               fillColor: fillColor,
-              fillOpacity: tieneReservaVencida ? 0.95 : 0.8,
+              fillOpacity: reservaVencidaMia ? 0.95 : 0.8,
               strokeColor: "#ffffff",
               strokeWeight: 2,
             },
