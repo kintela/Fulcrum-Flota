@@ -517,7 +517,7 @@ export async function completarReserva(
   }
 }
 
-export async function ampliarReservaTemporal(reservaId: number, nuevaFechaFin: string) {
+export async function ampliarReservaTemporal(reservaId: number, nuevaFechaFin: string, nuevaFechaInicio?: string) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
@@ -538,26 +538,26 @@ export async function ampliarReservaTemporal(reservaId: number, nuevaFechaFin: s
     const reserva = reservaUsuario.reserva as any
 
     if (!(reserva.estado === "pendiente" || reserva.estado === "activa")) {
-      return { success: false, error: "Solo se pueden ampliar reservas pendientes o activas" }
+      return { success: false, error: "Solo se pueden modificar reservas pendientes o activas" }
     }
 
-    const fechaInicio = new Date(reserva.fecha_inicio)
+    const fechaInicioNueva = nuevaFechaInicio ? new Date(nuevaFechaInicio) : new Date(reserva.fecha_inicio)
     const fechaFinActual = new Date(reserva.fecha_fin)
     const fechaFinNueva = new Date(nuevaFechaFin)
 
     if (reserva.estado === "activa" && fechaFinActual <= new Date()) {
-      return { success: false, error: "No se pueden ampliar reservas activas ya vencidas" }
+      return { success: false, error: "No se pueden modificar reservas activas ya vencidas" }
+    }
+
+    if (!Number.isFinite(fechaInicioNueva.getTime())) {
+      return { success: false, error: "La nueva fecha de inicio no es válida" }
     }
 
     if (!Number.isFinite(fechaFinNueva.getTime())) {
       return { success: false, error: "La nueva fecha de fin no es válida" }
     }
 
-    if (fechaFinNueva <= fechaFinActual) {
-      return { success: false, error: "La nueva fecha de fin debe ser posterior a la actual" }
-    }
-
-    if (fechaFinNueva <= fechaInicio) {
+    if (fechaFinNueva <= fechaInicioNueva) {
       return { success: false, error: "La fecha de fin debe ser posterior a la fecha de inicio" }
     }
 
@@ -576,27 +576,30 @@ export async function ampliarReservaTemporal(reservaId: number, nuevaFechaFin: s
     const hayConflicto = (otrasReservas || []).some((r) => {
       const inicioBloqueo = r.bloqueo_desde ? new Date(r.bloqueo_desde) : new Date(r.fecha_inicio)
       const fin = new Date(r.fecha_fin)
-      return inicioBloqueo < fechaFinNueva && fin > fechaInicio
+      return inicioBloqueo < fechaFinNueva && fin > fechaInicioNueva
     })
 
     if (hayConflicto) {
-      return { success: false, error: "No se puede ampliar la reserva porque hay otra reserva en ese período" }
+      return { success: false, error: "No se puede modificar la reserva porque hay otra reserva en ese período" }
     }
 
     const { error: updateError } = await supabase
       .from("reservas")
-      .update({ fecha_fin: fechaFinNueva.toISOString() })
+      .update({
+        fecha_inicio: fechaInicioNueva.toISOString(),
+        fecha_fin: fechaFinNueva.toISOString(),
+      })
       .eq("id", reservaId)
 
     if (updateError) {
-      console.error("Error ampliando reserva:", updateError)
-      return { success: false, error: "Error al ampliar la reserva" }
+      console.error("Error modificando reserva:", updateError)
+      return { success: false, error: "Error al modificar la reserva" }
     }
 
-    return { success: true, message: "Plazo de reserva ampliado" }
+    return { success: true, message: "Plazo de reserva modificado" }
   } catch (error) {
     console.error("Error en ampliarReservaTemporal:", error)
-    return { success: false, error: "Error inesperado al ampliar la reserva" }
+    return { success: false, error: "Error inesperado al modificar la reserva" }
   }
 }
 
