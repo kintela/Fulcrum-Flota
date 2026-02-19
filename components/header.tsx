@@ -3,22 +3,25 @@
 import Link from "next/link"
 import { useState } from "react"
 import { useSession, signOut } from "next-auth/react"
-import { Car, Calendar, Users, FileText, Menu, X, LogOut, User, Shield, UserCircle } from "lucide-react"
+import { Car, Calendar, Users, FileText, Menu, X, LogOut, User, Shield, UserCircle, WalletCards } from "lucide-react"
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const { data: session, status } = useSession()
+  const roleActual = String(session?.user?.role || "").toLowerCase()
+  const isAdmin = roleActual === "administrador" || roleActual === "admin"
 
   const menuItems = [
     { name: "Dashboard", href: "/", icon: <FileText className="w-5 h-5" /> },
     { name: "Coches", href: "/coches", icon: <Car className="w-5 h-5" /> },
     { name: "Reservas", href: "/reservas", icon: <Calendar className="w-5 h-5" /> },
+    { name: "Tarjetas", href: "/tarjetas", icon: <WalletCards className="w-5 h-5" /> },
     { name: "Empleados", href: "/empleados", icon: <Users className="w-5 h-5" /> },
   ]
 
   // Filtrar menús según el rol del usuario
-  const filteredMenuItems = session?.user?.role === 'administrador' ? menuItems : []
+  const filteredMenuItems = isAdmin ? menuItems : []
 
   const handleSignOut = async () => {
     await signOut({ 
@@ -66,7 +69,7 @@ export default function Header() {
           {/* Desktop menu */}
           <nav className="hidden md:flex space-x-8 items-center">
             {/* Solo mostrar elementos de navegación para administradores */}
-            {session?.user?.role === 'administrador' && filteredMenuItems.map((item) => (
+            {isAdmin && filteredMenuItems.map((item) => (
               <Link
                 key={item.name}
                 href={item.href}
@@ -83,7 +86,7 @@ export default function Header() {
                 onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
                 className="flex items-center text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
               >
-                {session?.user?.role === 'administrador' ? (
+                {isAdmin ? (
                   <Shield className="w-5 h-5 text-blue-600" />
                 ) : (
                   <User className="w-5 h-5" />
@@ -125,7 +128,7 @@ export default function Header() {
           <div className="flex items-center md:hidden">
             <button
               onClick={() => {
-                if (session?.user?.role === 'administrador') {
+                if (isAdmin) {
                   setIsMenuOpen(!isMenuOpen)
                 } else {
                   setIsUserMenuOpen(!isUserMenuOpen)
@@ -134,7 +137,7 @@ export default function Header() {
               className="inline-flex items-center justify-center p-2 rounded-md text-gray-700 hover:text-blue-600 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
             >
               <span className="sr-only">Abrir menú</span>
-              {session?.user?.role === 'administrador' ? (
+              {isAdmin ? (
                 isMenuOpen ? <X className="block h-6 w-6" /> : <Menu className="block h-6 w-6" />
               ) : (
                 isUserMenuOpen ? <X className="block h-6 w-6" /> : <User className="block h-6 w-6" />
@@ -145,7 +148,7 @@ export default function Header() {
       </div>
 
       {/* Mobile menu - Solo para administradores */}
-      {isMenuOpen && session?.user?.role === 'administrador' && (
+      {isMenuOpen && isAdmin && (
         <div className="md:hidden">
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
             {filteredMenuItems.map((item) => (
@@ -187,7 +190,7 @@ export default function Header() {
       )}
 
       {/* Mobile user menu - Para usuarios no administradores */}
-      {isUserMenuOpen && session?.user?.role !== 'administrador' && (
+      {isUserMenuOpen && !isAdmin && (
         <div className="md:hidden">
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
             <div className="px-3 py-2">
