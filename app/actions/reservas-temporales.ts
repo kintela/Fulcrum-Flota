@@ -625,8 +625,8 @@ export async function verificarDisponibilidad(matricula: string, fechaInicio: st
       const inicio = new Date(r.fecha_inicio)
       const fin = new Date(r.fecha_fin)
       const inicioBloqueo = r.bloqueo_desde ? new Date(r.bloqueo_desde) : inicio
-      // Ventana de bloqueo: desde bloqueo_desde (o inicio) hasta fin
-      const solapa = inicioBloqueo <= finSolicitado && fin >= inicioSolicitado
+      // Solape estricto: permite reservas contiguas (p. ej. una termina a las 18:00 y otra empieza a las 18:00)
+      const solapa = inicioBloqueo < finSolicitado && fin > inicioSolicitado
       // Reserva activa ya vencida pero no marcada (fin < ahora) -> sigue bloqueando
       const vencidaNoCompletada = fin < ahora && inicioBloqueo <= ahora
       return solapa || vencidaNoCompletada
