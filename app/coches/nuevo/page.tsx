@@ -375,30 +375,32 @@ export default function NuevoCochePage() {
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="fecha_inicio_alquiler">Fecha Inicio</Label>
+                    <Label htmlFor="fecha_inicio_alquiler">Fecha Inicio *</Label>
                     <Input
                       id="fecha_inicio_alquiler"
                       name="fecha_inicio_alquiler"
                       type="date"
                       value={formData.fecha_inicio_alquiler}
                       onChange={handleInputChange}
+                      required={formData.alquiler}
                     />
                   </div>
                   <div>
-                    <Label htmlFor="fecha_fin_alquiler">Fecha Fin</Label>
+                    <Label htmlFor="fecha_fin_alquiler">Fecha Fin *</Label>
                     <Input
                       id="fecha_fin_alquiler"
                       name="fecha_fin_alquiler"
                       type="date"
                       value={formData.fecha_fin_alquiler}
                       onChange={handleInputChange}
+                      required={formData.alquiler}
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="importe_anual">Importe Anual (€)</Label>
+                    <Label htmlFor="importe_anual">Importe Anual (€) *</Label>
                     <Input
                       id="importe_anual"
                       name="importe_anual"
@@ -408,6 +410,7 @@ export default function NuevoCochePage() {
                       onChange={handleInputChange}
                       placeholder="12000.00"
                       min="0"
+                      required={formData.alquiler}
                     />
                   </div>
                   <div>
@@ -425,13 +428,14 @@ export default function NuevoCochePage() {
                 </div>
 
                 <div>
-                  <Label htmlFor="compania">Compañía</Label>
+                  <Label htmlFor="compania">Compañía *</Label>
                   <Input
                     id="compania"
                     name="compania"
                     value={formData.compania}
                     onChange={handleInputChange}
                     placeholder="Nombre de la compañía de alquiler"
+                    required={formData.alquiler}
                   />
                 </div>
               </CardContent>
