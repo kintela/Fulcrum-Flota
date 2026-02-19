@@ -769,16 +769,6 @@ export default function DashboardClient({
           <AlquilerAlertsSection alquilerAlerts={alquilerAlerts} empleados={empleados} />
         </Suspense>
 
-        {/* Mis Reservas - Visible para todos los usuarios */}
-        <Suspense fallback={<div>Cargando reservas...</div>}>
-          <MisReservas 
-            onCocheEnCancelacion={setCocheEnCancelacion}
-            onReservasChange={handleReservasChange}
-            refreshToken={reservasRefreshToken}
-            onUbicacionInicial={handleUbicacionInicial}
-          />
-        </Suspense>
-
         {/* Mapa de vehículos - Visible para todos los usuarios */}
         <Suspense fallback={<div>Cargando mapa...</div>}>
           <MapaCoches 
@@ -791,6 +781,16 @@ export default function DashboardClient({
             onFunctionsReady={setMapFunctions}
             onReservaCreada={handleReservaCreada}
             locationOverrides={ubicacionOverrides}
+          />
+        </Suspense>
+
+        {/* Mis Reservas - Visible para todos los usuarios */}
+        <Suspense fallback={<div>Cargando reservas...</div>}>
+          <MisReservas 
+            onCocheEnCancelacion={setCocheEnCancelacion}
+            onReservasChange={handleReservasChange}
+            refreshToken={reservasRefreshToken}
+            onUbicacionInicial={handleUbicacionInicial}
           />
         </Suspense>
       </div>
