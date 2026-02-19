@@ -81,6 +81,7 @@ export default function TarjetasAdminPage() {
   const [viatId, setViatId] = useState("")
   const [viatFecha, setViatFecha] = useState("")
   const [creandoViat, setCreandoViat] = useState(false)
+  const [filtroTarjetas, setFiltroTarjetas] = useState("")
 
   const isAdmin = useMemo(() => {
     const role = String(session?.user?.role || "").toLowerCase()
@@ -93,6 +94,38 @@ export default function TarjetasAdminPage() {
     if (!Number.isFinite(parsed.getTime())) return "-"
     return parsed.toLocaleDateString("es-ES")
   }
+
+  const normalizarTexto = (valor: unknown) => String(valor ?? "").trim().toLowerCase()
+  const filtroNormalizado = normalizarTexto(filtroTarjetas)
+
+  const tarjetasSolredFiltradas =
+    filtroNormalizado.length === 0
+      ? tarjetasSolred
+      : tarjetasSolred.filter((tarjeta) => {
+          const campos = [
+            tarjeta.numero_tarjeta,
+            String(tarjeta.pin || "").trim(),
+            tarjeta.fechavencimiento,
+            formatearFecha(tarjeta.fechavencimiento),
+            tarjeta.activa ? "activa" : "inactiva",
+            tarjeta.matricula_asignada,
+          ]
+          return campos.some((campo) => normalizarTexto(campo).includes(filtroNormalizado))
+        })
+
+  const tarjetasViatFiltradas =
+    filtroNormalizado.length === 0
+      ? tarjetasViat
+      : tarjetasViat.filter((tarjeta) => {
+          const campos = [
+            tarjeta.id,
+            tarjeta.fechacaducidad,
+            formatearFecha(tarjeta.fechacaducidad),
+            tarjeta.activo ? "activa" : "inactiva",
+            tarjeta.matricula_asignada,
+          ]
+          return campos.some((campo) => normalizarTexto(campo).includes(filtroNormalizado))
+        })
 
   const cargarDatos = async (silencioso = false) => {
     try {
@@ -383,13 +416,30 @@ export default function TarjetasAdminPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="bg-white px-4 py-3 rounded-lg shadow text-center">
-            <div className="text-2xl font-bold text-blue-600">{tarjetasSolred.length}</div>
+            <div className="text-2xl font-bold text-blue-600">
+              {tarjetasSolredFiltradas.length}
+              {filtroNormalizado && <span className="text-sm text-gray-500">/{tarjetasSolred.length}</span>}
+            </div>
             <div className="text-xs text-gray-600">Tarjetas SOLRED</div>
           </div>
           <div className="bg-white px-4 py-3 rounded-lg shadow text-center">
-            <div className="text-2xl font-bold text-green-600">{tarjetasViat.length}</div>
+            <div className="text-2xl font-bold text-green-600">
+              {tarjetasViatFiltradas.length}
+              {filtroNormalizado && <span className="text-sm text-gray-500">/{tarjetasViat.length}</span>}
+            </div>
             <div className="text-xs text-gray-600">Tarjetas ViaT</div>
           </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-lg shadow space-y-2">
+          <Label htmlFor="filtro-tarjetas">Filtrar tablas</Label>
+          <Input
+            id="filtro-tarjetas"
+            value={filtroTarjetas}
+            onChange={(e) => setFiltroTarjetas(e.target.value)}
+            placeholder="Buscar por número, PIN, fecha, estado o matrícula"
+          />
+          <p className="text-xs text-gray-500">El filtro se aplica a SOLRED y ViaT al mismo tiempo.</p>
         </div>
 
         {error && (
@@ -469,14 +519,16 @@ export default function TarjetasAdminPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {tarjetasSolred.length === 0 ? (
+                  {tarjetasSolredFiltradas.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center text-gray-500">
-                        No hay tarjetas SOLRED registradas.
+                        {tarjetasSolred.length === 0
+                          ? "No hay tarjetas SOLRED registradas."
+                          : "No hay tarjetas SOLRED que coincidan con el filtro."}
                       </TableCell>
                     </TableRow>
                   ) : (
-                    tarjetasSolred.map((tarjeta) => (
+                    tarjetasSolredFiltradas.map((tarjeta) => (
                       <TableRow key={tarjeta.numero_tarjeta}>
                         <TableCell
                           className="font-medium cursor-pointer"
@@ -683,14 +735,16 @@ export default function TarjetasAdminPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {tarjetasViat.length === 0 ? (
+                  {tarjetasViatFiltradas.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={5} className="text-center text-gray-500">
-                        No hay tarjetas ViaT registradas.
+                        {tarjetasViat.length === 0
+                          ? "No hay tarjetas ViaT registradas."
+                          : "No hay tarjetas ViaT que coincidan con el filtro."}
                       </TableCell>
                     </TableRow>
                   ) : (
-                    tarjetasViat.map((tarjeta) => (
+                    tarjetasViatFiltradas.map((tarjeta) => (
                       <TableRow key={tarjeta.id}>
                         <TableCell
                           className="font-medium cursor-pointer"
