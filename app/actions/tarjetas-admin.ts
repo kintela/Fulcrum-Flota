@@ -227,3 +227,147 @@ export async function crearTarjetaViatAdmin(id: string, fechaCaducidad: string) 
     return { success: false as const, error: "Error inesperado al crear tarjeta ViaT" }
   }
 }
+
+export async function actualizarTarjetaSolredAdmin({
+  numeroTarjetaActual,
+  numeroTarjetaNuevo,
+  pin,
+  fechaVencimiento,
+  activa,
+}: {
+  numeroTarjetaActual: string
+  numeroTarjetaNuevo: string
+  pin: string
+  fechaVencimiento: string
+  activa: boolean
+}) {
+  try {
+    const acceso = await validarAdmin()
+    if (!acceso.success) {
+      return { success: false as const, error: acceso.error }
+    }
+
+    const numeroActualNormalizado = String(numeroTarjetaActual || "").trim()
+    const numeroNuevoNormalizado = String(numeroTarjetaNuevo || "").trim()
+    const pinNormalizado = String(pin || "").trim()
+    const fechaNormalizada = String(fechaVencimiento || "").trim()
+    const activaNormalizada = Boolean(activa)
+
+    if (!numeroActualNormalizado) {
+      return { success: false as const, error: "No se encontró la tarjeta SOLRED a editar" }
+    }
+
+    if (!/^\d{1,20}$/.test(numeroNuevoNormalizado)) {
+      return { success: false as const, error: "El número de tarjeta SOLRED debe contener entre 1 y 20 dígitos" }
+    }
+
+    if (!/^\d{4}$/.test(pinNormalizado)) {
+      return { success: false as const, error: "El PIN de SOLRED debe tener exactamente 4 dígitos" }
+    }
+
+    if (!fechaNormalizada || !esFechaValida(fechaNormalizada)) {
+      return { success: false as const, error: "La fecha de vencimiento de SOLRED no es válida" }
+    }
+
+    const { data, error } = await supabase
+      .from("tarjetassolred")
+      .update({
+        numero_tarjeta: numeroNuevoNormalizado,
+        pin: pinNormalizado,
+        fechavencimiento: fechaNormalizada,
+        activa: activaNormalizada,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("numero_tarjeta", numeroActualNormalizado)
+      .select("numero_tarjeta")
+      .maybeSingle()
+
+    if (error) {
+      console.error("Error actualizando tarjeta SOLRED:", error)
+      if (error.code === "23505") {
+        return { success: false as const, error: "Ya existe una tarjeta SOLRED con ese número" }
+      }
+      return { success: false as const, error: `No se pudo actualizar la tarjeta SOLRED: ${error.message}` }
+    }
+
+    if (!data) {
+      return { success: false as const, error: "La tarjeta SOLRED a editar ya no existe" }
+    }
+
+    revalidatePath("/tarjetas")
+    revalidatePath("/coches")
+
+    return { success: true as const, message: "Tarjeta SOLRED actualizada correctamente" }
+  } catch (error) {
+    console.error("Error en actualizarTarjetaSolredAdmin:", error)
+    return { success: false as const, error: "Error inesperado al actualizar tarjeta SOLRED" }
+  }
+}
+
+export async function actualizarTarjetaViatAdmin({
+  idActual,
+  idNuevo,
+  fechaCaducidad,
+  activo,
+}: {
+  idActual: string
+  idNuevo: string
+  fechaCaducidad: string
+  activo: boolean
+}) {
+  try {
+    const acceso = await validarAdmin()
+    if (!acceso.success) {
+      return { success: false as const, error: acceso.error }
+    }
+
+    const idActualNormalizado = String(idActual || "").trim()
+    const idNuevoNormalizado = String(idNuevo || "").trim()
+    const fechaNormalizada = String(fechaCaducidad || "").trim()
+    const activoNormalizado = Boolean(activo)
+
+    if (!idActualNormalizado) {
+      return { success: false as const, error: "No se encontró la tarjeta ViaT a editar" }
+    }
+
+    if (!/^\d{1,16}$/.test(idNuevoNormalizado)) {
+      return { success: false as const, error: "El identificador ViaT debe contener entre 1 y 16 dígitos" }
+    }
+
+    if (!fechaNormalizada || !esFechaValida(fechaNormalizada)) {
+      return { success: false as const, error: "La fecha de caducidad ViaT no es válida" }
+    }
+
+    const { data, error } = await supabase
+      .from("viats")
+      .update({
+        id: idNuevoNormalizado,
+        fechacaducidad: fechaNormalizada,
+        activo: activoNormalizado,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", idActualNormalizado)
+      .select("id")
+      .maybeSingle()
+
+    if (error) {
+      console.error("Error actualizando tarjeta ViaT:", error)
+      if (error.code === "23505") {
+        return { success: false as const, error: "Ya existe una tarjeta ViaT con ese identificador" }
+      }
+      return { success: false as const, error: `No se pudo actualizar la tarjeta ViaT: ${error.message}` }
+    }
+
+    if (!data) {
+      return { success: false as const, error: "La tarjeta ViaT a editar ya no existe" }
+    }
+
+    revalidatePath("/tarjetas")
+    revalidatePath("/coches")
+
+    return { success: true as const, message: "Tarjeta ViaT actualizada correctamente" }
+  } catch (error) {
+    console.error("Error en actualizarTarjetaViatAdmin:", error)
+    return { success: false as const, error: "Error inesperado al actualizar tarjeta ViaT" }
+  }
+}

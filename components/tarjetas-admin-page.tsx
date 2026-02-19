@@ -10,6 +10,8 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
+  actualizarTarjetaSolredAdmin,
+  actualizarTarjetaViatAdmin,
   crearTarjetaSolredAdmin,
   crearTarjetaViatAdmin,
   obtenerTarjetasSolredAdmin,
@@ -23,6 +25,21 @@ interface MensajeEstado {
   texto: string
 }
 
+type CampoSolredEditable = "numero_tarjeta" | "pin" | "fechavencimiento" | "activa"
+type CampoViatEditable = "id" | "fechacaducidad" | "activo"
+
+interface EdicionSolred {
+  rowKey: string
+  field: CampoSolredEditable
+  value: string
+}
+
+interface EdicionViat {
+  rowKey: string
+  field: CampoViatEditable
+  value: string
+}
+
 export default function TarjetasAdminPage() {
   const { data: session, status } = useSession()
   const [tarjetasSolred, setTarjetasSolred] = useState<TarjetaSolredAdmin[]>([])
@@ -31,6 +48,9 @@ export default function TarjetasAdminPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState("")
   const [mensaje, setMensaje] = useState<MensajeEstado | null>(null)
+  const [edicionSolred, setEdicionSolred] = useState<EdicionSolred | null>(null)
+  const [edicionViat, setEdicionViat] = useState<EdicionViat | null>(null)
+  const [guardandoEdicion, setGuardandoEdicion] = useState(false)
 
   const [solredNumero, setSolredNumero] = useState("")
   const [solredPin, setSolredPin] = useState("")
@@ -164,6 +184,108 @@ export default function TarjetasAdminPage() {
       setMensaje({ tipo: "error", texto: "Error inesperado al crear tarjeta ViaT" })
     } finally {
       setCreandoViat(false)
+    }
+  }
+
+  const iniciarEdicionSolred = (tarjeta: TarjetaSolredAdmin, field: CampoSolredEditable) => {
+    if (guardandoEdicion) return
+    const value =
+      field === "activa"
+        ? String(Boolean(tarjeta.activa))
+        : String((tarjeta as Record<string, unknown>)[field] ?? "")
+
+    setEdicionViat(null)
+    setEdicionSolred({
+      rowKey: tarjeta.numero_tarjeta,
+      field,
+      value,
+    })
+  }
+
+  const iniciarEdicionViat = (tarjeta: TarjetaViatAdmin, field: CampoViatEditable) => {
+    if (guardandoEdicion) return
+    const value =
+      field === "activo" ? String(Boolean(tarjeta.activo)) : String((tarjeta as Record<string, unknown>)[field] ?? "")
+
+    setEdicionSolred(null)
+    setEdicionViat({
+      rowKey: tarjeta.id,
+      field,
+      value,
+    })
+  }
+
+  const cancelarEdicion = () => {
+    setEdicionSolred(null)
+    setEdicionViat(null)
+  }
+
+  const guardarEdicionSolred = async (tarjeta: TarjetaSolredAdmin) => {
+    if (!edicionSolred || guardandoEdicion) return
+
+    const numeroNuevo = edicionSolred.field === "numero_tarjeta" ? edicionSolred.value : tarjeta.numero_tarjeta
+    const pinNuevo = edicionSolred.field === "pin" ? edicionSolred.value : String(tarjeta.pin || "").trim()
+    const fechaNueva = edicionSolred.field === "fechavencimiento" ? edicionSolred.value : tarjeta.fechavencimiento
+    const activaNueva =
+      edicionSolred.field === "activa" ? edicionSolred.value === "true" : Boolean(tarjeta.activa)
+
+    setGuardandoEdicion(true)
+    setMensaje(null)
+    try {
+      const resultado = await actualizarTarjetaSolredAdmin({
+        numeroTarjetaActual: tarjeta.numero_tarjeta,
+        numeroTarjetaNuevo: numeroNuevo,
+        pin: pinNuevo,
+        fechaVencimiento: fechaNueva,
+        activa: activaNueva,
+      })
+
+      if (!resultado.success) {
+        setMensaje({ tipo: "error", texto: resultado.error || "No se pudo actualizar la tarjeta SOLRED" })
+        return
+      }
+
+      setMensaje({ tipo: "success", texto: resultado.message || "Tarjeta SOLRED actualizada correctamente" })
+      setEdicionSolred(null)
+      await cargarDatos(true)
+    } catch (saveError) {
+      console.error("Error guardando edición SOLRED:", saveError)
+      setMensaje({ tipo: "error", texto: "Error inesperado al actualizar tarjeta SOLRED" })
+    } finally {
+      setGuardandoEdicion(false)
+    }
+  }
+
+  const guardarEdicionViat = async (tarjeta: TarjetaViatAdmin) => {
+    if (!edicionViat || guardandoEdicion) return
+
+    const idNuevo = edicionViat.field === "id" ? edicionViat.value : tarjeta.id
+    const fechaNueva = edicionViat.field === "fechacaducidad" ? edicionViat.value : tarjeta.fechacaducidad
+    const activoNuevo = edicionViat.field === "activo" ? edicionViat.value === "true" : Boolean(tarjeta.activo)
+
+    setGuardandoEdicion(true)
+    setMensaje(null)
+    try {
+      const resultado = await actualizarTarjetaViatAdmin({
+        idActual: tarjeta.id,
+        idNuevo,
+        fechaCaducidad: fechaNueva,
+        activo: activoNuevo,
+      })
+
+      if (!resultado.success) {
+        setMensaje({ tipo: "error", texto: resultado.error || "No se pudo actualizar la tarjeta ViaT" })
+        return
+      }
+
+      setMensaje({ tipo: "success", texto: resultado.message || "Tarjeta ViaT actualizada correctamente" })
+      setEdicionViat(null)
+      await cargarDatos(true)
+    } catch (saveError) {
+      console.error("Error guardando edición ViaT:", saveError)
+      setMensaje({ tipo: "error", texto: "Error inesperado al actualizar tarjeta ViaT" })
+    } finally {
+      setGuardandoEdicion(false)
     }
   }
 
@@ -305,13 +427,138 @@ export default function TarjetasAdminPage() {
                   ) : (
                     tarjetasSolred.map((tarjeta) => (
                       <TableRow key={tarjeta.numero_tarjeta}>
-                        <TableCell className="font-medium">{tarjeta.numero_tarjeta}</TableCell>
-                        <TableCell>{String(tarjeta.pin || "").trim()}</TableCell>
-                        <TableCell>{formatearFecha(tarjeta.fechavencimiento)}</TableCell>
-                        <TableCell>
-                          <Badge variant={tarjeta.activa ? "default" : "secondary"}>
-                            {tarjeta.activa ? "Activa" : "Inactiva"}
-                          </Badge>
+                        <TableCell
+                          className="font-medium cursor-pointer"
+                          title="Doble clic para editar"
+                          onDoubleClick={() => iniciarEdicionSolred(tarjeta, "numero_tarjeta")}
+                        >
+                          {edicionSolred?.rowKey === tarjeta.numero_tarjeta && edicionSolred.field === "numero_tarjeta" ? (
+                            <Input
+                              autoFocus
+                              value={edicionSolred.value}
+                              onChange={(e) =>
+                                setEdicionSolred((prev) =>
+                                  prev
+                                    ? { ...prev, value: e.target.value.replace(/\D/g, "").slice(0, 20) }
+                                    : prev,
+                                )
+                              }
+                              onBlur={() => {
+                                void guardarEdicionSolred(tarjeta)
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault()
+                                  void guardarEdicionSolred(tarjeta)
+                                }
+                                if (e.key === "Escape") {
+                                  e.preventDefault()
+                                  cancelarEdicion()
+                                }
+                              }}
+                            />
+                          ) : (
+                            tarjeta.numero_tarjeta
+                          )}
+                        </TableCell>
+                        <TableCell
+                          className="cursor-pointer"
+                          title="Doble clic para editar"
+                          onDoubleClick={() => iniciarEdicionSolred(tarjeta, "pin")}
+                        >
+                          {edicionSolred?.rowKey === tarjeta.numero_tarjeta && edicionSolred.field === "pin" ? (
+                            <Input
+                              autoFocus
+                              value={edicionSolred.value}
+                              onChange={(e) =>
+                                setEdicionSolred((prev) =>
+                                  prev ? { ...prev, value: e.target.value.replace(/\D/g, "").slice(0, 4) } : prev,
+                                )
+                              }
+                              onBlur={() => {
+                                void guardarEdicionSolred(tarjeta)
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault()
+                                  void guardarEdicionSolred(tarjeta)
+                                }
+                                if (e.key === "Escape") {
+                                  e.preventDefault()
+                                  cancelarEdicion()
+                                }
+                              }}
+                            />
+                          ) : (
+                            String(tarjeta.pin || "").trim()
+                          )}
+                        </TableCell>
+                        <TableCell
+                          className="cursor-pointer"
+                          title="Doble clic para editar"
+                          onDoubleClick={() => iniciarEdicionSolred(tarjeta, "fechavencimiento")}
+                        >
+                          {edicionSolred?.rowKey === tarjeta.numero_tarjeta && edicionSolred.field === "fechavencimiento" ? (
+                            <Input
+                              autoFocus
+                              type="date"
+                              value={edicionSolred.value}
+                              onChange={(e) =>
+                                setEdicionSolred((prev) => (prev ? { ...prev, value: e.target.value } : prev))
+                              }
+                              onBlur={() => {
+                                void guardarEdicionSolred(tarjeta)
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault()
+                                  void guardarEdicionSolred(tarjeta)
+                                }
+                                if (e.key === "Escape") {
+                                  e.preventDefault()
+                                  cancelarEdicion()
+                                }
+                              }}
+                            />
+                          ) : (
+                            formatearFecha(tarjeta.fechavencimiento)
+                          )}
+                        </TableCell>
+                        <TableCell
+                          className="cursor-pointer"
+                          title="Doble clic para editar"
+                          onDoubleClick={() => iniciarEdicionSolred(tarjeta, "activa")}
+                        >
+                          {edicionSolred?.rowKey === tarjeta.numero_tarjeta && edicionSolred.field === "activa" ? (
+                            <select
+                              autoFocus
+                              value={edicionSolred.value}
+                              onChange={(e) =>
+                                setEdicionSolred((prev) => (prev ? { ...prev, value: e.target.value } : prev))
+                              }
+                              onBlur={() => {
+                                void guardarEdicionSolred(tarjeta)
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault()
+                                  void guardarEdicionSolred(tarjeta)
+                                }
+                                if (e.key === "Escape") {
+                                  e.preventDefault()
+                                  cancelarEdicion()
+                                }
+                              }}
+                              className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm"
+                            >
+                              <option value="true">Activa</option>
+                              <option value="false">Inactiva</option>
+                            </select>
+                          ) : (
+                            <Badge variant={tarjeta.activa ? "default" : "secondary"}>
+                              {tarjeta.activa ? "Activa" : "Inactiva"}
+                            </Badge>
+                          )}
                         </TableCell>
                         <TableCell>{formatearFechaHora(tarjeta.created_at)}</TableCell>
                       </TableRow>
@@ -319,6 +566,7 @@ export default function TarjetasAdminPage() {
                   )}
                 </TableBody>
               </Table>
+              <p className="text-xs text-gray-500">Doble clic en una celda para editarla.</p>
             </CardContent>
           </Card>
 
@@ -378,12 +626,102 @@ export default function TarjetasAdminPage() {
                   ) : (
                     tarjetasViat.map((tarjeta) => (
                       <TableRow key={tarjeta.id}>
-                        <TableCell className="font-medium">{tarjeta.id}</TableCell>
-                        <TableCell>{formatearFecha(tarjeta.fechacaducidad)}</TableCell>
-                        <TableCell>
-                          <Badge variant={tarjeta.activo ? "default" : "secondary"}>
-                            {tarjeta.activo ? "Activa" : "Inactiva"}
-                          </Badge>
+                        <TableCell
+                          className="font-medium cursor-pointer"
+                          title="Doble clic para editar"
+                          onDoubleClick={() => iniciarEdicionViat(tarjeta, "id")}
+                        >
+                          {edicionViat?.rowKey === tarjeta.id && edicionViat.field === "id" ? (
+                            <Input
+                              autoFocus
+                              value={edicionViat.value}
+                              onChange={(e) =>
+                                setEdicionViat((prev) =>
+                                  prev ? { ...prev, value: e.target.value.replace(/\D/g, "").slice(0, 16) } : prev,
+                                )
+                              }
+                              onBlur={() => {
+                                void guardarEdicionViat(tarjeta)
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault()
+                                  void guardarEdicionViat(tarjeta)
+                                }
+                                if (e.key === "Escape") {
+                                  e.preventDefault()
+                                  cancelarEdicion()
+                                }
+                              }}
+                            />
+                          ) : (
+                            tarjeta.id
+                          )}
+                        </TableCell>
+                        <TableCell
+                          className="cursor-pointer"
+                          title="Doble clic para editar"
+                          onDoubleClick={() => iniciarEdicionViat(tarjeta, "fechacaducidad")}
+                        >
+                          {edicionViat?.rowKey === tarjeta.id && edicionViat.field === "fechacaducidad" ? (
+                            <Input
+                              autoFocus
+                              type="date"
+                              value={edicionViat.value}
+                              onChange={(e) =>
+                                setEdicionViat((prev) => (prev ? { ...prev, value: e.target.value } : prev))
+                              }
+                              onBlur={() => {
+                                void guardarEdicionViat(tarjeta)
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault()
+                                  void guardarEdicionViat(tarjeta)
+                                }
+                                if (e.key === "Escape") {
+                                  e.preventDefault()
+                                  cancelarEdicion()
+                                }
+                              }}
+                            />
+                          ) : (
+                            formatearFecha(tarjeta.fechacaducidad)
+                          )}
+                        </TableCell>
+                        <TableCell
+                          className="cursor-pointer"
+                          title="Doble clic para editar"
+                          onDoubleClick={() => iniciarEdicionViat(tarjeta, "activo")}
+                        >
+                          {edicionViat?.rowKey === tarjeta.id && edicionViat.field === "activo" ? (
+                            <select
+                              autoFocus
+                              value={edicionViat.value}
+                              onChange={(e) => setEdicionViat((prev) => (prev ? { ...prev, value: e.target.value } : prev))}
+                              onBlur={() => {
+                                void guardarEdicionViat(tarjeta)
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault()
+                                  void guardarEdicionViat(tarjeta)
+                                }
+                                if (e.key === "Escape") {
+                                  e.preventDefault()
+                                  cancelarEdicion()
+                                }
+                              }}
+                              className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm"
+                            >
+                              <option value="true">Activa</option>
+                              <option value="false">Inactiva</option>
+                            </select>
+                          ) : (
+                            <Badge variant={tarjeta.activo ? "default" : "secondary"}>
+                              {tarjeta.activo ? "Activa" : "Inactiva"}
+                            </Badge>
+                          )}
                         </TableCell>
                         <TableCell>{formatearFechaHora(tarjeta.created_at)}</TableCell>
                       </TableRow>
@@ -391,6 +729,7 @@ export default function TarjetasAdminPage() {
                   )}
                 </TableBody>
               </Table>
+              <p className="text-xs text-gray-500">Doble clic en una celda para editarla.</p>
             </CardContent>
           </Card>
         </div>
