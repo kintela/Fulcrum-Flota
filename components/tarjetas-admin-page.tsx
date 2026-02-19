@@ -409,7 +409,7 @@ export default function TarjetasAdminPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -457,20 +457,21 @@ export default function TarjetasAdminPage() {
                 </div>
               </form>
 
-              <Table>
+              <Table className="text-xs sm:text-sm [&_th]:px-2 [&_td]:px-2">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Número</TableHead>
                     <TableHead>PIN</TableHead>
                     <TableHead>Vencimiento</TableHead>
                     <TableHead>Estado</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
+                    <TableHead className="w-[120px]">Matrícula</TableHead>
+                    <TableHead className="w-[88px] text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {tarjetasSolred.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center text-gray-500">
+                      <TableCell colSpan={6} className="text-center text-gray-500">
                         No hay tarjetas SOLRED registradas.
                       </TableCell>
                     </TableRow>
@@ -610,6 +611,9 @@ export default function TarjetasAdminPage() {
                             </Badge>
                           )}
                         </TableCell>
+                        <TableCell className="font-mono text-xs sm:text-sm whitespace-nowrap">
+                          {tarjeta.matricula_asignada ? tarjeta.matricula_asignada : "-"}
+                        </TableCell>
                         <TableCell className="text-right">
                           <button
                             type="button"
@@ -668,19 +672,20 @@ export default function TarjetasAdminPage() {
                 </div>
               </form>
 
-              <Table>
+              <Table className="text-xs sm:text-sm [&_th]:px-2 [&_td]:px-2">
                 <TableHeader>
                   <TableRow>
                     <TableHead>ID</TableHead>
                     <TableHead>Caducidad</TableHead>
                     <TableHead>Estado</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
+                    <TableHead className="w-[120px]">Matrícula</TableHead>
+                    <TableHead className="w-[88px] text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {tarjetasViat.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center text-gray-500">
+                      <TableCell colSpan={5} className="text-center text-gray-500">
                         No hay tarjetas ViaT registradas.
                       </TableCell>
                     </TableRow>
@@ -783,6 +788,9 @@ export default function TarjetasAdminPage() {
                               {tarjeta.activo ? "Activa" : "Inactiva"}
                             </Badge>
                           )}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs sm:text-sm whitespace-nowrap">
+                          {tarjeta.matricula_asignada ? tarjeta.matricula_asignada : "-"}
                         </TableCell>
                         <TableCell className="text-right">
                           <button

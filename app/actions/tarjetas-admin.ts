@@ -10,6 +10,7 @@ export interface TarjetaSolredAdmin {
   pin: string
   fechavencimiento: string
   activa: boolean | null
+  matricula_asignada: string | null
   created_at: string | null
   updated_at: string | null
 }
@@ -18,6 +19,7 @@ export interface TarjetaViatAdmin {
   id: string
   fechacaducidad: string
   activo: boolean | null
+  matricula_asignada: string | null
   created_at: string | null
   updated_at: string | null
 }
@@ -73,7 +75,7 @@ export async function obtenerTarjetasSolredAdmin() {
       return { success: false as const, error: acceso.error, tarjetas: [] as TarjetaSolredAdmin[] }
     }
 
-    const { data, error } = await supabase
+    const { data: tarjetasData, error } = await supabase
       .from("tarjetassolred")
       .select("numero_tarjeta, pin, fechavencimiento, activa, created_at, updated_at")
       .order("created_at", { ascending: false })
@@ -83,7 +85,68 @@ export async function obtenerTarjetasSolredAdmin() {
       return { success: false as const, error: "Error al obtener tarjetas SOLRED", tarjetas: [] as TarjetaSolredAdmin[] }
     }
 
-    return { success: true as const, tarjetas: (data || []) as TarjetaSolredAdmin[] }
+    const numerosTarjeta = new Set(
+      (tarjetasData || []).map((tarjeta) => String(tarjeta.numero_tarjeta || "").trim()).filter(Boolean),
+    )
+
+    const matriculaPorTarjeta = new Map<string, string>()
+    if (numerosTarjeta.size > 0) {
+      const { data: asignacionesActivas, error: asignacionesError } = await supabase
+        .from("solred_coches")
+        .select("numero_tarjeta, matricula, fecha_asignacion, created_at")
+        .or("activa.eq.true,fecha_desasignacion.is.null")
+        .order("fecha_asignacion", { ascending: false })
+        .order("created_at", { ascending: false })
+
+      if (asignacionesError) {
+        console.error("Error al obtener asignaciones activas SOLRED:", asignacionesError)
+      } else {
+        for (const asignacion of asignacionesActivas || []) {
+          const numeroTarjeta = String(asignacion.numero_tarjeta || "").trim()
+          const matricula = String(asignacion.matricula || "").trim().toUpperCase()
+          if (!numeroTarjeta || !matricula || !numerosTarjeta.has(numeroTarjeta) || matriculaPorTarjeta.has(numeroTarjeta)) {
+            continue
+          }
+          matriculaPorTarjeta.set(numeroTarjeta, matricula)
+        }
+      }
+
+      if (matriculaPorTarjeta.size === 0) {
+        const { data: ultimasAsignaciones, error: ultimasAsignacionesError } = await supabase
+          .from("solred_coches")
+          .select("numero_tarjeta, matricula, fecha_asignacion, created_at")
+          .order("fecha_asignacion", { ascending: false })
+          .order("created_at", { ascending: false })
+
+        if (ultimasAsignacionesError) {
+          console.error("Error al obtener últimas asignaciones SOLRED:", ultimasAsignacionesError)
+        } else {
+          for (const asignacion of ultimasAsignaciones || []) {
+            const numeroTarjeta = String(asignacion.numero_tarjeta || "").trim()
+            const matricula = String(asignacion.matricula || "").trim().toUpperCase()
+            if (
+              !numeroTarjeta ||
+              !matricula ||
+              !numerosTarjeta.has(numeroTarjeta) ||
+              matriculaPorTarjeta.has(numeroTarjeta)
+            ) {
+              continue
+            }
+            matriculaPorTarjeta.set(numeroTarjeta, matricula)
+          }
+        }
+      }
+    }
+
+    const tarjetas = (tarjetasData || []).map((tarjeta) => {
+      const numeroTarjeta = String(tarjeta.numero_tarjeta || "").trim()
+      return {
+        ...tarjeta,
+        matricula_asignada: matriculaPorTarjeta.get(numeroTarjeta) || null,
+      }
+    }) as TarjetaSolredAdmin[]
+
+    return { success: true as const, tarjetas }
   } catch (error) {
     console.error("Error en obtenerTarjetasSolredAdmin:", error)
     return { success: false as const, error: "Error inesperado al obtener tarjetas SOLRED", tarjetas: [] as TarjetaSolredAdmin[] }
@@ -97,7 +160,7 @@ export async function obtenerTarjetasViatAdmin() {
       return { success: false as const, error: acceso.error, tarjetas: [] as TarjetaViatAdmin[] }
     }
 
-    const { data, error } = await supabase
+    const { data: tarjetasData, error } = await supabase
       .from("viats")
       .select("id, fechacaducidad, activo, created_at, updated_at")
       .order("created_at", { ascending: false })
@@ -107,7 +170,57 @@ export async function obtenerTarjetasViatAdmin() {
       return { success: false as const, error: "Error al obtener tarjetas ViaT", tarjetas: [] as TarjetaViatAdmin[] }
     }
 
-    return { success: true as const, tarjetas: (data || []) as TarjetaViatAdmin[] }
+    const idsViat = new Set((tarjetasData || []).map((tarjeta) => String(tarjeta.id || "").trim()).filter(Boolean))
+
+    const matriculaPorViat = new Map<string, string>()
+    if (idsViat.size > 0) {
+      const { data: asignacionesActivas, error: asignacionesError } = await supabase
+        .from("viat_coches")
+        .select("viat_id, matricula, fecha_asignacion, created_at")
+        .is("fecha_desasignacion", null)
+        .order("fecha_asignacion", { ascending: false })
+        .order("created_at", { ascending: false })
+
+      if (asignacionesError) {
+        console.error("Error al obtener asignaciones activas ViaT:", asignacionesError)
+      } else {
+        for (const asignacion of asignacionesActivas || []) {
+          const viatId = String(asignacion.viat_id || "").trim()
+          const matricula = String(asignacion.matricula || "").trim().toUpperCase()
+          if (!viatId || !matricula || !idsViat.has(viatId) || matriculaPorViat.has(viatId)) continue
+          matriculaPorViat.set(viatId, matricula)
+        }
+      }
+
+      if (matriculaPorViat.size === 0) {
+        const { data: ultimasAsignaciones, error: ultimasAsignacionesError } = await supabase
+          .from("viat_coches")
+          .select("viat_id, matricula, fecha_asignacion, created_at")
+          .order("fecha_asignacion", { ascending: false })
+          .order("created_at", { ascending: false })
+
+        if (ultimasAsignacionesError) {
+          console.error("Error al obtener últimas asignaciones ViaT:", ultimasAsignacionesError)
+        } else {
+          for (const asignacion of ultimasAsignaciones || []) {
+            const viatId = String(asignacion.viat_id || "").trim()
+            const matricula = String(asignacion.matricula || "").trim().toUpperCase()
+            if (!viatId || !matricula || !idsViat.has(viatId) || matriculaPorViat.has(viatId)) continue
+            matriculaPorViat.set(viatId, matricula)
+          }
+        }
+      }
+    }
+
+    const tarjetas = (tarjetasData || []).map((tarjeta) => {
+      const viatId = String(tarjeta.id || "").trim()
+      return {
+        ...tarjeta,
+        matricula_asignada: matriculaPorViat.get(viatId) || null,
+      }
+    }) as TarjetaViatAdmin[]
+
+    return { success: true as const, tarjetas }
   } catch (error) {
     console.error("Error en obtenerTarjetasViatAdmin:", error)
     return { success: false as const, error: "Error inesperado al obtener tarjetas ViaT", tarjetas: [] as TarjetaViatAdmin[] }
@@ -388,7 +501,7 @@ export async function eliminarTarjetaSolredAdmin(numeroTarjeta: string) {
       .from("solred_coches")
       .select("matricula")
       .eq("numero_tarjeta", numeroNormalizado)
-      .eq("activa", true)
+      .or("activa.eq.true,fecha_desasignacion.is.null")
 
     if (asignacionesError) {
       console.error("Error comprobando asignaciones SOLRED:", asignacionesError)
