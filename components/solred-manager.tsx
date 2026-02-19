@@ -205,7 +205,7 @@ export function SolredManager({
             {/* Campos para nueva tarjeta */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <Label htmlFor="numero">Número de Tarjeta (17 dígitos)</Label>
+                <Label htmlFor="numero">Número de Tarjeta (17 dígitos) *</Label>
                 <Input
                   id="numero"
                   name="numero"
@@ -215,11 +215,12 @@ export function SolredManager({
                   placeholder="12345678901234567"
                   maxLength={17}
                   className="mt-1"
+                  required
                 />
               </div>
 
               <div>
-                <Label htmlFor="pin">PIN (4 dígitos)</Label>
+                <Label htmlFor="pin">PIN (4 dígitos) *</Label>
                 <Input
                   id="pin"
                   name="pin"
@@ -229,11 +230,12 @@ export function SolredManager({
                   placeholder="1234"
                   maxLength={4}
                   className="mt-1"
+                  required
                 />
               </div>
 
               <div>
-                <Label htmlFor="fechaVencimiento">Fecha de Vencimiento</Label>
+                <Label htmlFor="fechaVencimiento">Fecha de Vencimiento *</Label>
                 <Input
                   id="fechaVencimiento"
                   name="fechaVencimiento"
@@ -241,6 +243,7 @@ export function SolredManager({
                   value={nuevaTarjeta.fechaVencimiento}
                   onChange={handleInputChange}
                   className="mt-1"
+                  required
                 />
               </div>
             </div>

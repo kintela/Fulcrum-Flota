@@ -180,7 +180,7 @@ export default async function EditarCochePage({ params }: { params: { id: string
             <MantenimientoManager matricula={coche.matricula} isEditing />
 
             {/* Gestión de SOLRED */}
-            <SolredManager matricula={coche.matricula} />
+            <SolredManager matricula={coche.matricula} isEditing />
 
             {/* Gestión de VIAT */}
             <ViatManager matricula={coche.matricula} isEditing />
