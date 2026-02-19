@@ -1,6 +1,7 @@
 "use server"
 
 import { supabaseServer as supabase } from "@/lib/supabase-server"
+import { revalidatePath } from "next/cache"
 
 export async function obtenerTarjetasSolred() {
   try {
@@ -20,6 +21,29 @@ export async function obtenerTarjetasSolred() {
 
 export async function asignarTarjetaSolred(matricula: string, numeroTarjeta: string) {
   try {
+    // Si ya está asignada exactamente esa tarjeta, no hacer nada
+    const { data: asignacionActual, error: asignacionActualError } = await supabase
+      .from("solred_coches")
+      .select("id, numero_tarjeta")
+      .eq("matricula", matricula)
+      .eq("activa", true)
+      .maybeSingle()
+
+    if (asignacionActualError && asignacionActualError.code !== "PGRST116") {
+      console.error("Error al verificar asignación actual SOLRED:", asignacionActualError)
+      return {
+        success: false,
+        error: "Error al verificar la asignación actual",
+      }
+    }
+
+    if (asignacionActual?.numero_tarjeta === numeroTarjeta) {
+      return {
+        success: true,
+        data: asignacionActual,
+      }
+    }
+
     // Verificar que la tarjeta existe y está activa
     const { data: tarjeta, error: tarjetaError } = await supabase
       .from("tarjetassolred")
@@ -36,14 +60,31 @@ export async function asignarTarjetaSolred(matricula: string, numeroTarjeta: str
     }
 
     // Desactivar asignación anterior si existe
-    await supabase
-      .from("solred_coches")
-      .update({
-        fecha_desasignacion: new Date().toISOString().split("T")[0],
-        activa: false,
-      })
-      .eq("matricula", matricula)
-      .eq("activa", true)
+    if (asignacionActual) {
+      // Evita conflictos con unique(numero_tarjeta, matricula, activa) al pasar de true -> false
+      await supabase
+        .from("solred_coches")
+        .delete()
+        .eq("matricula", matricula)
+        .eq("numero_tarjeta", asignacionActual.numero_tarjeta)
+        .eq("activa", false)
+
+      const { error: desactivarError } = await supabase
+        .from("solred_coches")
+        .update({
+          fecha_desasignacion: new Date().toISOString().split("T")[0],
+          activa: false,
+        })
+        .eq("id", asignacionActual.id)
+
+      if (desactivarError) {
+        console.error("Error al desactivar tarjeta SOLRED anterior:", desactivarError)
+        return {
+          success: false,
+          error: `Error al desactivar la tarjeta anterior: ${desactivarError.message}`,
+        }
+      }
+    }
 
     // Crear nueva asignación
     const { data, error } = await supabase
@@ -67,6 +108,11 @@ export async function asignarTarjetaSolred(matricula: string, numeroTarjeta: str
       }
     }
 
+    revalidatePath("/coches")
+    revalidatePath(`/coches/detalle/${matricula}`)
+    revalidatePath(`/coches/editar/${matricula}`)
+    revalidatePath("/")
+
     return {
       success: true,
       data: data[0],
@@ -82,14 +128,43 @@ export async function asignarTarjetaSolred(matricula: string, numeroTarjeta: str
 
 export async function desasignarTarjetaSolred(matricula: string) {
   try {
+    const { data: asignacionActiva, error: asignacionActivaError } = await supabase
+      .from("solred_coches")
+      .select("id, numero_tarjeta")
+      .eq("matricula", matricula)
+      .eq("activa", true)
+      .maybeSingle()
+
+    if (asignacionActivaError && asignacionActivaError.code !== "PGRST116") {
+      console.error("Error al consultar asignación activa SOLRED:", asignacionActivaError)
+      return {
+        success: false,
+        error: `Error al consultar la asignación activa: ${asignacionActivaError.message}`,
+      }
+    }
+
+    if (!asignacionActiva) {
+      return {
+        success: true,
+        data: [],
+      }
+    }
+
+    // Evita conflictos con unique(numero_tarjeta, matricula, activa) al pasar de true -> false
+    await supabase
+      .from("solred_coches")
+      .delete()
+      .eq("matricula", matricula)
+      .eq("numero_tarjeta", asignacionActiva.numero_tarjeta)
+      .eq("activa", false)
+
     const { data, error } = await supabase
       .from("solred_coches")
       .update({
         fecha_desasignacion: new Date().toISOString().split("T")[0],
         activa: false,
       })
-      .eq("matricula", matricula)
-      .eq("activa", true)
+      .eq("id", asignacionActiva.id)
       .select()
 
     if (error) {
@@ -99,6 +174,11 @@ export async function desasignarTarjetaSolred(matricula: string) {
         error: `Error al desasignar la tarjeta: ${error.message}`,
       }
     }
+
+    revalidatePath("/coches")
+    revalidatePath(`/coches/detalle/${matricula}`)
+    revalidatePath(`/coches/editar/${matricula}`)
+    revalidatePath("/")
 
     return {
       success: true,

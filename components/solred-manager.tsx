@@ -6,8 +6,14 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { crearTarjetaSolred, obtenerTarjetasSolred, obtenerTarjetaAsignada } from "@/app/actions/solred"
-import { AlertCircle, CheckCircle2, CreditCard } from "lucide-react"
+import {
+  asignarTarjetaSolred,
+  crearTarjetaSolred,
+  desasignarTarjetaSolred,
+  obtenerTarjetaAsignada,
+  obtenerTarjetasSolred,
+} from "@/app/actions/solred"
+import { AlertCircle, CheckCircle2, CreditCard, Trash2 } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
 interface SolredManagerProps {
@@ -37,14 +43,16 @@ export function SolredManager({
     fechaVencimiento: "",
   })
   const [isCreating, setIsCreating] = useState(false)
+  const [isSavingAssignment, setIsSavingAssignment] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [mensaje, setMensaje] = useState<{ tipo: "success" | "error"; texto: string } | null>(null)
+  const [tarjetaAsignadaActual, setTarjetaAsignadaActual] = useState("")
 
   // Usar props si están disponibles, sino usar estado local
-  const tarjetasSolred = propTarjetasSolred || localTarjetasSolred
-  const setTarjetasSolred = propSetTarjetasSolred || setLocalTarjetasSolred
-  const tarjetaSeleccionada = propTarjetaSeleccionada || localTarjetaSeleccionada
-  const setTarjetaSeleccionada = propSetTarjetaSeleccionada || setLocalTarjetaSeleccionada
+  const tarjetasSolred = propTarjetasSolred ?? localTarjetasSolred
+  const setTarjetasSolred = propSetTarjetasSolred ?? setLocalTarjetasSolred
+  const tarjetaSeleccionada = propTarjetaSeleccionada ?? localTarjetaSeleccionada
+  const setTarjetaSeleccionada = propSetTarjetaSeleccionada ?? setLocalTarjetaSeleccionada
 
   useEffect(() => {
     cargarDatos()
@@ -65,6 +73,10 @@ export function SolredManager({
         const tarjetaAsignada = await obtenerTarjetaAsignada(matricula)
         if (tarjetaAsignada) {
           setLocalTarjetaSeleccionada(tarjetaAsignada.numero_tarjeta)
+          setTarjetaAsignadaActual(tarjetaAsignada.numero_tarjeta)
+        } else {
+          setLocalTarjetaSeleccionada("")
+          setTarjetaAsignadaActual("")
         }
       }
     } catch (error) {
@@ -108,14 +120,33 @@ export function SolredManager({
           activa: true,
         }
 
-        const tarjetasActualizadas = [...tarjetasSolred, nuevaTarjetaCompleta]
+        const tarjetasActuales = Array.isArray(tarjetasSolred) ? tarjetasSolred : []
+        const existeEnListado = tarjetasActuales.some((tarjeta) => tarjeta.numero_tarjeta === nuevaTarjeta.numero)
+        const tarjetasActualizadas = existeEnListado ? tarjetasActuales : [...tarjetasActuales, nuevaTarjetaCompleta]
         setTarjetasSolred(tarjetasActualizadas)
         setTarjetaSeleccionada(nuevaTarjeta.numero)
 
-        setMensaje({
-          tipo: "success",
-          texto: "Tarjeta SOLRED creada y seleccionada correctamente",
-        })
+        // Si estamos editando un coche, asignar automáticamente la tarjeta recién creada
+        if (isEditing && matricula) {
+          const asignacion = await asignarTarjetaSolred(matricula, nuevaTarjeta.numero)
+          if (!asignacion.success) {
+            setMensaje({
+              tipo: "error",
+              texto: `Tarjeta creada, pero no se pudo asignar al coche: ${asignacion.error}`,
+            })
+          } else {
+            setTarjetaAsignadaActual(nuevaTarjeta.numero)
+            setMensaje({
+              tipo: "success",
+              texto: "Tarjeta SOLRED creada y asignada correctamente",
+            })
+          }
+        } else {
+          setMensaje({
+            tipo: "success",
+            texto: "Tarjeta SOLRED creada y seleccionada correctamente",
+          })
+        }
 
         // Limpiar el formulario
         setNuevaTarjeta({ numero: "", pin: "", fechaVencimiento: "" })
@@ -135,6 +166,68 @@ export function SolredManager({
       setIsCreating(false)
     }
   }
+
+  const guardarAsignacion = async () => {
+    if (!matricula) return
+
+    if (tarjetaSeleccionada === tarjetaAsignadaActual) {
+      setMensaje({
+        tipo: "success",
+        texto: "No hay cambios en la asignación de tarjeta SOLRED",
+      })
+      return
+    }
+
+    setIsSavingAssignment(true)
+    setMensaje(null)
+
+    try {
+      if (!tarjetaSeleccionada) {
+        const result = await desasignarTarjetaSolred(matricula)
+        if (!result.success) {
+          setMensaje({
+            tipo: "error",
+            texto: result.error || "Error al desasignar la tarjeta SOLRED",
+          })
+          return
+        }
+
+        setTarjetaAsignadaActual("")
+        setMensaje({
+          tipo: "success",
+          texto: "Tarjeta SOLRED desasignada correctamente",
+        })
+        return
+      }
+
+      const result = await asignarTarjetaSolred(matricula, tarjetaSeleccionada)
+      if (!result.success) {
+        setMensaje({
+          tipo: "error",
+          texto: result.error || "Error al asignar la tarjeta SOLRED",
+        })
+        return
+      }
+
+      setTarjetaAsignadaActual(tarjetaSeleccionada)
+      setMensaje({
+        tipo: "success",
+        texto: "Tarjeta SOLRED asignada correctamente",
+      })
+    } catch (error) {
+      console.error("Error al guardar asignación SOLRED:", error)
+      setMensaje({
+        tipo: "error",
+        texto: "Error inesperado al guardar la asignación SOLRED",
+      })
+    } finally {
+      setIsSavingAssignment(false)
+    }
+  }
+
+  const tarjetasSolredUnicas = Array.isArray(tarjetasSolred)
+    ? Array.from(new Map(tarjetasSolred.map((tarjeta) => [tarjeta.numero_tarjeta, tarjeta])).values())
+    : []
 
   if (isLoading) {
     return (
@@ -184,14 +277,38 @@ export function SolredManager({
             className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
             <option value="">Sin tarjeta asignada</option>
-            {Array.isArray(tarjetasSolred) &&
-              tarjetasSolred.map((tarjeta) => (
-                <option key={tarjeta.numero_tarjeta} value={tarjeta.numero_tarjeta}>
-                  {tarjeta.numero_tarjeta} - PIN: {tarjeta.pin} - Vence: {tarjeta.fechavencimiento}
-                </option>
-              ))}
+            {tarjetasSolredUnicas.map((tarjeta) => (
+              <option key={tarjeta.numero_tarjeta} value={tarjeta.numero_tarjeta}>
+                {tarjeta.numero_tarjeta} - PIN: {tarjeta.pin} - Vence: {tarjeta.fechavencimiento}
+              </option>
+            ))}
           </select>
         </div>
+
+        {isEditing && matricula && (
+          <div className="flex justify-between gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setTarjetaSeleccionada("")
+              }}
+              disabled={isSavingAssignment || isCreating || !tarjetaSeleccionada}
+              className="text-red-600 hover:text-red-700 bg-transparent"
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              Quitar selección
+            </Button>
+            <Button
+              type="button"
+              onClick={guardarAsignacion}
+              disabled={isSavingAssignment || isCreating}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {isSavingAssignment ? "Guardando..." : "Guardar Tarjeta SOLRED"}
+            </Button>
+          </div>
+        )}
 
         {isEditing && (
           <>
