@@ -26,6 +26,14 @@ interface ReservaModalProps {
   onReservaCreada: (mensaje: string) => void
 }
 
+interface BloqueoReserva {
+  desde: Date
+  hasta: Date
+  inicioReal: Date
+  responsableNombre: string
+  responsableMovil: string | null
+}
+
 export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReservaCreada }: ReservaModalProps) {
   const roundToNext30 = (date: Date) => {
     const d = new Date(date)
@@ -55,7 +63,7 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
   const [numeroMeses, setNumeroMeses] = useState(1)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
-  const [bloqueos, setBloqueos] = useState<Array<{ desde: Date; hasta: Date; inicioReal: Date }>>([])
+  const [bloqueos, setBloqueos] = useState<BloqueoReserva[]>([])
   const diasReservados = useMemo(() => {
     if (bloqueos.length === 0) return []
     const dias = new Map<string, Date>()
@@ -119,6 +127,36 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
     })
 
     return bloqueados
+  }, [bloqueos])
+
+  const responsablesPorDia = useMemo(() => {
+    const dayMap = new Map<string, Array<{ nombre: string; movil: string | null }>>()
+
+    bloqueos.forEach((bloqueo) => {
+      const start = startOfDay(bloqueo.desde)
+      const end = startOfDay(bloqueo.hasta)
+      const cursor = new Date(start)
+
+      while (cursor <= end) {
+        const key = cursor.toISOString().slice(0, 10)
+        const actual = dayMap.get(key) || []
+        const yaExiste = actual.some(
+          (r) => r.nombre === bloqueo.responsableNombre && (r.movil || "") === (bloqueo.responsableMovil || "")
+        )
+
+        if (!yaExiste) {
+          actual.push({
+            nombre: bloqueo.responsableNombre,
+            movil: bloqueo.responsableMovil,
+          })
+          dayMap.set(key, actual)
+        }
+
+        cursor.setDate(cursor.getDate() + 1)
+      }
+    })
+
+    return dayMap
   }, [bloqueos])
 
   const minHoraInicioPorBloqueo = useMemo(() => {
@@ -341,7 +379,23 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
     }, [modifiers.focused])
 
     const bloqueadoCompleto = modifiers.full === true
-    const tooltip = bloqueadoCompleto ? "Día completo ya reservado" : buttonProps.title
+    const tieneReserva = modifiers.full === true || modifiers.reservado === true
+    const dayKey = day.date.toISOString().slice(0, 10)
+    const responsables = responsablesPorDia.get(dayKey) || []
+    const tooltip =
+      tieneReserva && responsables.length > 0
+        ? [
+            responsables.length === 1 ? "Reserva existente" : "Reservas existentes",
+            ...responsables.flatMap((r, idx) => {
+              const lineas = [r.nombre]
+              if (r.movil) lineas.push(`Móvil: ${r.movil}`)
+              if (idx < responsables.length - 1) lineas.push("")
+              return lineas
+            }),
+          ].join("\n")
+        : bloqueadoCompleto
+          ? "Día completo ya reservado"
+          : buttonProps.title
 
     return (
       <button
@@ -381,10 +435,13 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
         }
 
         const ventanas = resultado.data.map((r: any) => {
+          const empleado = Array.isArray(r.empleados) ? r.empleados[0] : r.empleados
+          const responsableNombre = [empleado?.nombre, empleado?.apellidos].filter(Boolean).join(" ").trim() || "Usuario no disponible"
+          const responsableMovil = empleado?.movil ? String(empleado.movil).trim() : null
           const inicioReal = new Date(r.fecha_inicio)
           const desde = r.bloqueo_desde ? new Date(r.bloqueo_desde) : inicioReal
           const hasta = new Date(r.fecha_fin)
-          return { desde, hasta, inicioReal }
+          return { desde, hasta, inicioReal, responsableNombre, responsableMovil }
         })
 
         setBloqueos(ventanas)
@@ -593,7 +650,8 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
                     const fin = format(b.hasta, "dd/MM/yyyy HH:mm")
                     return (
                       <li key={`${inicio}-${fin}-${idx}`}>
-                        {inicio} → {fin}
+                        {inicio} → {fin} · {b.responsableNombre}
+                        {b.responsableMovil ? ` · Móvil: ${b.responsableMovil}` : ""}
                       </li>
                     )
                   })}
