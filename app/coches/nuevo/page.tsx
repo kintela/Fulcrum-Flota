@@ -23,7 +23,7 @@ interface Empleado {
   dni: string
   telefono: string
   email: string
-  activo: boolean
+  activo?: boolean | null
 }
 
 export default function NuevoCochePage() {
@@ -63,7 +63,8 @@ export default function NuevoCochePage() {
   const cargarEmpleados = async () => {
     try {
       const empleadosData = await obtenerEmpleados()
-      setEmpleados(empleadosData.filter((emp) => emp.activo))
+      // Mostrar todos salvo empleados marcados explícitamente como inactivos
+      setEmpleados(empleadosData.filter((emp) => emp.activo !== false))
     } catch (error) {
       console.error("Error al cargar empleados:", error)
       setError("Error al cargar la lista de empleados")
