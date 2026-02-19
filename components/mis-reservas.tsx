@@ -21,7 +21,13 @@ import {
 import { Calendar, Clock, Car, RefreshCw, AlertTriangle, MapPin, Loader2, CreditCard, Truck } from "lucide-react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
-import { obtenerReservasUsuario, cancelarReserva, completarReserva, ampliarReservaTemporal } from "@/app/actions/reservas-temporales"
+import {
+  obtenerReservasUsuario,
+  cancelarReserva,
+  completarReserva,
+  ampliarReservaTemporal,
+  obtenerBloqueosReservasPorMatricula,
+} from "@/app/actions/reservas-temporales"
 import { ubicarCocheEnSede } from "@/app/actions/ubicacion"
 import { capturarYAsignarUbicacion } from "@/lib/ubicacion-utils"
 import { obtenerFotosCoche } from "@/lib/storage"
@@ -47,6 +53,12 @@ interface Reserva {
     longitud?: number | null
     direccion_actual?: string | null
   }
+}
+
+interface BloqueoExtend {
+  id: number | null
+  desde: Date
+  hasta: Date
 }
 
 function getITVStatus(date: string): { isUrgent: boolean; isOverdue: boolean; daysRemaining: number } {
@@ -109,6 +121,7 @@ export function MisReservas({
   const [showExtendInicioCalendar, setShowExtendInicioCalendar] = useState(false)
   const [showExtendFinCalendar, setShowExtendFinCalendar] = useState(false)
   const [extendError, setExtendError] = useState("")
+  const [extendBloqueos, setExtendBloqueos] = useState<BloqueoExtend[]>([])
   const [fotosCache, setFotosCache] = useState<{ [matricula: string]: string | null }>({})
   const [historialSeleccionado, setHistorialSeleccionado] = useState<Reserva | null>(null)
   const [fichaCocheCache, setFichaCocheCache] = useState<Record<string, CocheFicha | null>>({})
@@ -322,12 +335,32 @@ export function MisReservas({
 
   const formatHora = (date: Date) =>
     `${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`
+  const horasOpciones = useMemo(() => generarHoras(), [])
 
   const construirFechaHora = (fecha: Date, hora: string) => {
     const [h, m] = hora.split(":").map(Number)
     const valor = new Date(fecha)
     valor.setHours(h, m, 0, 0)
     return valor
+  }
+
+  const extendBloqueosOtros = useMemo(() => {
+    if (!reservaToExtend) return []
+    return extendBloqueos.filter((b) => b.id === null || b.id !== reservaToExtend.id)
+  }, [extendBloqueos, reservaToExtend])
+
+  const isHoraInicioBloqueadaEnExtension = (hora: string) => {
+    if (!extendFechaInicio) return false
+    const slot = construirFechaHora(extendFechaInicio, hora)
+    return extendBloqueosOtros.some((b) => slot >= b.desde && slot < b.hasta)
+  }
+
+  const isHoraFinBloqueadaEnExtension = (hora: string) => {
+    if (!extendFechaInicio || !extendHoraInicio || !extendFechaFin) return false
+    const inicioSeleccionado = construirFechaHora(extendFechaInicio, extendHoraInicio)
+    const finPropuesto = construirFechaHora(extendFechaFin, hora)
+    if (finPropuesto <= inicioSeleccionado) return true
+    return extendBloqueosOtros.some((b) => b.desde < finPropuesto && b.hasta > inicioSeleccionado)
   }
 
   const minHoraFinExtend = useMemo(() => {
@@ -359,6 +392,55 @@ export function MisReservas({
       setExtendFechaFin(new Date(extendFechaInicio))
     }
   }, [extendFechaInicio, extendFechaFin])
+
+  useEffect(() => {
+    const cargarBloqueos = async () => {
+      if (!reservaToExtend) return
+      try {
+        const matriculaReserva = reservaToExtend.coches?.matricula || reservaToExtend.matricula
+        const resultado = await obtenerBloqueosReservasPorMatricula(matriculaReserva)
+        if (!resultado.success || !resultado.data) {
+          setExtendBloqueos([])
+          return
+        }
+
+        const parsed = (resultado.data as any[])
+          .map((r) => {
+            const inicioReal = new Date(r.fecha_inicio)
+            const desde = r.bloqueo_desde ? new Date(r.bloqueo_desde) : inicioReal
+            const hasta = new Date(r.fecha_fin)
+            const idNum = typeof r.id === "number" ? r.id : Number(r.id)
+            return {
+              id: Number.isFinite(idNum) ? idNum : null,
+              desde,
+              hasta,
+            } as BloqueoExtend
+          })
+          .filter((b) => Number.isFinite(b.desde.getTime()) && Number.isFinite(b.hasta.getTime()))
+
+        setExtendBloqueos(parsed)
+      } catch (error) {
+        console.warn("Error cargando bloqueos para modificar reserva:", error)
+        setExtendBloqueos([])
+      }
+    }
+
+    if (showExtendDialog && reservaToExtend) {
+      cargarBloqueos()
+      return
+    }
+
+    setExtendBloqueos([])
+  }, [showExtendDialog, reservaToExtend])
+
+  useEffect(() => {
+    if (!extendFechaInicio || !extendHoraInicio) return
+    if (!isHoraInicioBloqueadaEnExtension(extendHoraInicio)) return
+    const primeraDisponible = horasOpciones.find((hora) => !isHoraInicioBloqueadaEnExtension(hora))
+    if (primeraDisponible) {
+      setExtendHoraInicio(primeraDisponible)
+    }
+  }, [extendFechaInicio, extendHoraInicio, extendBloqueosOtros, horasOpciones])
 
   const handleConfirmarAmpliar = (reserva: Reserva) => {
     const inicioActual = new Date(reserva.fecha_inicio)
@@ -1346,11 +1428,14 @@ export function MisReservas({
                           }}
                           className="w-full pl-10 pr-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
-                          {generarHoras().map((hora) => (
-                            <option key={hora} value={hora}>
-                              {hora}
-                            </option>
-                          ))}
+                          {horasOpciones.map((hora) => {
+                            const disabledOpt = isHoraInicioBloqueadaEnExtension(hora)
+                            return (
+                              <option key={hora} value={hora} disabled={disabledOpt}>
+                                {hora}{disabledOpt ? " (no disponible)" : ""}
+                              </option>
+                            )
+                          })}
                         </select>
                       </div>
                     </div>
@@ -1413,16 +1498,8 @@ export function MisReservas({
                           }}
                           className="w-full pl-10 pr-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
-                          {generarHoras().map((hora) => {
-                            let disabledOpt = false
-                            if (extendFechaInicio && extendHoraInicio && extendFechaFin) {
-                              if (extendFechaFin.toDateString() === extendFechaInicio.toDateString()) {
-                                const [hIni, mIni] = extendHoraInicio.split(":").map(Number)
-                                const baseMin = hIni * 60 + mIni
-                                const [h, m] = hora.split(":").map(Number)
-                                disabledOpt = h * 60 + m <= baseMin
-                              }
-                            }
+                          {horasOpciones.map((hora) => {
+                            const disabledOpt = isHoraFinBloqueadaEnExtension(hora)
                             return (
                               <option key={hora} value={hora} disabled={disabledOpt}>
                                 {hora}{disabledOpt ? " (no disponible)" : ""}

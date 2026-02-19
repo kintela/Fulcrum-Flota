@@ -653,6 +653,7 @@ export async function obtenerBloqueosReservasPorMatricula(matricula: string) {
     const { data, error } = await supabase
       .from("reservas")
       .select(`
+        id,
         fecha_inicio,
         fecha_fin,
         bloqueo_desde,
