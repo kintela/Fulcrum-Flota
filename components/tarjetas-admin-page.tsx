@@ -2,18 +2,30 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useSession } from "next-auth/react"
-import { AlertCircle, CheckCircle2, CreditCard, RefreshCw, WalletCards } from "lucide-react"
+import { AlertCircle, CheckCircle2, CreditCard, RefreshCw, Trash2, WalletCards } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   actualizarTarjetaSolredAdmin,
   actualizarTarjetaViatAdmin,
   crearTarjetaSolredAdmin,
   crearTarjetaViatAdmin,
+  eliminarTarjetaSolredAdmin,
+  eliminarTarjetaViatAdmin,
   obtenerTarjetasSolredAdmin,
   obtenerTarjetasViatAdmin,
   type TarjetaSolredAdmin,
@@ -40,6 +52,11 @@ interface EdicionViat {
   value: string
 }
 
+interface EliminacionPendiente {
+  tipo: "solred" | "viat"
+  id: string
+}
+
 export default function TarjetasAdminPage() {
   const { data: session, status } = useSession()
   const [tarjetasSolred, setTarjetasSolred] = useState<TarjetaSolredAdmin[]>([])
@@ -51,6 +68,10 @@ export default function TarjetasAdminPage() {
   const [edicionSolred, setEdicionSolred] = useState<EdicionSolred | null>(null)
   const [edicionViat, setEdicionViat] = useState<EdicionViat | null>(null)
   const [guardandoEdicion, setGuardandoEdicion] = useState(false)
+  const [eliminacionPendiente, setEliminacionPendiente] = useState<EliminacionPendiente | null>(null)
+  const [modalEliminarAbierto, setModalEliminarAbierto] = useState(false)
+  const [eliminando, setEliminando] = useState(false)
+  const [errorEliminacion, setErrorEliminacion] = useState("")
 
   const [solredNumero, setSolredNumero] = useState("")
   const [solredPin, setSolredPin] = useState("")
@@ -71,19 +92,6 @@ export default function TarjetasAdminPage() {
     const parsed = new Date(fecha)
     if (!Number.isFinite(parsed.getTime())) return "-"
     return parsed.toLocaleDateString("es-ES")
-  }
-
-  const formatearFechaHora = (fecha?: string | null) => {
-    if (!fecha) return "-"
-    const parsed = new Date(fecha)
-    if (!Number.isFinite(parsed.getTime())) return "-"
-    return parsed.toLocaleString("es-ES", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
   }
 
   const cargarDatos = async (silencioso = false) => {
@@ -289,6 +297,48 @@ export default function TarjetasAdminPage() {
     }
   }
 
+  const abrirConfirmacionEliminacion = (tipo: "solred" | "viat", id: string) => {
+    if (guardandoEdicion || eliminando) return
+    cancelarEdicion()
+    setMensaje(null)
+    setErrorEliminacion("")
+    setEliminacionPendiente({ tipo, id })
+    setModalEliminarAbierto(true)
+  }
+
+  const confirmarEliminacion = async () => {
+    if (!eliminacionPendiente || eliminando) return
+
+    setEliminando(true)
+    setErrorEliminacion("")
+    setMensaje(null)
+    try {
+      const resultado =
+        eliminacionPendiente.tipo === "solred"
+          ? await eliminarTarjetaSolredAdmin(eliminacionPendiente.id)
+          : await eliminarTarjetaViatAdmin(eliminacionPendiente.id)
+
+      if (!resultado.success) {
+        const errorTexto = resultado.error || "No se pudo eliminar la tarjeta"
+        setErrorEliminacion(errorTexto)
+        setMensaje({ tipo: "error", texto: errorTexto })
+        return
+      }
+
+      setMensaje({ tipo: "success", texto: resultado.message || "Tarjeta eliminada correctamente" })
+      setModalEliminarAbierto(false)
+      setEliminacionPendiente(null)
+      await cargarDatos(true)
+    } catch (deleteError) {
+      console.error("Error eliminando tarjeta:", deleteError)
+      const errorTexto = "Error inesperado al eliminar tarjeta"
+      setErrorEliminacion(errorTexto)
+      setMensaje({ tipo: "error", texto: errorTexto })
+    } finally {
+      setEliminando(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-100 p-8">
@@ -414,7 +464,7 @@ export default function TarjetasAdminPage() {
                     <TableHead>PIN</TableHead>
                     <TableHead>Vencimiento</TableHead>
                     <TableHead>Estado</TableHead>
-                    <TableHead>Creada</TableHead>
+                    <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -560,7 +610,18 @@ export default function TarjetasAdminPage() {
                             </Badge>
                           )}
                         </TableCell>
-                        <TableCell>{formatearFechaHora(tarjeta.created_at)}</TableCell>
+                        <TableCell className="text-right">
+                          <button
+                            type="button"
+                            title={`Eliminar tarjeta SOLRED ${tarjeta.numero_tarjeta}`}
+                            aria-label={`Eliminar tarjeta SOLRED ${tarjeta.numero_tarjeta}`}
+                            onClick={() => abrirConfirmacionEliminacion("solred", tarjeta.numero_tarjeta)}
+                            disabled={guardandoEdicion || eliminando}
+                            className="text-red-600 hover:text-red-700 disabled:opacity-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </TableCell>
                       </TableRow>
                     ))
                   )}
@@ -613,7 +674,7 @@ export default function TarjetasAdminPage() {
                     <TableHead>ID</TableHead>
                     <TableHead>Caducidad</TableHead>
                     <TableHead>Estado</TableHead>
-                    <TableHead>Creada</TableHead>
+                    <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -723,7 +784,18 @@ export default function TarjetasAdminPage() {
                             </Badge>
                           )}
                         </TableCell>
-                        <TableCell>{formatearFechaHora(tarjeta.created_at)}</TableCell>
+                        <TableCell className="text-right">
+                          <button
+                            type="button"
+                            title={`Eliminar tarjeta ViaT ${tarjeta.id}`}
+                            aria-label={`Eliminar tarjeta ViaT ${tarjeta.id}`}
+                            onClick={() => abrirConfirmacionEliminacion("viat", tarjeta.id)}
+                            disabled={guardandoEdicion || eliminando}
+                            className="text-red-600 hover:text-red-700 disabled:opacity-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </TableCell>
                       </TableRow>
                     ))
                   )}
@@ -733,6 +805,45 @@ export default function TarjetasAdminPage() {
             </CardContent>
           </Card>
         </div>
+
+        <AlertDialog
+          open={modalEliminarAbierto}
+          onOpenChange={(open) => {
+            if (eliminando) return
+            setModalEliminarAbierto(open)
+            if (!open) {
+              setEliminacionPendiente(null)
+              setErrorEliminacion("")
+            }
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirmar eliminación</AlertDialogTitle>
+              <AlertDialogDescription>
+                {eliminacionPendiente
+                  ? `¿Seguro que quieres eliminar la tarjeta ${
+                      eliminacionPendiente.tipo === "solred" ? "SOLRED" : "ViaT"
+                    } ${eliminacionPendiente.id}? Esta acción no se puede deshacer.`
+                  : "¿Seguro que quieres eliminar esta tarjeta?"}
+              </AlertDialogDescription>
+              {errorEliminacion && <p className="text-sm text-red-600">{errorEliminacion}</p>}
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={eliminando}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(event) => {
+                  event.preventDefault()
+                  void confirmarEliminacion()
+                }}
+                disabled={eliminando || !eliminacionPendiente}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {eliminando ? "Eliminando..." : "Eliminar tarjeta"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   )

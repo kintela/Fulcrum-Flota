@@ -371,3 +371,131 @@ export async function actualizarTarjetaViatAdmin({
     return { success: false as const, error: "Error inesperado al actualizar tarjeta ViaT" }
   }
 }
+
+export async function eliminarTarjetaSolredAdmin(numeroTarjeta: string) {
+  try {
+    const acceso = await validarAdmin()
+    if (!acceso.success) {
+      return { success: false as const, error: acceso.error }
+    }
+
+    const numeroNormalizado = String(numeroTarjeta || "").trim()
+    if (!numeroNormalizado) {
+      return { success: false as const, error: "Número de tarjeta SOLRED inválido" }
+    }
+
+    const { data: asignacionesActivas, error: asignacionesError } = await supabase
+      .from("solred_coches")
+      .select("matricula")
+      .eq("numero_tarjeta", numeroNormalizado)
+      .eq("activa", true)
+
+    if (asignacionesError) {
+      console.error("Error comprobando asignaciones SOLRED:", asignacionesError)
+      return { success: false as const, error: "No se pudo comprobar si la tarjeta SOLRED está asignada" }
+    }
+
+    if ((asignacionesActivas || []).length > 0) {
+      const matriculas = (asignacionesActivas || [])
+        .map((a) => String(a.matricula || "").trim())
+        .filter(Boolean)
+        .slice(0, 3)
+      const detalle = matriculas.length > 0 ? ` (${matriculas.join(", ")})` : ""
+      return {
+        success: false as const,
+        error: `No se puede eliminar: la tarjeta SOLRED está asignada actualmente${detalle}`,
+      }
+    }
+
+    const { data, error } = await supabase
+      .from("tarjetassolred")
+      .delete()
+      .eq("numero_tarjeta", numeroNormalizado)
+      .select("numero_tarjeta")
+
+    if (error) {
+      console.error("Error eliminando tarjeta SOLRED:", error)
+      if (error.code === "23503") {
+        return {
+          success: false as const,
+          error: "No se puede eliminar la tarjeta SOLRED porque tiene referencias históricas en otras tablas",
+        }
+      }
+      return { success: false as const, error: `No se pudo eliminar la tarjeta SOLRED: ${error.message}` }
+    }
+
+    if (!data || data.length === 0) {
+      return { success: false as const, error: "La tarjeta SOLRED ya no existe" }
+    }
+
+    revalidatePath("/tarjetas")
+    revalidatePath("/coches")
+
+    return { success: true as const, message: "Tarjeta SOLRED eliminada correctamente" }
+  } catch (error) {
+    console.error("Error en eliminarTarjetaSolredAdmin:", error)
+    return { success: false as const, error: "Error inesperado al eliminar tarjeta SOLRED" }
+  }
+}
+
+export async function eliminarTarjetaViatAdmin(id: string) {
+  try {
+    const acceso = await validarAdmin()
+    if (!acceso.success) {
+      return { success: false as const, error: acceso.error }
+    }
+
+    const idNormalizado = String(id || "").trim()
+    if (!idNormalizado) {
+      return { success: false as const, error: "Identificador ViaT inválido" }
+    }
+
+    const { data: asignacionesActivas, error: asignacionesError } = await supabase
+      .from("viat_coches")
+      .select("matricula")
+      .eq("viat_id", idNormalizado)
+      .is("fecha_desasignacion", null)
+
+    if (asignacionesError) {
+      console.error("Error comprobando asignaciones ViaT:", asignacionesError)
+      return { success: false as const, error: "No se pudo comprobar si la tarjeta ViaT está asignada" }
+    }
+
+    if ((asignacionesActivas || []).length > 0) {
+      const matriculas = (asignacionesActivas || [])
+        .map((a) => String(a.matricula || "").trim())
+        .filter(Boolean)
+        .slice(0, 3)
+      const detalle = matriculas.length > 0 ? ` (${matriculas.join(", ")})` : ""
+      return {
+        success: false as const,
+        error: `No se puede eliminar: la tarjeta ViaT está asignada actualmente${detalle}`,
+      }
+    }
+
+    const { data, error } = await supabase.from("viats").delete().eq("id", idNormalizado).select("id")
+
+    if (error) {
+      console.error("Error eliminando tarjeta ViaT:", error)
+      if (error.code === "23503") {
+        return {
+          success: false as const,
+          error: "No se puede eliminar la tarjeta ViaT porque tiene referencias históricas en otras tablas",
+        }
+      }
+      return { success: false as const, error: `No se pudo eliminar la tarjeta ViaT: ${error.message}` }
+    }
+
+    if (!data || data.length === 0) {
+      return { success: false as const, error: "La tarjeta ViaT ya no existe" }
+    }
+
+    revalidatePath("/tarjetas")
+    revalidatePath("/coches")
+
+    return { success: true as const, message: "Tarjeta ViaT eliminada correctamente" }
+  } catch (error) {
+    console.error("Error en eliminarTarjetaViatAdmin:", error)
+    return { success: false as const, error: "Error inesperado al eliminar tarjeta ViaT" }
+  }
+}
