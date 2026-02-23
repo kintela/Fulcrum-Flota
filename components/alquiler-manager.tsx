@@ -4,6 +4,16 @@ import type React from "react"
 
 import { useEffect, useState } from "react"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -67,8 +77,11 @@ export function AlquilerManager({ matricula, isEditing = false }: AlquilerManage
   const [showForm, setShowForm] = useState(false)
   const [editingAlquiler, setEditingAlquiler] = useState<Alquiler | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [formData, setFormData] = useState<AlquilerFormData>(EMPTY_FORM)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [alquilerToDelete, setAlquilerToDelete] = useState<Alquiler | null>(null)
 
   useEffect(() => {
     if (matricula && matricula !== "undefined") {
@@ -194,22 +207,24 @@ export function AlquilerManager({ matricula, isEditing = false }: AlquilerManage
     }
   }
 
-  async function handleEliminar(alquiler: Alquiler) {
-    if (!confirm("¿Estás seguro de que quieres eliminar este alquiler?")) {
-      return
-    }
-
+  async function confirmarEliminar() {
+    if (!alquilerToDelete) return
     try {
-      const result = await eliminarAlquiler(alquiler.id, matricula)
+      setIsDeleting(true)
+      const result = await eliminarAlquiler(alquilerToDelete.id, matricula)
       if (!result.success) {
         setError(result.error || "Error al eliminar el alquiler")
         return
       }
 
       await cargarAlquileres()
+      setDeleteDialogOpen(false)
+      setAlquilerToDelete(null)
     } catch (error) {
       console.error("Error al eliminar alquiler:", error)
       setError("Error inesperado al eliminar el alquiler")
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -481,7 +496,16 @@ export function AlquilerManager({ matricula, isEditing = false }: AlquilerManage
                           >
                             <Edit2 className="w-3 h-3" />
                           </Button>
-                          <Button size="sm" variant="outline" onClick={() => handleEliminar(alquiler)}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setAlquilerToDelete(alquiler)
+                              setDeleteDialogOpen(true)
+                              setError(null)
+                            }}
+                            disabled={isDeleting}
+                          >
                             <Trash2 className="w-3 h-3" />
                           </Button>
                         </div>
@@ -491,6 +515,49 @@ export function AlquilerManager({ matricula, isEditing = false }: AlquilerManage
                 ))}
               </div>
             )}
+
+            <AlertDialog
+              open={deleteDialogOpen}
+              onOpenChange={(open) => {
+                if (isDeleting) return
+                setDeleteDialogOpen(open)
+                if (!open) {
+                  setAlquilerToDelete(null)
+                }
+              }}
+            >
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Confirmar eliminación</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {alquilerToDelete ? (
+                      <>
+                        ¿Seguro que quieres eliminar el alquiler de <strong>{alquilerToDelete.compania}</strong>
+                        {alquilerToDelete.numero_contrato ? (
+                          <> (contrato {alquilerToDelete.numero_contrato})</>
+                        ) : null}
+                        ? Esta acción no se puede deshacer.
+                      </>
+                    ) : (
+                      "¿Seguro que quieres eliminar este alquiler?"
+                    )}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={(event) => {
+                      event.preventDefault()
+                      void confirmarEliminar()
+                    }}
+                    disabled={isDeleting || !alquilerToDelete}
+                    className="bg-red-600 hover:bg-red-700"
+                  >
+                    {isDeleting ? "Eliminando..." : "Eliminar alquiler"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         </AccordionContent>
       </AccordionItem>
