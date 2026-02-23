@@ -16,6 +16,7 @@ import { ViatManager } from "@/components/viat-manager"
 import { ITVManager } from "@/components/itv-manager"
 import { MantenimientoManager } from "@/components/mantenimiento-manager"
 import { FotosManager } from "@/components/fotos-manager"
+import { AlquilerManager } from "@/components/alquiler-manager"
 
 async function getCoche(matricula: string) {
   const { data, error } = await supabase.from("coches").select("*").eq("matricula", matricula).single()
@@ -172,6 +173,9 @@ export default async function EditarCochePage({ params }: { params: { id: string
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Gestión de Seguros */}
             <SeguroManager matricula={coche.matricula} isEditing />
+
+            {/* Gestión de Alquileres */}
+            <AlquilerManager matricula={coche.matricula} isEditing />
 
             {/* Gestión de ITVs */}
             <ITVManager matricula={coche.matricula} isEditing />
