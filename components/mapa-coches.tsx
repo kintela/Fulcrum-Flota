@@ -352,6 +352,78 @@ const selectedMatriculaRef = useRef<string>("all")
     return noEstaAsignado && sinReservaBloqueante && noEsDonante
   }, [reservasActivas])
 
+  const createMarkerIconWithLabel = useCallback(
+    (matricula: string, fillColor: string, markerSize: number, fillOpacity: number) => {
+      const safeMatricula = String(matricula || "").toUpperCase()
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;")
+
+      const fontSize = 11
+      const charWidth = 7
+      const labelPaddingX = 8
+      const labelPaddingY = 4
+      const labelHeight = fontSize + labelPaddingY * 2
+      const textWidth = Math.max(34, safeMatricula.length * charWidth)
+      const labelWidth = textWidth + labelPaddingX * 2
+      const radius = Math.max(8, markerSize)
+      const circleStroke = 2
+      const gap = 4
+      const circleCenterY = labelHeight + gap + radius + circleStroke
+      const width = Math.max(labelWidth, radius * 2 + 8)
+      const circleCenterX = width / 2
+      const height = circleCenterY + radius + circleStroke + 2
+
+      const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+          <g>
+            <rect
+              x="${(width - labelWidth) / 2}"
+              y="0.5"
+              width="${labelWidth}"
+              height="${labelHeight}"
+              rx="8"
+              ry="8"
+              fill="#ffffff"
+              fill-opacity="0.95"
+              stroke="#1f2937"
+              stroke-opacity="0.22"
+              stroke-width="1"
+            />
+            <text
+              x="${width / 2}"
+              y="${labelHeight / 2 + 0.5}"
+              text-anchor="middle"
+              dominant-baseline="middle"
+              font-family="Arial, sans-serif"
+              font-size="${fontSize}"
+              font-weight="700"
+              fill="#111827"
+            >${safeMatricula}</text>
+          </g>
+          <circle
+            cx="${circleCenterX}"
+            cy="${circleCenterY}"
+            r="${radius}"
+            fill="${fillColor}"
+            fill-opacity="${fillOpacity}"
+            stroke="#ffffff"
+            stroke-width="${circleStroke}"
+          />
+        </svg>
+      `.trim()
+
+      return {
+        url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+        scaledSize: new window.google.maps.Size(width, height),
+        anchor: new window.google.maps.Point(circleCenterX, circleCenterY),
+      }
+    },
+    [],
+  )
+
   // Función para limpiar marcadores
   const clearMarkers = useCallback(() => {
     markers.current.forEach((markerObj) => {
@@ -464,14 +536,12 @@ const selectedMatriculaRef = useRef<string>("all")
             map,
             title: `${coche.matricula} - ${coche.marca} ${coche.modelo}`,
             draggable: canRelocate, // Hacer arrastrable si el usuario tiene permisos
-            icon: {
-              path: window.google.maps.SymbolPath.CIRCLE,
-              scale: markerSize, // Tamaño dinámico: 14 para mis coches, 10 para otros
-              fillColor: fillColor,
-              fillOpacity: reservaVencidaMia ? 0.95 : 0.8,
-              strokeColor: "#ffffff",
-              strokeWeight: 2,
-            },
+            icon: createMarkerIconWithLabel(
+              coche.matricula,
+              fillColor,
+              markerSize,
+              reservaVencidaMia ? 0.95 : 0.8,
+            ),
           })
 
           // Crear ventana de información
@@ -622,7 +692,19 @@ const selectedMatriculaRef = useRef<string>("all")
         }
       }
     },
-    [cochesVisibles, getEmpleadoInfo, empleadosMap, clearMarkers, isGoogleMapsReady, userEmail, miCocheMatricula, misReservas, isAdmin, reservasActivas],
+    [
+      cochesVisibles,
+      getEmpleadoInfo,
+      empleadosMap,
+      clearMarkers,
+      isGoogleMapsReady,
+      userEmail,
+      miCocheMatricula,
+      misReservas,
+      isAdmin,
+      reservasActivas,
+      createMarkerIconWithLabel,
+    ],
   )
 
   // Función para actualizar la ubicación de un vehículo
