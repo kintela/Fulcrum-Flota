@@ -161,19 +161,29 @@ export async function verificarReservasVencidas() {
       try {
         console.log(`📨 Procesando reserva ${reserva.id} - ${reserva.matricula}`)
 
-        // Marcar la reserva como vencida en cuanto se detecta
+        // Marcar la reserva como vencida solo si sigue activa.
+        // Si el usuario la canceló entre la consulta inicial y este punto, se omite el aviso.
         try {
-          const { error: estadoError } = await supabase
+          const { data: reservaMarcadaVencida, error: estadoError } = await supabase
             .from('reservas')
             .update({ estado: 'vencida' })
             .eq('id', reserva.id)
             .eq('estado', 'activa')
+            .select('id')
+            .maybeSingle()
 
           if (estadoError) {
             console.error(`❌ Error marcando reserva ${reserva.id} como vencida:`, estadoError)
+            continue
+          }
+
+          if (!reservaMarcadaVencida) {
+            console.log(`ℹ️ Reserva ${reserva.id} ya no está activa (posible cancelación), se omite notificación`)
+            continue
           }
         } catch (estadoError) {
           console.error(`❌ Error inesperado marcando reserva ${reserva.id} como vencida:`, estadoError)
+          continue
         }
 
         // Validar fecha - usar tal como está en BD

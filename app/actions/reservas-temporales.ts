@@ -718,15 +718,15 @@ export async function obtenerEstadoReservasPorMatriculas(matriculas: string[]) {
 export async function activarReservasPendientes(opciones?: { manual?: boolean }) {
   try {
     const ahora = new Date()
-    const umbralAviso = new Date(ahora.getTime() + 30 * 60 * 1000) // 30 minutos adelante
 
-    // Buscar reservas en estado pendiente con fecha_inicio <= ahora + 30m
+    // Buscar solo reservas pendientes cuyo inicio ya llegó.
+    // Evita enviar avisos de inicio adelantados si el usuario cancela antes de comenzar.
     // Nota: reducimos el SELECT para evitar fallar si ciertos campos no existen todavía (ej: whatsapp)
     const { data: pendientes, error } = await supabase
       .from('reservas')
       .select('id, fecha_inicio, fecha_fin, matricula, empleado_id, notificacion_inicio_reserva_enviada, fecha_notificacion_inicio_reserva, coches(marca,modelo), empleados(email,nombre,apellidos,movil)')
       .eq('estado', 'pendiente')
-      .lte('fecha_inicio', umbralAviso.toISOString())
+      .lte('fecha_inicio', ahora.toISOString())
 
     if (error) {
       console.error('Error consultando reservas pendientes para activar:', error)
@@ -747,11 +747,21 @@ export async function activarReservasPendientes(opciones?: { manual?: boolean })
         const fechaInicio = new Date(r.fecha_inicio)
         const fechaFin = new Date(r.fecha_fin)
 
-        // Activar si ya empezó o está dentro de los próximos 30 minutos
-        if (fechaInicio <= umbralAviso) {
-        const { error: upErr } = await supabase.from('reservas').update({ estado: 'activa' }).eq('id', r.id)
+        // Activar solo si ya empezó
+        if (fechaInicio <= ahora) {
+        const { data: reservaActivada, error: upErr } = await supabase
+          .from('reservas')
+          .update({ estado: 'activa' })
+          .eq('id', r.id)
+          .eq('estado', 'pendiente')
+          .select('id')
+          .maybeSingle()
         if (upErr) {
           console.error('Error activando reserva', r.id, upErr)
+          continue
+        }
+        if (!reservaActivada) {
+          console.log('ℹ️ Reserva', r.id, 'ya no está pendiente (posible cancelación), se omite aviso de inicio')
           continue
         }
         ids.push(r.id)
