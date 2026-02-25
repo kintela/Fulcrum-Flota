@@ -12,6 +12,13 @@ import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import {
+  esRolAdministrador,
+  normalizarRolUsuario,
+  OPCIONES_ROL_USUARIO,
+  ROL_USUARIO_POR_DEFECTO,
+  type UserRole,
+} from "@/lib/user-role"
 
 interface EditarEmpleadoPageProps {
   params: { id: string }
@@ -22,7 +29,7 @@ export default function EditarEmpleadoPage({ params }: EditarEmpleadoPageProps) 
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [empleado, setEmpleado] = useState<any>(null)
-  const [role, setRole] = useState("usuario")
+  const [role, setRole] = useState<UserRole>(ROL_USUARIO_POR_DEFECTO)
   const router = useRouter()
 
   useEffect(() => {
@@ -38,7 +45,7 @@ export default function EditarEmpleadoPage({ params }: EditarEmpleadoPageProps) 
 
         if (empleadoData) {
           setEmpleado(empleadoData)
-          setRole(String(empleadoData.role || "usuario"))
+          setRole(normalizarRolUsuario(empleadoData.role))
         } else {
           setError(`No se encontró el empleado con ID ${params.id}`)
         }
@@ -194,11 +201,14 @@ export default function EditarEmpleadoPage({ params }: EditarEmpleadoPageProps) 
                     id="role"
                     name="role"
                     value={role}
-                    onChange={(e) => setRole(e.target.value)}
+                    onChange={(e) => setRole(normalizarRolUsuario(e.target.value))}
                     className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
-                    <option value="usuario">Usuario</option>
-                    <option value="administrador">Administrador</option>
+                    {OPCIONES_ROL_USUARIO.map((opcion) => (
+                      <option key={opcion.value} value={opcion.value}>
+                        {opcion.label}
+                      </option>
+                    ))}
                   </select>
                   <p className="text-sm text-gray-500 mt-1">
                     Cambia el rol del empleado si es necesario.
@@ -212,14 +222,14 @@ export default function EditarEmpleadoPage({ params }: EditarEmpleadoPageProps) 
                     id="baneado"
                     name="baneado"
                     defaultChecked={!!empleado.baneado}
-                    disabled={String(role || "").toLowerCase() === "administrador" || String(role || "").toLowerCase() === "admin"}
+                    disabled={esRolAdministrador(role)}
                   />
                   <div>
                     <Label htmlFor="baneado" className="text-sm font-medium">
                       Empleado baneado
                     </Label>
                     <p className="text-xs text-gray-600 mt-1">
-                      {String(role || "").toLowerCase() === "administrador" || String(role || "").toLowerCase() === "admin"
+                      {esRolAdministrador(role)
                         ? "Los administradores no pueden ser baneados."
                         : "Un empleado baneado no puede crear nuevas reservas."}
                     </p>

@@ -12,11 +12,12 @@ import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { OPCIONES_ROL_USUARIO, ROL_USUARIO_POR_DEFECTO, type UserRole, normalizarRolUsuario } from "@/lib/user-role"
 
 export default function NuevoEmpleadoPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [role, setRole] = useState("usuario")
+  const [role, setRole] = useState<UserRole>(ROL_USUARIO_POR_DEFECTO)
   const router = useRouter()
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -107,13 +108,16 @@ export default function NuevoEmpleadoPage() {
 
                 <div className="md:col-span-2">
                   <Label htmlFor="role">Rol</Label>
-                  <Select value={role} onValueChange={setRole}>
+                  <Select value={role} onValueChange={(value) => setRole(normalizarRolUsuario(value))}>
                     <SelectTrigger id="role" className="mt-1">
                       <SelectValue placeholder="Selecciona un rol" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="usuario">Usuario</SelectItem>
-                      <SelectItem value="administrador">Administrador</SelectItem>
+                      {OPCIONES_ROL_USUARIO.map((opcion) => (
+                        <SelectItem key={opcion.value} value={opcion.value}>
+                          {opcion.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <input type="hidden" name="role" value={role} />

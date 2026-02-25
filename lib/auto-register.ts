@@ -1,6 +1,7 @@
 "use server"
 
 import { supabaseServer as supabase } from "./supabase-server"
+import { RolUsuario } from "./user-role"
 
 /**
  * Registra automáticamente un usuario nuevo en la tabla empleados
@@ -50,7 +51,7 @@ export async function registrarUsuarioAutomatico(email: string, nombre: string, 
       nombre: nombreFinal,
       apellidos: apellidosFinal,
       email: email,
-      role: "usuario"
+      role: RolUsuario.USUARIO
     })
 
     // Crear nuevo empleado con rol 'usuario' por defecto
@@ -58,7 +59,7 @@ export async function registrarUsuarioAutomatico(email: string, nombre: string, 
       nombre: nombreFinal,
       apellidos: apellidosFinal,
       email: email,
-      role: "usuario", // Rol por defecto
+      role: RolUsuario.USUARIO, // Rol por defecto
       movil: null // Se puede actualizar después
     }
 

@@ -1,8 +1,15 @@
 import { supabaseServer as supabase } from "./supabase-server"
 import { Session } from "next-auth"
+import {
+  esRolAdministrador,
+  normalizarRolUsuario,
+  parseRolUsuario,
+  RolUsuario,
+  type UserRole,
+} from "./user-role"
 
-// Tipos de roles disponibles
-export type UserRole = 'administrador' | 'usuario'
+export { RolUsuario }
+export type { UserRole }
 
 // Interface para el empleado con rol
 export interface EmpleadoConRol {
@@ -31,7 +38,7 @@ export async function obtenerRolUsuario(email: string): Promise<UserRole | null>
       return null
     }
 
-    return data.role as UserRole
+    return parseRolUsuario(data.role)
   } catch (error) {
     console.error("Error en obtenerRolUsuario:", error)
     return null
@@ -54,7 +61,10 @@ export async function obtenerEmpleadoPorEmail(email: string): Promise<EmpleadoCo
       return null
     }
 
-    return data as EmpleadoConRol
+    return {
+      ...(data as Omit<EmpleadoConRol, "role">),
+      role: normalizarRolUsuario((data as { role?: unknown }).role),
+    }
   } catch (error) {
     console.error("Error en obtenerEmpleadoPorEmail:", error)
     return null
@@ -65,7 +75,7 @@ export async function obtenerEmpleadoPorEmail(email: string): Promise<EmpleadoCo
  * Verifica si un usuario tiene rol de administrador
  */
 export function esAdministrador(role: UserRole | null): boolean {
-  return role === 'administrador'
+  return esRolAdministrador(role)
 }
 
 /**
@@ -87,7 +97,7 @@ export function verificarPermiso(userRole: UserRole | null, requiredRole: UserRo
   if (!userRole) return false
   
   // Los administradores tienen acceso a todo
-  if (userRole === 'administrador') return true
+  if (userRole === RolUsuario.ADMINISTRADOR) return true
   
   // Verificar si el rol del usuario cumple con el requerido
   return userRole === requiredRole

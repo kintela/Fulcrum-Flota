@@ -1,6 +1,7 @@
 "use server"
 
 import { supabaseServer as supabase } from "@/lib/supabase-server"
+import { esRolAdministrador, normalizarRolUsuario } from "@/lib/user-role"
 import { revalidatePath } from "next/cache"
 
 export async function editarEmpleado(id: number, formData: FormData) {
@@ -28,9 +29,10 @@ export async function editarEmpleado(id: number, formData: FormData) {
       }
     }
 
-    const roleFromForm = (formData.get("role") as string) || empleadoActual.role || "usuario"
-    const allowedRoles = ["usuario", "administrador", "admin"]
-    const roleFinal = allowedRoles.includes(roleFromForm) ? roleFromForm : "usuario"
+    const roleFromForm = formData.get("role")
+    const roleFinal = normalizarRolUsuario(
+      typeof roleFromForm === "string" && roleFromForm.trim() ? roleFromForm : empleadoActual.role,
+    )
 
     // Extraer datos del formulario
     const empleadoData: any = {
@@ -39,9 +41,7 @@ export async function editarEmpleado(id: number, formData: FormData) {
       email: formData.get("email") as string,
       movil: (formData.get("movil") as string) || null,
       role: roleFinal,
-      baneado: roleFinal === "administrador" || roleFinal === "admin"
-        ? false
-        : formData.get("baneado") === "on",
+      baneado: esRolAdministrador(roleFinal) ? false : formData.get("baneado") === "on",
     }
 
     // Validaciones básicas

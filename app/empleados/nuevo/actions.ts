@@ -1,6 +1,7 @@
 "use server"
 
 import { supabaseServer as supabase } from "@/lib/supabase-server"
+import { normalizarRolUsuario } from "@/lib/user-role"
 import { revalidatePath } from "next/cache"
 
 export async function crearEmpleado(formData: FormData) {
@@ -16,13 +17,7 @@ export async function crearEmpleado(formData: FormData) {
       apellidos: getValue("apellidos"),
       email: getValue("email"),
       movil: getValue("movil") || null,
-      role: (formData.get("role") as string) || "usuario", // Añadir campo role con valor por defecto
-    }
-
-    // Validar rol permitido
-    const allowedRoles = ["usuario", "administrador"]
-    if (!allowedRoles.includes(empleadoData.role)) {
-      empleadoData.role = "usuario"
+      role: normalizarRolUsuario(formData.get("role")), // Rol validado y normalizado
     }
 
     // Validaciones básicas

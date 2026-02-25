@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge"
 import { Users, Plus, ShieldCheck } from "lucide-react"
 import Link from "next/link"
 import { supabaseServer as supabase } from "@/lib/supabase-server"
+import { esRolAdministrador } from "@/lib/user-role"
 
 async function getEmpleados() {
   // Obtener empleados
@@ -86,8 +87,7 @@ export default async function EmpleadosPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {empleados.map((empleado) => {
-              const roleLower = String(empleado.role || "").toLowerCase()
-              const isAdmin = roleLower === "administrador" || roleLower === "admin"
+              const isAdmin = esRolAdministrador(empleado.role)
               return (
               <Card
                 key={empleado.id}
