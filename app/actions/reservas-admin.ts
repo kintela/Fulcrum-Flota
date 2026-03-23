@@ -212,11 +212,11 @@ export async function cancelarReservaTemporal(reservaId: number) {
       }
     }
 
-    // Solo permitir cancelar reservas activas
-    if (reserva.estado !== 'activa') {
+    // Un administrador puede cancelar cualquier reserva no finalizada
+    if (reserva.estado === 'cancelada' || reserva.estado === 'completada') {
       return {
         success: false,
-        error: "Solo se pueden cancelar reservas activas"
+        error: "No se pueden cancelar reservas ya finalizadas"
       }
     }
 

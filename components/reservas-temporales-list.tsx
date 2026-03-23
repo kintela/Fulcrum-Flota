@@ -76,12 +76,16 @@ function getTipoReserva(reserva: ReservaTemporal): Exclude<TipoReservaFiltro, "t
   return 'activa'
 }
 
-function puedeSerCancelada(reserva: ReservaTemporal): boolean {
-  if (reserva.estado !== 'activa') return false
-  
+function puedeSerCancelada(reserva: ReservaTemporal, isAdmin: boolean): boolean {
+  if (isAdmin) {
+    return reserva.estado !== 'cancelada' && reserva.estado !== 'completada'
+  }
+
+  if (reserva.estado !== 'activa' && reserva.estado !== 'pendiente') return false
+
   const ahora = new Date()
   const fechaFin = parseISO(reserva.fecha_fin)
-  
+
   return isBefore(ahora, fechaFin)
 }
 
@@ -255,7 +259,7 @@ export default function ReservasTemporalesList({
     coche: { marca: string; modelo: string },
   ) => {
     const estadoInfo = getEstadoReserva(reserva)
-    const puedeCancelarse = puedeSerCancelada(reserva)
+    const puedeCancelarse = puedeSerCancelada(reserva, isAdmin)
     const puedeCompletar = isAdmin && puedeSerCompletada(reserva)
     const badgeClassName = (estadoInfo.estado === 'Vencida' || estadoInfo.estado === 'Completada')
       ? 'bg-orange-100 text-orange-800 hover:bg-orange-100'
