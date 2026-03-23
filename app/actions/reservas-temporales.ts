@@ -179,7 +179,7 @@ export async function crearReservaTemporal(data: CrearReservaData) {
     // Verificar que el coche existe
     const { data: coche, error: cocheError } = await supabase
       .from("coches")
-      .select("matricula, marca, modelo, donante")
+      .select("matricula, marca, modelo, donante, eliminado")
       .eq('matricula', data.matricula)
       .single()
     
@@ -187,6 +187,13 @@ export async function crearReservaTemporal(data: CrearReservaData) {
       return {
         success: false,
         error: "Vehículo no encontrado"
+      }
+    }
+
+    if (coche.eliminado === true) {
+      return {
+        success: false,
+        error: "Este vehículo está eliminado y no se puede reservar"
       }
     }
 

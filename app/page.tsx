@@ -4,6 +4,8 @@ import { authOptions } from "@/lib/auth"
 import DashboardClient from "./dashboard-client"
 import { obtenerFotosCoche } from "@/lib/storage"
 
+const COCHES_NO_ELIMINADOS_FILTER = "eliminado.is.null,eliminado.eq.false"
+
 async function getDashboardData(userRole: string, userEmail?: string) {
   try {
     // Primero obtener el empleado por email para obtener su ID real
@@ -23,7 +25,7 @@ async function getDashboardData(userRole: string, userEmail?: string) {
     }
 
     // Obtener coches - si es usuario, solo los asignados a él PARA LAS ESTADÍSTICAS
-    let cochesQuery = supabase.from("coches").select("*")
+    let cochesQuery = supabase.from("coches").select("*").or(COCHES_NO_ELIMINADOS_FILTER)
     let cochesFiltrados = []
     
     if (userRole === 'usuario' && empleadoActual) {
@@ -36,7 +38,10 @@ async function getDashboardData(userRole: string, userEmail?: string) {
     }
     
     // SIEMPRE obtener TODOS los coches para el mapa
-    const { data: todosLosCoches, error: cochesError } = await supabase.from("coches").select("*")
+    const { data: todosLosCoches, error: cochesError } = await supabase
+      .from("coches")
+      .select("*")
+      .or(COCHES_NO_ELIMINADOS_FILTER)
 
     if (cochesError) {
       console.error("Error fetching todos los coches:", cochesError)

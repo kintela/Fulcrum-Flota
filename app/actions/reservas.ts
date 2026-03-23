@@ -33,7 +33,7 @@ export async function reservarCoche(matricula: string) {
     // Verificar que el coche existe y está disponible
     const { data: coche, error: cocheError } = await supabase
       .from("coches")
-      .select("matricula, marca, modelo, asignadoa, donante")
+      .select("matricula, marca, modelo, asignadoa, donante, eliminado")
       .eq('matricula', matricula)
       .single()
     
@@ -41,6 +41,13 @@ export async function reservarCoche(matricula: string) {
       return {
         success: false,
         error: "Vehículo no encontrado"
+      }
+    }
+
+    if (coche.eliminado === true) {
+      return {
+        success: false,
+        error: "Este vehículo está eliminado y no se puede reservar"
       }
     }
 

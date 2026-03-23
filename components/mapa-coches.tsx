@@ -21,6 +21,7 @@ interface Coche {
   ultima_ubicacion?: string
   asignadoa?: string | number
   donante?: boolean
+  eliminado?: boolean | null
   direccion_actual?: string
 }
 
@@ -217,7 +218,8 @@ const selectedMatriculaRef = useRef<string>("all")
   const isAdmin = userRole === 'administrador' || userRole === 'admin'
 
   const cochesVisibles = useMemo(() => {
-    const base = isAdmin ? coches : coches.filter((coche) => !coche.asignadoa && !coche.donante)
+    const cochesActivos = coches.filter((coche) => coche.eliminado !== true)
+    const base = isAdmin ? cochesActivos : cochesActivos.filter((coche) => !coche.asignadoa && !coche.donante)
     return base.map((coche) => {
       const override = locationOverrides[coche.matricula]
       if (!override) return coche
