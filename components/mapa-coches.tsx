@@ -329,7 +329,7 @@ const selectedMatriculaRef = useRef<string>("all")
           }
         })
 
-        if (!enCurso && !vencida && proximaInicio) programada = true
+        if (!enCurso && proximaInicio) programada = true
         if (enCurso) bloquea = true
 
         nuevasReservas.set(matricula, { enCurso, vencida, programada, bloquea, bloqueoDesde, proximaInicio, proximaFin, empleadoId })
@@ -346,10 +346,11 @@ const selectedMatriculaRef = useRef<string>("all")
 
   // Función para determinar si un coche está disponible
   const isCocheDisponible = useCallback((coche: Coche) => {
-    // Disponible si: no está asignado, no es donante, y no tiene reserva en curso, vencida o bloqueada por margen. Programada NO bloquea salvo que el margen haya empezado.
+    // Disponible si: no está asignado, no es donante, y no tiene reserva en curso o bloqueada por margen.
+    // Las reservas vencidas se muestran como aviso, pero ya no bloquean una nueva reserva.
     const noEstaAsignado = !coche.asignadoa
     const estadoReserva = reservasActivas.get(coche.matricula)
-    const sinReservaBloqueante = !(estadoReserva?.enCurso || estadoReserva?.vencida || estadoReserva?.bloquea)
+    const sinReservaBloqueante = !(estadoReserva?.enCurso || estadoReserva?.bloquea)
     const noEsDonante = !coche.donante
     return noEstaAsignado && sinReservaBloqueante && noEsDonante
   }, [reservasActivas])
@@ -497,7 +498,7 @@ const selectedMatriculaRef = useRef<string>("all")
               (reserva.estado === "activa" || reserva.estado === "pendiente" || reserva.estado === "vencida"),
           ) || reservaEsDelUsuario
           const tieneReservaVencida = !!estadoReserva?.vencida
-          const tieneReservaBloqueante = !!(estadoReserva?.enCurso || estadoReserva?.vencida || estadoReserva?.bloquea)
+          const tieneReservaBloqueante = !!(estadoReserva?.enCurso || estadoReserva?.bloquea)
           
           // Es "mi coche" si está asignado permanentemente O tengo una reserva (activa/pendiente/vencida)
           const esMiCoche = isUserVehicle || !!tieneReservaUsuario
@@ -876,7 +877,7 @@ const selectedMatriculaRef = useRef<string>("all")
   const usuarioBaneado = !!empleadoActual?.baneado
   const tieneReservaBloqueante = (coche: Coche) => {
     const estadoReserva = reservasActivas.get(coche.matricula)
-    return !!(estadoReserva?.enCurso || estadoReserva?.vencida || estadoReserva?.bloquea) // programada no cuenta salvo margen activo
+    return !!(estadoReserva?.enCurso || estadoReserva?.bloquea) // programada y vencida no bloquean salvo margen activo
   }
   const cochesReservados = todosLosCoches.filter((c) => tieneReservaBloqueante(c))
   const cochesAsignados = todosLosCoches.filter((c) => (getEmpleadoInfo(c) || c.asignadoa) && !tieneReservaBloqueante(c))
@@ -987,18 +988,13 @@ const selectedMatriculaRef = useRef<string>("all")
     
     const coche = cochesVisibles.find(c => c.matricula === selectedMatricula)
     if (!coche) return
-    const estadoReserva = reservasActivas.get(selectedMatricula)
-    if (estadoReserva?.vencida) {
-      setReservationMessage("❌ Este vehículo tiene una reserva vencida pendiente de completar. Debes completarla antes de crear una nueva.")
-      return
-    }
 
     setSelectedVehicleForReservation({
       matricula: coche.matricula,
       marcaModelo: `${coche.marca} ${coche.modelo}`
     })
     setShowReservaModal(true)
-  }, [selectedMatricula, cochesVisibles, reservasActivas, usuarioBaneado])
+  }, [selectedMatricula, cochesVisibles, usuarioBaneado])
 
   // Función para cerrar el modal y limpiar estados
   const handleCerrarReservaTemporal = useCallback(() => {
@@ -1234,7 +1230,7 @@ const selectedMatriculaRef = useRef<string>("all")
     const hasLocation = coche.latitud && coche.longitud && !coche.donante
     const isAssigned = getEmpleadoInfo(coche) || coche.asignadoa
     const estadoReserva = reservasActivas.get(coche.matricula)
-    const isReserved = !!(estadoReserva?.enCurso || estadoReserva?.vencida || estadoReserva?.bloquea) // programada no
+    const isReserved = !!(estadoReserva?.enCurso || estadoReserva?.bloquea) // programada y vencida no bloquean
 
     // Si hay un filtro activo, colorear solo los que coinciden con el filtro
     let matchesFilter = false
@@ -1448,22 +1444,18 @@ const selectedMatriculaRef = useRef<string>("all")
                  if (!cocheSeleccionado || cocheSeleccionado.donante || cocheSeleccionado.asignadoa) {
                    return null
                  }
-                 const estadoReserva = reservasActivas.get(selectedMatricula)
-                 const bloqueadaPorVencida = !!estadoReserva?.vencida
                  const bloqueadaPorBaneado = usuarioBaneado
                  return (
                   <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto">
                     <Button
                       onClick={handleAbrirReservaTemporal}
-                      disabled={isReserving || isReleasing || bloqueadaPorVencida || bloqueadaPorBaneado}
+                      disabled={isReserving || isReleasing || bloqueadaPorBaneado}
                       className="bg-blue-600 hover:bg-blue-700 text-white"
                       size="sm"
                       title={
                         bloqueadaPorBaneado
                           ? "Usuario baneado: no puedes crear reservas"
-                          : bloqueadaPorVencida
-                            ? "Reserva vencida pendiente de completar"
-                            : "Crear reserva temporal"
+                          : "Crear reserva temporal"
                       }
                     >
                       <Calendar className="h-4 w-4 mr-2" />
@@ -1485,7 +1477,7 @@ const selectedMatriculaRef = useRef<string>("all")
                  const cocheSeleccionado = cochesVisibles.find(c => c.matricula === selectedMatricula)
                  if (!cocheSeleccionado || cocheSeleccionado.donante) return false
                  const estadoReserva = reservasActivas.get(selectedMatricula)
-                 const bloqueadoPorReserva = !!(estadoReserva?.enCurso || estadoReserva?.vencida || estadoReserva?.bloquea)
+                 const bloqueadoPorReserva = !!(estadoReserva?.enCurso || estadoReserva?.bloquea)
                  const asignado = !!cocheSeleccionado.asignadoa
                  return asignado || bloqueadoPorReserva
                })() && (
@@ -1498,19 +1490,12 @@ const selectedMatriculaRef = useRef<string>("all")
                     const cocheSeleccionado = cochesVisibles.find(c => c.matricula === selectedMatricula)
                     if (!cocheSeleccionado) return null
                     const estadoReserva = reservasActivas.get(selectedMatricula)
-                    const bloqueadoPorReserva = !!(estadoReserva?.enCurso || estadoReserva?.vencida || estadoReserva?.bloquea)
+                    const bloqueadoPorReserva = !!(estadoReserva?.enCurso || estadoReserva?.bloquea)
                     const asignado = !!cocheSeleccionado.asignadoa
                     if (asignado) {
                       return (
                         <p className="text-xs text-gray-500 mt-1">
                           Este vehículo está asignado permanentemente y no se puede reservar.
-                        </p>
-                      )
-                    }
-                    if (estadoReserva?.vencida) {
-                      return (
-                        <p className="text-xs text-gray-500 mt-1">
-                          Tiene una reserva vencida pendiente de completar. No se puede reservar hasta que se complete.
                         </p>
                       )
                     }

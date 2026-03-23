@@ -626,7 +626,6 @@ export async function verificarDisponibilidad(matricula: string, fechaInicio: st
 
     const inicioSolicitado = new Date(fechaInicio)
     const finSolicitado = new Date(fechaFin)
-    const ahora = new Date()
 
     const conflictos = (reservasActivas || []).filter(r => {
       const inicio = new Date(r.fecha_inicio)
@@ -634,9 +633,7 @@ export async function verificarDisponibilidad(matricula: string, fechaInicio: st
       const inicioBloqueo = r.bloqueo_desde ? new Date(r.bloqueo_desde) : inicio
       // Solape estricto: permite reservas contiguas (p. ej. una termina a las 18:00 y otra empieza a las 18:00)
       const solapa = inicioBloqueo < finSolicitado && fin > inicioSolicitado
-      // Reserva activa ya vencida pero no marcada (fin < ahora) -> sigue bloqueando
-      const vencidaNoCompletada = fin < ahora && inicioBloqueo <= ahora
-      return solapa || vencidaNoCompletada
+      return solapa
     })
 
     return { success: true, disponible: conflictos.length === 0, conflictos }
@@ -657,6 +654,8 @@ export async function obtenerBloqueosReservasPorMatricula(matricula: string) {
       return { success: false, error: "Usuario no autenticado" as const }
     }
 
+    const ahoraIso = new Date().toISOString()
+
     const { data, error } = await supabase
       .from("reservas")
       .select(`
@@ -671,7 +670,9 @@ export async function obtenerBloqueosReservasPorMatricula(matricula: string) {
         )
       `)
       .eq("matricula", matricula)
-      .in("estado", ["activa", "pendiente", "vencida"])
+      .in("estado", ["activa", "pendiente"])
+      .gt("fecha_fin", ahoraIso)
+      .order("fecha_inicio", { ascending: true })
 
     if (error) {
       console.error("Error obteniendo bloqueos de reservas:", error)

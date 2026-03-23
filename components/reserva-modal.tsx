@@ -640,10 +640,10 @@ export function ReservaModal({ isOpen, onClose, matricula, marcaModelo, onReserv
             <div className="space-y-2">
               <div className="text-xs text-gray-600 flex items-center gap-2">
                 <span className="inline-block h-3 w-3 rounded border border-amber-300 bg-amber-100" />
-                Días con reservas existentes
+                Días con reservas vigentes
               </div>
               <div className="text-xs text-gray-600">
-                <p className="font-medium text-gray-700">Reservas existentes:</p>
+                <p className="font-medium text-gray-700">Reservas vigentes:</p>
                 <ul className="mt-1 space-y-1">
                   {bloqueos.map((b, idx) => {
                     const inicio = format(b.inicioReal, "dd/MM/yyyy HH:mm")
