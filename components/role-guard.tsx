@@ -41,9 +41,10 @@ export default function RoleGuard({
   }
 
   const userRole = session?.user?.role
+  const isAdmin = userRole === 'administrador' || userRole === 'admin'
 
   // Si se requiere solo admin
-  if (adminOnly && userRole !== 'administrador') {
+  if (adminOnly && !isAdmin) {
     return fallback || (
       <div className="flex flex-col items-center justify-center p-8 bg-yellow-50 rounded-lg border border-yellow-200">
         <Shield className="w-12 h-12 text-yellow-600 mb-4" />
@@ -61,7 +62,7 @@ export default function RoleGuard({
   }
 
   // Si se requiere un rol específico
-  if (requiredRole && userRole !== requiredRole && userRole !== 'administrador') {
+  if (requiredRole && userRole !== requiredRole && !isAdmin) {
     return fallback || (
       <div className="flex flex-col items-center justify-center p-8 bg-yellow-50 rounded-lg border border-yellow-200">
         <Shield className="w-12 h-12 text-yellow-600 mb-4" />
@@ -106,9 +107,10 @@ export function useUserRole() {
   
   return {
     role: session?.user?.role || null,
-    isAdmin: session?.user?.role === 'administrador',
+    isAdmin: session?.user?.role === 'administrador' || session?.user?.role === 'admin',
     isUser: session?.user?.role === 'usuario',
     empleadoId: session?.user?.empleadoId || null,
-    hasRole: (role: UserRole) => session?.user?.role === role || session?.user?.role === 'administrador'
+    hasRole: (role: UserRole) =>
+      session?.user?.role === role || session?.user?.role === 'administrador' || session?.user?.role === 'admin'
   }
 }
