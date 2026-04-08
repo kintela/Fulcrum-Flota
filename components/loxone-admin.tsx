@@ -103,6 +103,19 @@ function getKeypadInstruction(outputNumber: number) {
   return `En teclado: ${outputNumber} + confirmar + PIN.`
 }
 
+function sanitizeLoxoneAccessCodeNameForLookup(name: string) {
+  const normalized = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9 _-]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/ /g, "-")
+    .replace(/-+/g, "-")
+
+  return normalized || "codigo-acceso"
+}
+
 function getCodeTypeLabel(type: number) {
   switch (type) {
     case 0:
@@ -387,6 +400,7 @@ export default function LoxoneAdmin() {
     const outputLabel = getOutputLabel(selectedControl, outputNumber)
     const safeLocalStamp = formatDateTimeInputValue(now).replace("T", " ").replace(/:/g, "-")
     const name = `${outputLabel} ${safeLocalStamp}`
+    const expectedStoredName = sanitizeLoxoneAccessCodeNameForLookup(name)
     const durationMinutes =
       quickAssignMode === "15m"
         ? 15
@@ -425,7 +439,7 @@ export default function LoxoneAdmin() {
 
     const refreshedCodes = await handleLoadCodes({ preserveStatus: true, silentSuccess: true })
     const createdCode = refreshedCodes.find(
-      (entry) => entry.name === name && outputMaskIncludes(entry.outputs, outputNumber),
+      (entry) => entry.name === expectedStoredName && outputMaskIncludes(entry.outputs, outputNumber),
     )
 
     if (createdCode?.isActive) {
