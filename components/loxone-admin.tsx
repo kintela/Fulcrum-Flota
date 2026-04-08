@@ -64,6 +64,8 @@ interface ConnectionData {
   loxoneBody?: string | null
 }
 
+type LockerFeedbackTone = "success" | "error" | "info"
+
 function formatDateTimeInputValue(date: Date) {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
   return local.toISOString().slice(0, 16)
@@ -72,6 +74,33 @@ function formatDateTimeInputValue(date: Date) {
 function formatUnixDateTime(seconds?: number) {
   if (!seconds) return "-"
   return new Date(seconds * 1000).toLocaleString("es-ES")
+}
+
+function outputMaskIncludes(mask: number, outputNumber: number) {
+  if (!Number.isInteger(mask) || !Number.isInteger(outputNumber) || outputNumber < 1) return false
+  return (mask & (1 << (outputNumber - 1))) !== 0
+}
+
+function getOutputLabel(control: AccessControl | null, outputNumber: number) {
+  if (!Number.isInteger(outputNumber) || outputNumber < 1) return "-"
+  return control?.accessOutputs?.[`q${outputNumber}`] || `Q${outputNumber}`
+}
+
+function getAssignedOutputsLabel(code: AccessCode, control: AccessControl | null) {
+  if (!control) return `Máscara ${code.outputs}`
+
+  const outputs = control.availableOutputs.filter((output) => outputMaskIncludes(code.outputs, output))
+  if (outputs.length === 0) return `Máscara ${code.outputs}`
+
+  return outputs.map((output) => getOutputLabel(control, output)).join(", ")
+}
+
+function getKeypadInstruction(outputNumber: number) {
+  if (outputNumber === 1) {
+    return "En teclado: introduce solo el PIN."
+  }
+
+  return `En teclado: ${outputNumber} + confirmar + PIN.`
 }
 
 function getCodeTypeLabel(type: number) {
@@ -124,7 +153,7 @@ export default function LoxoneAdmin() {
   }, [])
   const defaultEnd = useMemo(() => {
     const end = new Date()
-    end.setHours(end.getHours() + 4, 0, 0, 0)
+    end.setHours(end.getHours() + 24, 0, 0, 0)
     return formatDateTimeInputValue(end)
   }, [])
 
@@ -142,10 +171,17 @@ export default function LoxoneAdmin() {
   const [codeType, setCodeType] = useState("2")
   const [timeFrom, setTimeFrom] = useState(defaultStart)
   const [timeTo, setTimeTo] = useState(defaultEnd)
+  const [quickAssignMode, setQuickAssignMode] = useState("24h")
+  const [lockerCodeValues, setLockerCodeValues] = useState<Record<number, string>>({})
+  const [lockerFeedback, setLockerFeedback] = useState<Record<number, { tone: LockerFeedbackTone; message: string }>>({})
 
   const accessControls = connection?.accessControls || []
   const selectedControl = accessControls.find((control) => control.uuid === selectedControlUuid) || null
   const availableOutputs = selectedControl?.availableOutputs || []
+  const selectedOutput = Number(selectedOutputNumber)
+  const filteredCodes = codes.filter((code) =>
+    selectedOutputNumber ? outputMaskIncludes(code.outputs, selectedOutput) : true,
+  )
 
   useEffect(() => {
     void loadConnection()
@@ -172,6 +208,20 @@ export default function LoxoneAdmin() {
       setSelectedOutputNumber(String(availableOutputs[0]))
     }
   }, [availableOutputs, selectedOutputNumber])
+
+  useEffect(() => {
+    if (!selectedControlUuid) {
+      setCodes([])
+      setHistory([])
+      setLockerCodeValues({})
+      setLockerFeedback({})
+      return
+    }
+
+    setLockerCodeValues({})
+    setLockerFeedback({})
+    void handleLoadCodes()
+  }, [selectedControlUuid])
 
   async function readJson(response: Response) {
     try {
@@ -208,10 +258,17 @@ export default function LoxoneAdmin() {
   async function runAction(
     action: string,
     body: Record<string, unknown>,
+    options?: {
+      busyKey?: string
+      preserveStatus?: boolean
+      silentSuccess?: boolean
+    },
   ) {
-    setBusyAction(action)
-    setActionError("")
-    setActionMessage("")
+    setBusyAction(options?.busyKey || action)
+    if (!options?.preserveStatus) {
+      setActionError("")
+      setActionMessage("")
+    }
 
     try {
       const response = await fetch("/api/admin/loxone", {
@@ -222,15 +279,19 @@ export default function LoxoneAdmin() {
       const payload = await readJson(response)
 
       if (!response.ok || payload.success === false) {
-        setActionError(payload.error || `La acción ${action} ha fallado`)
-        return null
+        const errorMessage = payload.error || `La acción ${action} ha fallado`
+        setActionError(errorMessage)
+        return { ok: false as const, error: errorMessage }
       }
 
-      setActionMessage(payload.message || `Acción ${action} ejecutada`)
-      return payload
+      if (!options?.silentSuccess) {
+        setActionMessage(payload.message || `Acción ${action} ejecutada`)
+      }
+      return { ok: true as const, payload }
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : `Error inesperado en ${action}`)
-      return null
+      const errorMessage = error instanceof Error ? error.message : `Error inesperado en ${action}`
+      setActionError(errorMessage)
+      return { ok: false as const, error: errorMessage }
     } finally {
       setBusyAction(null)
     }
@@ -241,19 +302,45 @@ export default function LoxoneAdmin() {
     setCodeValue(value)
   }
 
-  async function handleLoadCodes() {
-    if (!selectedControlUuid) return
-    const payload = await runAction("listCodes", { controlUuid: selectedControlUuid })
-    if (payload) {
-      setCodes(Array.isArray(payload.codes) ? (payload.codes as AccessCode[]) : [])
-    }
+  function updateLockerCodeValue(outputNumber: number, value: string) {
+    setLockerCodeValues((current) => ({
+      ...current,
+      [outputNumber]: value.replace(/\D/g, ""),
+    }))
   }
 
-  async function handleLoadHistory() {
+  function generateLockerCodeForOutput(outputNumber: number) {
+    const value = String(Math.floor(1000 + Math.random() * 9000))
+    setLockerCodeValues((current) => ({
+      ...current,
+      [outputNumber]: value,
+    }))
+  }
+
+  async function handleLoadCodes(options?: { preserveStatus?: boolean; silentSuccess?: boolean }) {
+    if (!selectedControlUuid) return []
+    const result = await runAction("listCodes", { controlUuid: selectedControlUuid }, {
+      preserveStatus: options?.preserveStatus,
+      silentSuccess: options?.silentSuccess,
+    })
+
+    if (result.ok) {
+      const nextCodes = Array.isArray(result.payload.codes) ? (result.payload.codes as AccessCode[]) : []
+      setCodes(nextCodes)
+      return nextCodes
+    }
+
+    return []
+  }
+
+  async function handleLoadHistory(options?: { preserveStatus?: boolean; silentSuccess?: boolean }) {
     if (!selectedControlUuid) return
-    const payload = await runAction("history", { controlUuid: selectedControlUuid })
-    if (payload) {
-      setHistory(Array.isArray(payload.history) ? (payload.history as AccessHistoryEntry[]) : [])
+    const result = await runAction("history", { controlUuid: selectedControlUuid }, {
+      preserveStatus: options?.preserveStatus,
+      silentSuccess: options?.silentSuccess,
+    })
+    if (result.ok) {
+      setHistory(Array.isArray(result.payload.history) ? (result.payload.history as AccessHistoryEntry[]) : [])
     }
   }
 
@@ -268,7 +355,7 @@ export default function LoxoneAdmin() {
   async function handleCreateCode() {
     if (!selectedControlUuid || !selectedOutputNumber) return
 
-    const payload = await runAction("createCode", {
+    const result = await runAction("createCode", {
       controlUuid: selectedControlUuid,
       name: codeName,
       code: codeValue,
@@ -279,35 +366,122 @@ export default function LoxoneAdmin() {
       timeTo: codeType === "2" ? new Date(timeTo).toISOString() : undefined,
     })
 
-    if (payload) {
-      await handleLoadCodes()
+    if (result.ok) {
+      await handleLoadCodes({ preserveStatus: true, silentSuccess: true })
     }
+  }
+
+  async function handleAssignLockerCode(outputNumber: number) {
+    if (!selectedControlUuid) return
+    const code = lockerCodeValues[outputNumber]?.trim()
+    if (!code) return
+
+    setLockerFeedback((current) => {
+      const next = { ...current }
+      delete next[outputNumber]
+      return next
+    })
+    setSelectedOutputNumber(String(outputNumber))
+    const now = new Date()
+    const start = new Date(now.getTime() - 60_000)
+    const outputLabel = getOutputLabel(selectedControl, outputNumber)
+    const safeLocalStamp = formatDateTimeInputValue(now).replace("T", " ").replace(/:/g, "-")
+    const name = `${outputLabel} ${safeLocalStamp}`
+    const durationMinutes =
+      quickAssignMode === "15m"
+        ? 15
+        : quickAssignMode === "4h"
+          ? 240
+          : 24 * 60
+    const end = new Date(start.getTime() + durationMinutes * 60_000)
+
+    const result = await runAction(
+      "createCode",
+      {
+        controlUuid: selectedControlUuid,
+        name,
+        code,
+        type: 2,
+        outputNumber,
+        standardOutput: outputNumber,
+        timeFrom: start.toISOString(),
+        timeTo: end.toISOString(),
+      },
+      {
+        busyKey: `assignLockerCode-${outputNumber}`,
+      },
+    )
+
+    if (!result.ok) {
+      setLockerFeedback((current) => ({
+        ...current,
+        [outputNumber]: {
+          tone: "error",
+          message: result.error,
+        },
+      }))
+      return
+    }
+
+    const refreshedCodes = await handleLoadCodes({ preserveStatus: true, silentSuccess: true })
+    const createdCode = refreshedCodes.find(
+      (entry) => entry.name === name && outputMaskIncludes(entry.outputs, outputNumber),
+    )
+
+    if (createdCode?.isActive) {
+      setLockerCodeValues((current) => ({
+        ...current,
+        [outputNumber]: "",
+      }))
+      setLockerFeedback((current) => ({
+        ...current,
+        [outputNumber]: {
+          tone: "success",
+          message: `Asignado correctamente. ${getKeypadInstruction(outputNumber)}`,
+        },
+      }))
+      setActionMessage(
+        `Código ${code} asignado a ${outputLabel}. Válido hasta ${end.toLocaleTimeString("es-ES", {
+          hour: "2-digit",
+          minute: "2-digit",
+        })}.`,
+      )
+      return
+    }
+
+    setLockerFeedback((current) => ({
+      ...current,
+      [outputNumber]: {
+        tone: "error",
+        message: "Loxone respondió OK, pero el código no aparece activo en la lista real del casillero.",
+      },
+    }))
   }
 
   async function handleToggleCode(code: AccessCode) {
     if (!selectedControlUuid) return
 
     const action = code.isActive ? "deactivateCode" : "activateCode"
-    const payload = await runAction(action, {
+    const result = await runAction(action, {
       controlUuid: selectedControlUuid,
       codeUuid: code.uuid,
     })
 
-    if (payload) {
-      await handleLoadCodes()
+    if (result.ok) {
+      await handleLoadCodes({ preserveStatus: true, silentSuccess: true })
     }
   }
 
   async function handleDeleteCode(code: AccessCode) {
     if (!selectedControlUuid) return
 
-    const payload = await runAction("deleteCode", {
+    const result = await runAction("deleteCode", {
       controlUuid: selectedControlUuid,
       codeUuid: code.uuid,
     })
 
-    if (payload) {
-      await handleLoadCodes()
+    if (result.ok) {
+      await handleLoadCodes({ preserveStatus: true, silentSuccess: true })
     }
   }
 
@@ -387,6 +561,7 @@ export default function LoxoneAdmin() {
           <CardTitle>Control de acceso</CardTitle>
           <CardDescription>
             Selecciona el bloque del Miniserver y la salida/casillero con la que quieres trabajar.
+            El disparo manual de salida no valida ningún PIN ni comprueba códigos asignados.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
@@ -438,94 +613,206 @@ export default function LoxoneAdmin() {
             </div>
           )}
 
-          <div className="md:col-span-2">
+          <div className="md:col-span-2 space-y-2">
             <Button onClick={() => void handleTriggerOutput()} disabled={!selectedControlUuid || !selectedOutputNumber || busyAction !== null}>
               {isBusy("triggerOutput") ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DoorOpen className="mr-2 h-4 w-4" />}
-              Abrir casillero seleccionado
+              Disparar salida seleccionada
             </Button>
+            <div className="text-sm text-muted-foreground">
+              Envía el comando directo <code>output/{selectedOutputNumber || "n"}</code> al bloque NFC Code Touch. Sirve para probar la salida física, no para autenticar un código.
+            </div>
           </div>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Crear código de acceso</CardTitle>
+          <CardTitle>Asignar códigos a casilleros</CardTitle>
           <CardDescription>
-            Permite generar códigos permanentes, de un solo uso o temporales para un casillero concreto.
+            Lista de casilleros del control seleccionado con alta rápida de PIN. Por defecto se crean como temporales de 24 horas.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <div className="space-y-2">
-              <Label htmlFor="loxone-code-name">Nombre</Label>
-              <Input
-                id="loxone-code-name"
-                value={codeName}
-                onChange={(event) => setCodeName(event.target.value)}
-                placeholder="Reserva 1234"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="loxone-code-value">Código numérico</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="loxone-code-value"
-                  value={codeValue}
-                  onChange={(event) => setCodeValue(event.target.value.replace(/\D/g, ""))}
-                  placeholder="123456"
-                />
-                <Button type="button" variant="outline" onClick={generateCode}>
-                  Generar
-                </Button>
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_240px]">
+            <div className="rounded-lg border bg-muted/20 p-4">
+              <div className="text-sm font-medium">Casilleros disponibles</div>
+              <div className="mt-1 text-sm text-muted-foreground">
+                Introduce el PIN junto al casillero que quieras y asígnalo directamente.
+              </div>
+              <div className="mt-2 text-xs text-muted-foreground">
+                En Loxone, `CASILLERO 1` usa solo el PIN. Para `CASILLERO 2-6`, primero va el número del casillero, luego confirmar y después el PIN.
               </div>
             </div>
-
             <div className="space-y-2">
-              <Label htmlFor="loxone-code-type">Tipo</Label>
+              <Label htmlFor="loxone-quick-assign-mode">Vigencia máxima</Label>
               <select
-                id="loxone-code-type"
+                id="loxone-quick-assign-mode"
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                value={codeType}
-                onChange={(event) => setCodeType(event.target.value)}
+                value={quickAssignMode}
+                onChange={(event) => setQuickAssignMode(event.target.value)}
               >
-                <option value="0">Permanente</option>
-                <option value="1">Un solo uso</option>
-                <option value="2">Temporal</option>
+                <option value="15m">Temporal 15 min</option>
+                <option value="4h">Temporal 4 h</option>
+                <option value="24h">Temporal 24 h</option>
               </select>
-            </div>
-
-            <div className="flex items-end">
-              <Button
-                onClick={() => void handleCreateCode()}
-                disabled={!selectedControlUuid || !selectedOutputNumber || !codeName.trim() || !codeValue.trim() || busyAction !== null}
-              >
-                {isBusy("createCode") ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <KeyRound className="mr-2 h-4 w-4" />}
-                Crear código
-              </Button>
             </div>
           </div>
 
-          {codeType === "2" && (
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="loxone-time-from">Válido desde</Label>
-                <Input
-                  id="loxone-time-from"
-                  type="datetime-local"
-                  value={timeFrom}
-                  onChange={(event) => setTimeFrom(event.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="loxone-time-to">Válido hasta</Label>
-                <Input
-                  id="loxone-time-to"
-                  type="datetime-local"
-                  value={timeTo}
-                  onChange={(event) => setTimeTo(event.target.value)}
-                />
-              </div>
+          {!selectedControl || availableOutputs.length === 0 ? (
+            <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
+              Selecciona primero un control NFC Code Touch con casilleros disponibles.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {availableOutputs.map((output) => {
+                const outputLabel = getOutputLabel(selectedControl, output)
+                const outputCodes = codes.filter((code) => outputMaskIncludes(code.outputs, output))
+                const activeCodes = outputCodes.filter((code) => code.isActive)
+                const latestActiveCode = activeCodes[0] || null
+                const feedback = lockerFeedback[output]
+                return (
+                  <div key={output} className="space-y-3 rounded-lg border p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="font-medium">{outputLabel}</div>
+                        <div className="text-sm text-muted-foreground">q{output}</div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant={activeCodes.length > 0 ? "default" : "secondary"}>
+                          {activeCodes.length > 0 ? `${activeCodes.length} activo${activeCodes.length > 1 ? "s" : ""}` : "Sin códigos activos"}
+                        </Badge>
+                        <Badge variant="outline">{output === 1 ? "PIN directo" : `${output} + confirmar + PIN`}</Badge>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center">
+                      <Input
+                        value={lockerCodeValues[output] || ""}
+                        onChange={(event) => updateLockerCodeValue(output, event.target.value)}
+                        placeholder="Código numérico"
+                        inputMode="numeric"
+                      />
+                      <Button type="button" variant="outline" onClick={() => generateLockerCodeForOutput(output)} disabled={busyAction !== null}>
+                        Generar
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={() => void handleAssignLockerCode(output)}
+                        disabled={!selectedControlUuid || !(lockerCodeValues[output] || "").trim() || busyAction !== null}
+                      >
+                        {isBusy(`assignLockerCode-${output}`) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <KeyRound className="mr-2 h-4 w-4" />}
+                        Asignar
+                      </Button>
+                    </div>
+
+                    <div>
+                      <div className="text-sm text-muted-foreground">{getKeypadInstruction(output)}</div>
+                      {latestActiveCode ? (
+                        <div className="mt-1 text-sm text-muted-foreground">
+                          Último activo: {latestActiveCode.name || "(sin nombre)"} · hasta {formatUnixDateTime(latestActiveCode.timeTo)}
+                        </div>
+                      ) : (
+                        <div className="mt-1 text-sm text-muted-foreground">
+                          No hay ningún código activo visible para este casillero.
+                        </div>
+                      )}
+                    </div>
+
+                    {feedback && (
+                      <div
+                        className={
+                          feedback.tone === "success"
+                            ? "rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"
+                            : feedback.tone === "error"
+                              ? "rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+                              : "rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800"
+                        }
+                      >
+                        {feedback.message}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+
+              <details className="rounded-lg border p-4">
+                <summary className="cursor-pointer font-medium">Opciones avanzadas</summary>
+                <div className="mt-4 space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="loxone-code-name">Nombre</Label>
+                      <Input
+                        id="loxone-code-name"
+                        value={codeName}
+                        onChange={(event) => setCodeName(event.target.value)}
+                        placeholder="Reserva 1234"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="loxone-code-value">Código numérico</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          id="loxone-code-value"
+                          value={codeValue}
+                          onChange={(event) => setCodeValue(event.target.value.replace(/\D/g, ""))}
+                          placeholder="123456"
+                        />
+                        <Button type="button" variant="outline" onClick={generateCode}>
+                          Generar
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="loxone-code-type">Tipo</Label>
+                      <select
+                        id="loxone-code-type"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        value={codeType}
+                        onChange={(event) => setCodeType(event.target.value)}
+                      >
+                        <option value="0">Permanente</option>
+                        <option value="1">Un solo uso</option>
+                        <option value="2">Temporal</option>
+                      </select>
+                    </div>
+
+                    <div className="flex items-end">
+                      <Button
+                        onClick={() => void handleCreateCode()}
+                        disabled={!selectedControlUuid || !selectedOutputNumber || !codeName.trim() || !codeValue.trim() || busyAction !== null}
+                      >
+                        {isBusy("createCode") ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <KeyRound className="mr-2 h-4 w-4" />}
+                        Crear código
+                      </Button>
+                    </div>
+                  </div>
+
+                  {codeType === "2" && (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="loxone-time-from">Válido desde</Label>
+                        <Input
+                          id="loxone-time-from"
+                          type="datetime-local"
+                          value={timeFrom}
+                          onChange={(event) => setTimeFrom(event.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="loxone-time-to">Válido hasta</Label>
+                        <Input
+                          id="loxone-time-to"
+                          type="datetime-local"
+                          value={timeTo}
+                          onChange={(event) => setTimeTo(event.target.value)}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </details>
             </div>
           )}
         </CardContent>
@@ -534,18 +821,26 @@ export default function LoxoneAdmin() {
       <div className="grid gap-6 xl:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Códigos actuales</CardTitle>
+            <div className="flex items-center justify-between gap-3">
+              <CardTitle>Códigos actuales</CardTitle>
+              <Button variant="outline" size="sm" onClick={() => void handleLoadCodes()} disabled={!selectedControlUuid || busyAction !== null}>
+                {isBusy("listCodes") ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                Recargar
+              </Button>
+            </div>
             <CardDescription>
-              Lista de códigos del control seleccionado. Carga manual para evitar lecturas innecesarias.
+              Muestra los códigos asignados al casillero seleccionado. Loxone no devuelve el PIN en claro, solo sus metadatos.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {codes.length === 0 ? (
+            {filteredCodes.length === 0 ? (
               <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
-                No hay códigos cargados todavía.
+                {codes.length === 0
+                  ? "No hay códigos cargados todavía."
+                  : "No hay códigos asignados al casillero seleccionado."}
               </div>
             ) : (
-              codes.map((code) => (
+              filteredCodes.map((code) => (
                 <div key={code.uuid} className="rounded-lg border p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
@@ -562,7 +857,7 @@ export default function LoxoneAdmin() {
                   </div>
 
                   <div className="mt-3 space-y-1 text-sm text-muted-foreground">
-                    <div>Máscara de salidas: {code.outputs}</div>
+                    <div>Casilleros asignados: {getAssignedOutputsLabel(code, selectedControl)}</div>
                     <div>Válido desde: {formatUnixDateTime(code.timeFrom)}</div>
                     <div>Válido hasta: {formatUnixDateTime(code.timeTo)}</div>
                   </div>

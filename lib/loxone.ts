@@ -288,8 +288,21 @@ export function toUnixTimestampSeconds(date: Date) {
   return Math.floor(date.getTime() / 1000)
 }
 
+export function sanitizeLoxoneAccessCodeName(name: string) {
+  const normalized = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9 _-]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/ /g, "-")
+    .replace(/-+/g, "-")
+
+  return normalized || "codigo-acceso"
+}
+
 export function buildCreateAccessCodeCommand(params: LoxoneCreateCodeParams) {
-  const encodedName = encodeURIComponent(params.name)
+  const encodedName = encodeURIComponent(sanitizeLoxoneAccessCodeName(params.name))
   const encodedCode = encodeURIComponent(params.code)
   const basePath =
     buildControlCommand(params.controlUuid, "code/create") +
