@@ -377,9 +377,11 @@ export async function asegurarCodigoAccesoReserva(params: {
             controlUuid: casillero.loxoneControlUuid,
             name: nombreLoxone,
             code: codigoAcceso,
-            type: 0,
+            type: 2,
             outputsMask,
             standardOutput: casillero.loxoneOutputNumber,
+            timeFrom: params.fechaInicio,
+            timeTo: params.fechaFin,
           })
 
           break

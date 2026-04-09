@@ -176,6 +176,46 @@ function getCodeTypeLabel(type: number) {
   }
 }
 
+function formatDurationSeconds(totalSeconds: number) {
+  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return "-"
+
+  const totalMinutes = Math.round(totalSeconds / 60)
+  const days = Math.floor(totalMinutes / (24 * 60))
+  const hours = Math.floor((totalMinutes % (24 * 60)) / 60)
+  const minutes = totalMinutes % 60
+  const parts: string[] = []
+
+  if (days > 0) parts.push(`${days} d`)
+  if (hours > 0) parts.push(`${hours} h`)
+  if (minutes > 0) parts.push(`${minutes} min`)
+
+  return parts.length > 0 ? parts.join(" ") : "0 min"
+}
+
+function getCodeDurationLabel(code: AccessCode) {
+  if (code.type === 2 && code.timeFrom && code.timeTo) {
+    return formatDurationSeconds(code.timeTo - code.timeFrom)
+  }
+
+  if (code.type === 0) {
+    return "Sin caducidad"
+  }
+
+  if (code.type === 1) {
+    return "Un solo uso"
+  }
+
+  if (code.type === 3 && code.timeTo) {
+    return `Hasta ${formatUnixDateTime(code.timeTo)}`
+  }
+
+  if (code.type === 4 && code.timeFrom) {
+    return `Desde ${formatUnixDateTime(code.timeFrom)}`
+  }
+
+  return "-"
+}
+
 function getHistoryTypeLabel(type: number) {
   switch (type) {
     case 0:
@@ -665,6 +705,56 @@ export default function LoxoneAdmin() {
     }
   }
 
+  async function handleDeleteCodesForOutput(outputNumber: number, codesToDelete: AccessCode[]) {
+    if (!selectedControlUuid || codesToDelete.length === 0) return
+
+    const outputLabel = getOutputLabel(selectedControl, outputNumber)
+    const isBatch = codesToDelete.length > 1
+    const confirmed = window.confirm(
+      isBatch
+        ? `Se van a borrar ${codesToDelete.length} códigos activos de ${outputLabel}. ¿Continuar?`
+        : `Se va a borrar el código "${codesToDelete[0]?.name || codesToDelete[0]?.uuid}". ¿Continuar?`,
+    )
+
+    if (!confirmed) return
+
+    let deletedCount = 0
+
+    for (const code of codesToDelete) {
+      const result = await runAction(
+        "deleteCode",
+        {
+          controlUuid: selectedControlUuid,
+          codeUuid: code.uuid,
+        },
+        {
+          busyKey: `deleteCodes-${outputNumber}`,
+          preserveStatus: true,
+          silentSuccess: true,
+        },
+      )
+
+      if (!result.ok) {
+        setActionError(
+          deletedCount > 0
+            ? `${result.error}. Se borraron ${deletedCount} de ${codesToDelete.length} antes del fallo.`
+            : result.error,
+        )
+        await handleLoadCodes({ preserveStatus: true, silentSuccess: true })
+        return
+      }
+
+      deletedCount += 1
+    }
+
+    await handleLoadCodes({ preserveStatus: true, silentSuccess: true })
+    setActionMessage(
+      isBatch
+        ? `${deletedCount} códigos activos borrados de ${outputLabel}.`
+        : `Código borrado de ${outputLabel}.`,
+    )
+  }
+
   const isBusy = (action: string) => busyAction === action
 
   return (
@@ -847,8 +937,13 @@ export default function LoxoneAdmin() {
               {availableOutputs.map((output) => {
                 const outputLabel = getOutputLabel(selectedControl, output)
                 const outputCodes = codes.filter((code) => outputMaskIncludes(code.outputs, output))
-                const activeCodes = outputCodes.filter((code) => code.isActive)
-                const latestActiveCode = activeCodes[0] || null
+                const activeCodes = outputCodes
+                  .filter((code) => code.isActive)
+                  .sort((a, b) => {
+                    const aUntil = a.timeTo || Number.MAX_SAFE_INTEGER
+                    const bUntil = b.timeTo || Number.MAX_SAFE_INTEGER
+                    return aUntil - bUntil
+                  })
                 const currentAssignment = lockerAssignmentsByOutput.get(output) || null
                 const selectedMatricula = lockerVehicleSelections[output] || ""
                 const assignedCar = cars.find((car) => car.matricula === (currentAssignment?.matricula || selectedMatricula)) || null
@@ -963,9 +1058,51 @@ export default function LoxoneAdmin() {
 
                     <div>
                       <div className="text-sm text-muted-foreground">{getKeypadInstruction(output)}</div>
-                      {latestActiveCode ? (
-                        <div className="mt-1 text-sm text-muted-foreground">
-                          Último activo: {latestActiveCode.name || "(sin nombre)"} · hasta {formatUnixDateTime(latestActiveCode.timeTo)}
+                      {activeCodes.length > 0 ? (
+                        <div className="mt-3 space-y-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="text-sm font-medium">Activos ahora</div>
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => void handleDeleteCodesForOutput(output, activeCodes)}
+                              disabled={busyAction !== null}
+                            >
+                              {isBusy(`deleteCodes-${output}`) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                              Borrar todos
+                            </Button>
+                          </div>
+                          {activeCodes.map((code) => (
+                            <div key={code.uuid} className="rounded-md border bg-muted/20 p-3">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                  <div className="text-sm font-medium">{code.name || "(sin nombre)"}</div>
+                                  <div className="text-xs text-muted-foreground">{code.uuid}</div>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  <Badge variant="outline">{getCodeTypeLabel(code.type)}</Badge>
+                                  <Badge variant="secondary">{getCodeDurationLabel(code)}</Badge>
+                                </div>
+                              </div>
+                              <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                                <div>Válido desde: {formatUnixDateTime(code.timeFrom)}</div>
+                                <div>Válido hasta: {formatUnixDateTime(code.timeTo)}</div>
+                              </div>
+                              <div className="mt-3">
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => void handleDeleteCodesForOutput(output, [code])}
+                                  disabled={busyAction !== null}
+                                >
+                                  {isBusy(`deleteCodes-${output}`) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                  Borrar
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       ) : (
                         <div className="mt-1 text-sm text-muted-foreground">

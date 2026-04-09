@@ -11,6 +11,7 @@ import {
 } from "@/lib/reservas-casilleros"
 import {
   RESERVA_ACTIVACION_ANTELACION_MINUTOS,
+  getReservaActivacionDesde,
   getReservaBloqueoDesde,
   isReservaListaParaActivacion,
 } from "@/lib/reservas-access-window"
@@ -165,6 +166,7 @@ async function procesarInicioReservaActiva(params: {
   reservaId: number
   matricula: string
   casilleroId?: number | null
+  accesoDesde?: Date
   fechaInicio: Date
   fechaFin: Date
   empleadoEmail?: string | null
@@ -190,7 +192,7 @@ async function procesarInicioReservaActiva(params: {
         return await asegurarCodigoAccesoReserva({
           reservaId: params.reservaId,
           matricula: params.matricula,
-          fechaInicio: params.fechaInicio,
+          fechaInicio: params.accesoDesde || params.fechaInicio,
           fechaFin: params.fechaFin,
           casilleroId: casillero.id,
         })
@@ -406,6 +408,7 @@ export async function crearReservaTemporal(data: CrearReservaData) {
         reservaId: reserva.id,
         matricula: data.matricula,
         casilleroId: casillero?.id || null,
+        accesoDesde: bloqueoDesde,
         fechaInicio,
         fechaFin,
         empleadoEmail: empleado.email || session.user.email,
@@ -984,6 +987,7 @@ export async function activarReservasPendientes(opciones?: {
       try {
         const fechaInicio = new Date(r.fecha_inicio)
         const fechaFin = new Date(r.fecha_fin)
+        const accesoDesde = getReservaActivacionDesde(r)
         const estadoReserva = String((r as any).estado || "")
         const notificacionEnviada = Boolean((r as any).notificacion_inicio_reserva_enviada)
         const esPendiente = estadoReserva === "pendiente"
@@ -1020,7 +1024,7 @@ export async function activarReservasPendientes(opciones?: {
             accesoReserva = await asegurarCodigoAccesoReserva({
               reservaId: r.id,
               matricula: r.matricula,
-              fechaInicio,
+              fechaInicio: accesoDesde,
               fechaFin,
               casilleroId: casillero.id,
             })
@@ -1070,6 +1074,7 @@ export async function activarReservasPendientes(opciones?: {
           reservaId: r.id,
           matricula: r.matricula,
           casilleroId: (r as any).casillero_id || null,
+          accesoDesde,
           fechaInicio,
           fechaFin,
           empleadoEmail: empleado?.email || null,
