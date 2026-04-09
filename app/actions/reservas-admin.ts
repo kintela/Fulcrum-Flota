@@ -13,6 +13,8 @@ export interface ReservaTemporal {
   fecha_fin: string
   bloqueo_desde?: string | null
   margen_bloqueo?: number | null
+  casillero_id?: number | null
+  tiene_casillero_asociado?: boolean
   observaciones: string | null
   estado: string
   created_at: string
@@ -92,9 +94,42 @@ export async function obtenerReservasTemporales(): Promise<{
       }
     }
 
+    const matriculas = Array.from(
+      new Set(
+        (reservas || [])
+          .map((reserva) => String(reserva?.matricula || "").trim().toUpperCase())
+          .filter(Boolean),
+      ),
+    )
+
+    let matriculasConCasillero = new Set<string>()
+
+    if (matriculas.length > 0) {
+      const { data: casillerosActivos, error: casillerosError } = await supabase
+        .from("casilleros")
+        .select("matricula")
+        .in("matricula", matriculas)
+        .eq("activo", true)
+
+      if (casillerosError) {
+        console.error("Error obteniendo casilleros activos para reservas temporales:", casillerosError)
+      } else {
+        matriculasConCasillero = new Set(
+          (casillerosActivos || [])
+            .map((row) => String((row as { matricula?: string | null }).matricula || "").trim().toUpperCase())
+            .filter(Boolean),
+        )
+      }
+    }
+
     return {
       success: true,
-      reservas: (reservas || []) as ReservaTemporal[]
+      reservas: (reservas || []).map((reserva) => ({
+        ...(reserva as ReservaTemporal),
+        tiene_casillero_asociado:
+          Boolean((reserva as ReservaTemporal).casillero_id) ||
+          matriculasConCasillero.has(String(reserva?.matricula || "").trim().toUpperCase()),
+      })) as ReservaTemporal[]
     }
 
   } catch (error) {
@@ -229,6 +264,7 @@ export async function cancelarReservaTemporal(reservaId: number) {
         reservaId,
         motivoFin: "cancelada",
         origen: "manual",
+        eliminarRegistro: true,
       })
     } catch (error) {
       console.error("Error revocando código al cancelar reserva temporal:", error)

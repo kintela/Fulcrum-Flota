@@ -392,6 +392,26 @@ export default function ReservasTemporalesList({
                           será notificado de la cancelación.
                         </p>
                         <br />
+                        {reserva.tiene_casillero_asociado ? (
+                          getTipoReserva(reserva) === "pendiente" ? (
+                            <div className="mb-4 rounded-md border border-blue-200 bg-blue-50 p-4">
+                              <p className="text-sm text-blue-900">
+                                <strong>Importante:</strong> si esta reserva tenía un código de casillero, al cancelarla ese PIN se anulará.
+                                En una futura reserva se generará otro nuevo.
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="mb-4 rounded-md border border-red-300 bg-red-50 p-4">
+                              <p className="text-sm font-medium text-red-900">
+                                Importante: si el conductor ya sacó las llaves del casillero, cancelar ahora le dejará sin acceso.
+                              </p>
+                              <p className="mt-2 text-sm text-red-800">
+                                Al cancelar, el PIN del casillero se elimina en ese mismo momento. Si las llaves no están ya dentro, el
+                                conductor no podrá volver a abrir el casillero con ese código.
+                              </p>
+                            </div>
+                          )
+                        ) : null}
                         <div className="bg-blue-50 p-4 rounded-md border border-blue-200">
                           <p className="text-sm text-blue-700 mb-3">
                             💡 <strong>¿Dónde está el vehículo?</strong> Antes de cancelar, puedes registrar automáticamente la ubicación actual del vehículo:

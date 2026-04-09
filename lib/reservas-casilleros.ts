@@ -509,6 +509,7 @@ export async function revocarCodigoAccesoReserva(params: {
   reservaId: number
   motivoFin: MotivoFinCodigoReserva
   origen?: "loxone" | "app" | "system" | "manual"
+  eliminarRegistro?: boolean
 }) {
   const row = await obtenerCodigoAbiertoReserva(params.reservaId)
 
@@ -521,20 +522,6 @@ export async function revocarCodigoAccesoReserva(params: {
   try {
     if (row.loxone_code_uuid) {
       await deleteAccessCode(row.loxone_control_uuid, row.loxone_code_uuid)
-    }
-
-    const { error } = await supabase
-      .from("reservas_codigos_acceso")
-      .update({
-        estado: "revocado",
-        motivo_fin: params.motivoFin,
-        revocado_en: new Date().toISOString(),
-        ultimo_error: null,
-      })
-      .eq("id", row.id)
-
-    if (error) {
-      throw new Error(`No se pudo marcar el código de reserva como revocado: ${error.message}`)
     }
 
     if (casillero) {
@@ -550,6 +537,31 @@ export async function revocarCodigoAccesoReserva(params: {
           motivo_fin: params.motivoFin,
         },
       })
+    }
+
+    if (params.eliminarRegistro) {
+      const { error } = await supabase
+        .from("reservas_codigos_acceso")
+        .delete()
+        .eq("id", row.id)
+
+      if (error) {
+        throw new Error(`No se pudo eliminar el registro del código de reserva: ${error.message}`)
+      }
+    } else {
+      const { error } = await supabase
+        .from("reservas_codigos_acceso")
+        .update({
+          estado: "revocado",
+          motivo_fin: params.motivoFin,
+          revocado_en: new Date().toISOString(),
+          ultimo_error: null,
+        })
+        .eq("id", row.id)
+
+      if (error) {
+        throw new Error(`No se pudo marcar el código de reserva como revocado: ${error.message}`)
+      }
     }
 
     return { success: true as const, revoked: true as const }

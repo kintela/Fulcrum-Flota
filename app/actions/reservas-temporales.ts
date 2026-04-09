@@ -531,9 +531,42 @@ export async function obtenerReservasUsuario() {
       }
     }
 
+    const matriculas = Array.from(
+      new Set(
+        (reservas || [])
+          .map((reserva: any) => String(reserva?.matricula || "").trim().toUpperCase())
+          .filter(Boolean),
+      ),
+    )
+
+    let matriculasConCasillero = new Set<string>()
+
+    if (matriculas.length > 0) {
+      const { data: casillerosActivos, error: casillerosError } = await supabase
+        .from("casilleros")
+        .select("matricula")
+        .in("matricula", matriculas)
+        .eq("activo", true)
+
+      if (casillerosError) {
+        console.error("Error obteniendo casilleros activos para las reservas del usuario:", casillerosError)
+      } else {
+        matriculasConCasillero = new Set(
+          (casillerosActivos || [])
+            .map((row) => String((row as { matricula?: string | null }).matricula || "").trim().toUpperCase())
+            .filter(Boolean),
+        )
+      }
+    }
+
     return {
       success: true,
-      reservas: reservas || []
+      reservas: (reservas || []).map((reserva: any) => ({
+        ...reserva,
+        tiene_casillero_asociado:
+          Boolean(reserva?.casillero_id) ||
+          matriculasConCasillero.has(String(reserva?.matricula || "").trim().toUpperCase()),
+      })),
     }
 
   } catch (error) {
@@ -621,6 +654,7 @@ export async function cancelarReserva(
         reservaId,
         motivoFin: "cancelada",
         origen: "app",
+        eliminarRegistro: true,
       })
     } catch (error) {
       console.error("Error revocando código al cancelar reserva:", error)

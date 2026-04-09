@@ -42,6 +42,8 @@ interface Reserva {
   fecha_fin: string
   bloqueo_desde?: string | null
   margen_bloqueo?: number | null
+  casillero_id?: number | null
+  tiene_casillero_asociado?: boolean
   observaciones?: string
   quejas?: string
   limpieza?: "bien" | "regular" | "mal" | null
@@ -1153,6 +1155,33 @@ export function MisReservas({
                           <strong>Observaciones:</strong> {reservaToCancel.observaciones}
                         </p>
                       )}
+                    </div>
+                  )}
+                  {reservaToCancel && reservaToCancel.tiene_casillero_asociado && getEstadoReserva(reservaToCancel) === "pendiente" && (
+                    <div className="rounded-md border border-blue-200 bg-blue-50 p-4">
+                      <p className="text-sm text-blue-900">
+                        <strong>Importante:</strong> si esta reserva tenía un código de casillero, al cancelarla ese PIN se anulará.
+                        No pasa nada: en la próxima reserva se generará uno nuevo.
+                      </p>
+                    </div>
+                  )}
+                  {reservaToCancel && reservaToCancel.tiene_casillero_asociado && getEstadoReserva(reservaToCancel) === "activa" && (
+                    <div className="rounded-md border border-amber-300 bg-amber-50 p-4">
+                      <p className="text-sm text-amber-900">
+                        <strong>Atención:</strong> el acceso al casillero ya puede estar habilitado. Si ya usaste el PIN para sacar las
+                        llaves y cancelas ahora, el código se eliminará inmediatamente y no podrás volver a abrir el casillero con ese PIN.
+                      </p>
+                    </div>
+                  )}
+                  {reservaToCancel && reservaToCancel.tiene_casillero_asociado && getEstadoReserva(reservaToCancel) === "en_curso" && (
+                    <div className="rounded-md border border-red-300 bg-red-50 p-4">
+                      <p className="text-sm font-medium text-red-900">
+                        Importante: si ya tienes las llaves fuera del casillero, no canceles todavía.
+                      </p>
+                      <p className="mt-2 text-sm text-red-800">
+                        Al cancelar, el PIN del casillero se elimina en ese mismo momento. Si las llaves no están ya dentro, no podrás volver
+                        a abrir el casillero con ese código.
+                      </p>
                     </div>
                   )}
                   <div>
