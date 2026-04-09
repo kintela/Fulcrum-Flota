@@ -51,6 +51,19 @@ export interface LoxoneCreateCodeParams {
   timeTo?: Date
 }
 
+export interface LoxoneUpdateCodeParams {
+  controlUuid: string
+  codeUuid: string
+  isActive: boolean
+  name: string
+  code?: string
+  type: number
+  outputsMask: number
+  standardOutput: number
+  timeFrom?: Date
+  timeTo?: Date
+}
+
 export interface LoxoneEnvelope {
   LL?: {
     control?: string
@@ -323,8 +336,36 @@ export function buildCreateAccessCodeCommand(params: LoxoneCreateCodeParams) {
   return basePath
 }
 
+export function buildUpdateAccessCodeCommand(params: LoxoneUpdateCodeParams) {
+  const encodedCodeUuid = encodeURIComponent(params.codeUuid)
+  const encodedName = encodeURIComponent(sanitizeLoxoneAccessCodeName(params.name))
+  const encodedCode = encodeURIComponent((params.code || "-1").trim() || "-1")
+  const basePath =
+    buildControlCommand(params.controlUuid, "code/update") +
+    "/" +
+    `${encodedCodeUuid}/${params.isActive ? "true" : "false"}/${encodedName}/${encodedCode}/${params.type}/${params.outputsMask}/${params.standardOutput}`
+
+  if (params.type === 2) {
+    if (!params.timeFrom || !params.timeTo) {
+      throw new Error("Los códigos temporales requieren timeFrom y timeTo")
+    }
+
+    return (
+      `${basePath}/${toUnixTimestampSeconds(params.timeFrom)}` +
+      `/${toUnixTimestampSeconds(params.timeTo)}`
+    )
+  }
+
+  return basePath
+}
+
 export async function createAccessCode(params: LoxoneCreateCodeParams) {
   const path = buildCreateAccessCodeCommand(params)
+  return await fetchLoxoneCommand(path)
+}
+
+export async function updateAccessCode(params: LoxoneUpdateCodeParams) {
+  const path = buildUpdateAccessCodeCommand(params)
   return await fetchLoxoneCommand(path)
 }
 

@@ -28,6 +28,17 @@ interface AccessCode {
   standardOutput: number
   timeFrom?: number
   timeTo?: number
+  storedCodeValue?: string | null
+  storedCodeHint?: string | null
+  storedReservaId?: number | null
+  storedEstado?: string | null
+  storedFechaDesde?: string | null
+  storedFechaHasta?: string | null
+}
+
+interface CodeWindowDraft {
+  timeFrom: string
+  timeTo: string
 }
 
 interface AccessHistoryEntry {
@@ -102,6 +113,13 @@ function formatUnixDateTime(seconds?: number) {
 function formatSavedAt(value?: string | null) {
   if (!value) return "-"
   return new Date(value).toLocaleString("es-ES")
+}
+
+function formatIsoDateTimeInputValue(value?: string | null) {
+  if (!value) return ""
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ""
+  return formatDateTimeInputValue(date)
 }
 
 function outputMaskIncludes(mask: number, outputNumber: number) {
@@ -216,6 +234,16 @@ function getCodeDurationLabel(code: AccessCode) {
   return "-"
 }
 
+function getCodeWindowDraftValues(code: AccessCode): CodeWindowDraft {
+  const storedTimeFrom = formatIsoDateTimeInputValue(code.storedFechaDesde)
+  const storedTimeTo = formatIsoDateTimeInputValue(code.storedFechaHasta)
+
+  return {
+    timeFrom: code.timeFrom ? formatDateTimeInputValue(new Date(code.timeFrom * 1000)) : storedTimeFrom,
+    timeTo: code.timeTo ? formatDateTimeInputValue(new Date(code.timeTo * 1000)) : storedTimeTo,
+  }
+}
+
 function getHistoryTypeLabel(type: number) {
   switch (type) {
     case 0:
@@ -272,6 +300,7 @@ export default function LoxoneAdmin() {
   const [lockerAssignments, setLockerAssignments] = useState<LockerAssignment[]>([])
   const [lockerVehicleSelections, setLockerVehicleSelections] = useState<Record<number, string>>({})
   const [lockerVehicleFeedback, setLockerVehicleFeedback] = useState<Record<number, { tone: LockerFeedbackTone; message: string }>>({})
+  const [codeWindowDrafts, setCodeWindowDrafts] = useState<Record<string, CodeWindowDraft>>({})
 
   const accessControls = connection?.accessControls || []
   const selectedControl = accessControls.find((control) => control.uuid === selectedControlUuid) || null
@@ -327,12 +356,14 @@ export default function LoxoneAdmin() {
       setLockerFeedback({})
       setLockerVehicleSelections({})
       setLockerVehicleFeedback({})
+      setCodeWindowDrafts({})
       return
     }
 
     setLockerCodeValues({})
     setLockerFeedback({})
     setLockerVehicleFeedback({})
+    setCodeWindowDrafts({})
     void handleLoadCodes()
   }, [selectedControlUuid])
 
@@ -460,6 +491,27 @@ export default function LoxoneAdmin() {
     })
   }
 
+  function getCodeWindowDraft(code: AccessCode) {
+    return codeWindowDrafts[code.uuid] || getCodeWindowDraftValues(code)
+  }
+
+  function updateCodeWindowDraft(code: AccessCode, field: keyof CodeWindowDraft, value: string) {
+    setCodeWindowDrafts((current) => ({
+      ...current,
+      [code.uuid]: {
+        ...(current[code.uuid] || getCodeWindowDraftValues(code)),
+        [field]: value,
+      },
+    }))
+  }
+
+  function resetCodeWindowDraft(code: AccessCode) {
+    setCodeWindowDrafts((current) => ({
+      ...current,
+      [code.uuid]: getCodeWindowDraftValues(code),
+    }))
+  }
+
   async function handleLoadCodes(options?: { preserveStatus?: boolean; silentSuccess?: boolean }) {
     if (!selectedControlUuid) return []
     const result = await runAction("listCodes", { controlUuid: selectedControlUuid }, {
@@ -470,6 +522,7 @@ export default function LoxoneAdmin() {
     if (result.ok) {
       const nextCodes = Array.isArray(result.payload.codes) ? (result.payload.codes as AccessCode[]) : []
       setCodes(nextCodes)
+      setCodeWindowDrafts({})
       return nextCodes
     }
 
@@ -753,6 +806,46 @@ export default function LoxoneAdmin() {
         ? `${deletedCount} códigos activos borrados de ${outputLabel}.`
         : `Código borrado de ${outputLabel}.`,
     )
+  }
+
+  async function handleUpdateCodeWindow(code: AccessCode) {
+    if (!selectedControlUuid) return
+
+    const draft = getCodeWindowDraft(code)
+    const start = new Date(draft.timeFrom)
+    const end = new Date(draft.timeTo)
+
+    if (!draft.timeFrom || !draft.timeTo || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      setActionError("Debes indicar una fecha de inicio y una fecha de fin válidas")
+      return
+    }
+
+    if (end <= start) {
+      setActionError("La fecha fin debe ser posterior a la fecha inicio")
+      return
+    }
+
+    const result = await runAction(
+      "updateCodeWindow",
+      {
+        controlUuid: selectedControlUuid,
+        codeUuid: code.uuid,
+        timeFrom: start.toISOString(),
+        timeTo: end.toISOString(),
+      },
+      {
+        busyKey: `updateCodeWindow-${code.uuid}`,
+      },
+    )
+
+    if (result.ok) {
+      setCodeWindowDrafts((current) => {
+        const next = { ...current }
+        delete next[code.uuid]
+        return next
+      })
+      await handleLoadCodes({ preserveStatus: true, silentSuccess: true })
+    }
   }
 
   const isBusy = (action: string) => busyAction === action
@@ -1086,21 +1179,81 @@ export default function LoxoneAdmin() {
                                 </div>
                               </div>
                               <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                                {code.storedCodeValue ? <div>PIN guardado en app: <span className="font-medium text-foreground">{code.storedCodeValue}</span></div> : null}
+                                {code.storedReservaId ? <div>Reserva vinculada: {code.storedReservaId}</div> : null}
                                 <div>Válido desde: {formatUnixDateTime(code.timeFrom)}</div>
                                 <div>Válido hasta: {formatUnixDateTime(code.timeTo)}</div>
                               </div>
-                              <div className="mt-3">
-                                <Button
-                                  type="button"
-                                  variant="destructive"
-                                  size="sm"
-                                  onClick={() => void handleDeleteCodesForOutput(output, [code])}
-                                  disabled={busyAction !== null}
-                                >
-                                  {isBusy(`deleteCodes-${output}`) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                  Borrar
-                                </Button>
-                              </div>
+                              {code.type === 2 ? (
+                                <div className="mt-3 space-y-3 rounded-md border bg-background/80 p-3">
+                                  <div className="text-sm font-medium">Editar vigencia</div>
+                                  <div className="grid gap-3 md:grid-cols-2">
+                                    <div className="space-y-1">
+                                      <Label htmlFor={`code-window-from-${code.uuid}`}>Válido desde</Label>
+                                      <Input
+                                        id={`code-window-from-${code.uuid}`}
+                                        type="datetime-local"
+                                        value={getCodeWindowDraft(code).timeFrom}
+                                        onChange={(event) => updateCodeWindowDraft(code, "timeFrom", event.target.value)}
+                                        disabled={busyAction !== null}
+                                      />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <Label htmlFor={`code-window-to-${code.uuid}`}>Válido hasta</Label>
+                                      <Input
+                                        id={`code-window-to-${code.uuid}`}
+                                        type="datetime-local"
+                                        value={getCodeWindowDraft(code).timeTo}
+                                        onChange={(event) => updateCodeWindowDraft(code, "timeTo", event.target.value)}
+                                        disabled={busyAction !== null}
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => resetCodeWindowDraft(code)}
+                                      disabled={busyAction !== null}
+                                    >
+                                      Restablecer
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      onClick={() => void handleUpdateCodeWindow(code)}
+                                      disabled={busyAction !== null}
+                                    >
+                                      {isBusy(`updateCodeWindow-${code.uuid}`) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                      Guardar vigencia
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="destructive"
+                                      size="sm"
+                                      onClick={() => void handleDeleteCodesForOutput(output, [code])}
+                                      disabled={busyAction !== null}
+                                    >
+                                      {isBusy(`deleteCodes-${output}`) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                      Borrar
+                                    </Button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="mt-3">
+                                  <Button
+                                    type="button"
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() => void handleDeleteCodesForOutput(output, [code])}
+                                    disabled={busyAction !== null}
+                                  >
+                                    {isBusy(`deleteCodes-${output}`) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                    Borrar
+                                  </Button>
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -1264,6 +1417,8 @@ export default function LoxoneAdmin() {
                   </div>
 
                   <div className="mt-3 space-y-1 text-sm text-muted-foreground">
+                    {code.storedCodeValue ? <div>PIN guardado en app: <span className="font-medium text-foreground">{code.storedCodeValue}</span></div> : null}
+                    {code.storedReservaId ? <div>Reserva vinculada: {code.storedReservaId}</div> : null}
                     <div>Casilleros asignados: {getAssignedOutputsLabel(code, selectedControl)}</div>
                     <div>Válido desde: {formatUnixDateTime(code.timeFrom)}</div>
                     <div>Válido hasta: {formatUnixDateTime(code.timeTo)}</div>

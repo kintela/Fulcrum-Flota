@@ -16,6 +16,7 @@ import {
   getLoxoneStructureFile,
   isLoxoneRequestError,
   triggerAccessOutput,
+  updateAccessCode,
 } from "@/lib/loxone"
 
 function noStoreHeaders() {
@@ -32,6 +33,21 @@ interface LockerAssignmentRow {
   loxone_output_number: number
   loxone_output_key: string
   updated_at?: string | null
+}
+
+interface StoredReservationCodeRow {
+  id: number
+  reserva_id: number
+  casillero_id: number
+  codigo_acceso: string
+  codigo_hint: string | null
+  nombre_loxone: string | null
+  loxone_control_uuid: string
+  loxone_output_number: number
+  loxone_code_uuid: string | null
+  fecha_desde: string
+  fecha_hasta: string
+  estado: string
 }
 
 function mapLockerAssignment(row: LockerAssignmentRow) {
@@ -206,13 +222,52 @@ export async function POST(request: NextRequest) {
 
     if (action === "listCodes") {
       const result = await getAccessCodes(controlUuid)
+      const codes = Array.isArray(result.value) ? result.value : []
+      const codeUuids = codes
+        .map((code) => String(code?.uuid || "").trim())
+        .filter(Boolean)
+
+      let storedCodesByUuid = new Map<string, StoredReservationCodeRow>()
+
+      if (codeUuids.length > 0) {
+        const { data: storedCodes, error: storedCodesError } = await supabase
+          .from("reservas_codigos_acceso")
+          .select(
+            "id, reserva_id, casillero_id, codigo_acceso, codigo_hint, nombre_loxone, loxone_control_uuid, loxone_output_number, loxone_code_uuid, fecha_desde, fecha_hasta, estado",
+          )
+          .eq("loxone_control_uuid", controlUuid)
+          .in("loxone_code_uuid", codeUuids)
+          .order("id", { ascending: false })
+
+        if (storedCodesError) {
+          throw new Error(`No se pudieron cargar los códigos guardados en base de datos: ${storedCodesError.message}`)
+        }
+
+        storedCodesByUuid = new Map(
+          ((storedCodes || []) as StoredReservationCodeRow[])
+            .filter((row) => row.loxone_code_uuid)
+            .map((row) => [String(row.loxone_code_uuid), row] as const),
+        )
+      }
+
       return NextResponse.json(
         {
           success: true,
           message: "Códigos cargados correctamente",
           control: result.control,
           loxoneCode: result.code,
-          codes: result.value || [],
+          codes: codes.map((code) => {
+            const stored = storedCodesByUuid.get(String(code.uuid || ""))
+            return {
+              ...code,
+              storedCodeValue: stored?.codigo_acceso || null,
+              storedCodeHint: stored?.codigo_hint || null,
+              storedReservaId: stored?.reserva_id || null,
+              storedEstado: stored?.estado || null,
+              storedFechaDesde: stored?.fecha_desde || null,
+              storedFechaHasta: stored?.fecha_hasta || null,
+            }
+          }),
         },
         { headers: noStoreHeaders() },
       )
@@ -422,6 +477,135 @@ export async function POST(request: NextRequest) {
             ? `Casillero ${outputLabel} asociado a ${matricula}`
             : `Casillero ${outputLabel} actualizado sin coche asociado`,
           lockerAssignment: mapLockerAssignment(lockerAssignment as LockerAssignmentRow),
+        },
+        { headers: noStoreHeaders() },
+      )
+    }
+
+    if (action === "updateCodeWindow") {
+      const codeUuid = String(body?.codeUuid || "").trim()
+      if (codeUuid.length === 0) {
+        return NextResponse.json(
+          { success: false, error: "codeUuid es obligatorio" },
+          { status: 400, headers: noStoreHeaders() },
+        )
+      }
+
+      const timeFrom = new Date(String(body?.timeFrom || ""))
+      const timeTo = new Date(String(body?.timeTo || ""))
+
+      if (Number.isNaN(timeFrom.getTime()) || Number.isNaN(timeTo.getTime())) {
+        return NextResponse.json(
+          { success: false, error: "Debes indicar una fecha de inicio y una fecha de fin válidas" },
+          { status: 400, headers: noStoreHeaders() },
+        )
+      }
+
+      if (timeTo <= timeFrom) {
+        return NextResponse.json(
+          { success: false, error: "La fecha fin debe ser posterior a la fecha inicio" },
+          { status: 400, headers: noStoreHeaders() },
+        )
+      }
+
+      const codesResult = await getAccessCodes(controlUuid)
+      const currentCode = (Array.isArray(codesResult.value) ? codesResult.value : []).find(
+        (entry) => String(entry?.uuid || "").trim() === codeUuid,
+      )
+
+      if (!currentCode) {
+        return NextResponse.json(
+          { success: false, error: "No existe ningún código con ese UUID en Loxone" },
+          { status: 404, headers: noStoreHeaders() },
+        )
+      }
+
+      if (Number(currentCode.type) !== 2) {
+        return NextResponse.json(
+          { success: false, error: "Solo se puede editar la vigencia de códigos temporales" },
+          { status: 400, headers: noStoreHeaders() },
+        )
+      }
+
+      const { data: storedReservationCode, error: storedReservationCodeError } = await supabase
+        .from("reservas_codigos_acceso")
+        .select("id, reserva_id, casillero_id, fecha_desde, fecha_hasta")
+        .eq("loxone_control_uuid", controlUuid)
+        .eq("loxone_code_uuid", codeUuid)
+        .maybeSingle()
+
+      if (storedReservationCodeError) {
+        throw new Error(
+          `No se pudo cargar el metadato del código en base de datos: ${storedReservationCodeError.message}`,
+        )
+      }
+
+      const result = await updateAccessCode({
+        controlUuid,
+        codeUuid,
+        isActive: Boolean(currentCode.isActive),
+        name: String(currentCode.name || codeUuid),
+        code: "-1",
+        type: Number(currentCode.type),
+        outputsMask: Number(currentCode.outputs),
+        standardOutput: Number(currentCode.standardOutput),
+        timeFrom,
+        timeTo,
+      })
+
+      if (storedReservationCode) {
+        const { error: updateStoredReservationCodeError } = await supabase
+          .from("reservas_codigos_acceso")
+          .update({
+            fecha_desde: timeFrom.toISOString(),
+            fecha_hasta: timeTo.toISOString(),
+          })
+          .eq("id", storedReservationCode.id)
+
+        if (updateStoredReservationCodeError) {
+          throw new Error(
+            `Loxone actualizó el código, pero no se pudo sincronizar reservas_codigos_acceso: ${updateStoredReservationCodeError.message}`,
+          )
+        }
+
+        if (storedReservationCode.casillero_id) {
+          const { error: auditEventError } = await supabase.from("casilleros_eventos").insert({
+            casillero_id: storedReservationCode.casillero_id,
+            reserva_id: storedReservationCode.reserva_id,
+            reserva_codigo_acceso_id: storedReservationCode.id,
+            origen: "manual",
+            tipo_evento: "otro",
+            fecha_evento: new Date().toISOString(),
+            detalles: {
+              accion: "codigo_actualizado_vigencia",
+              loxone_code_uuid: codeUuid,
+              anterior: {
+                fecha_desde: storedReservationCode.fecha_desde,
+                fecha_hasta: storedReservationCode.fecha_hasta,
+              },
+              nuevo: {
+                fecha_desde: timeFrom.toISOString(),
+                fecha_hasta: timeTo.toISOString(),
+              },
+            },
+          })
+
+          if (auditEventError) {
+            console.warn("No se pudo auditar la actualización manual de vigencia:", auditEventError)
+          }
+        }
+      }
+
+      return NextResponse.json(
+        {
+          success: true,
+          message: storedReservationCode
+            ? "Vigencia actualizada en Loxone y sincronizada en la app"
+            : "Vigencia actualizada en Loxone",
+          control: result.control,
+          loxoneCode: result.code,
+          value: result.value,
+          rawValue: result.rawValue,
         },
         { headers: noStoreHeaders() },
       )
