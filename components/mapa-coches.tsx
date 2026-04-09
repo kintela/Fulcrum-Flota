@@ -10,6 +10,7 @@ import { liberarCoche } from "@/app/actions/reservas"
 import { actualizarUbicacionCoche } from "@/app/actions/ubicacion"
 import { obtenerEstadoReservasPorMatriculas } from "@/app/actions/reservas-temporales"
 import { ReservaModal } from "@/components/reserva-modal"
+import { canUserAccessReservationVehicle } from "@/lib/reserva-test-vehicles"
 
 interface Coche {
   matricula: string
@@ -220,7 +221,11 @@ const selectedMatriculaRef = useRef<string>("all")
   const cochesVisibles = useMemo(() => {
     const cochesActivos = coches.filter((coche) => coche.eliminado !== true)
     const base = isAdmin ? cochesActivos : cochesActivos.filter((coche) => !coche.asignadoa && !coche.donante)
-    return base.map((coche) => {
+    const filtradosPorReserva = base.filter((coche) =>
+      canUserAccessReservationVehicle(coche.matricula, userEmail),
+    )
+
+    return filtradosPorReserva.map((coche) => {
       const override = locationOverrides[coche.matricula]
       if (!override) return coche
       return {
@@ -230,7 +235,7 @@ const selectedMatriculaRef = useRef<string>("all")
         direccion_actual: override.direccion_actual ?? coche.direccion_actual
       }
     })
-  }, [coches, isAdmin, locationOverrides])
+  }, [coches, isAdmin, locationOverrides, userEmail])
 
   // Crear mapa de empleados (memoizado para evitar recrear marcadores en cada render)
   const empleadosMap = useMemo(() => {
@@ -346,6 +351,10 @@ const selectedMatriculaRef = useRef<string>("all")
 
   // Función para determinar si un coche está disponible
   const isCocheDisponible = useCallback((coche: Coche) => {
+    if (!canUserAccessReservationVehicle(coche.matricula, userEmail)) {
+      return false
+    }
+
     // Disponible si: no está asignado, no es donante, y no tiene reserva en curso o bloqueada por margen.
     // Las reservas vencidas se muestran como aviso, pero ya no bloquean una nueva reserva.
     const noEstaAsignado = !coche.asignadoa
@@ -353,7 +362,7 @@ const selectedMatriculaRef = useRef<string>("all")
     const sinReservaBloqueante = !(estadoReserva?.enCurso || estadoReserva?.bloquea)
     const noEsDonante = !coche.donante
     return noEstaAsignado && sinReservaBloqueante && noEsDonante
-  }, [reservasActivas])
+  }, [reservasActivas, userEmail])
 
   const createMarkerIconWithLabel = useCallback(
     (matricula: string, fillColor: string, markerSize: number, fillOpacity: number) => {
@@ -985,6 +994,11 @@ const selectedMatriculaRef = useRef<string>("all")
       setReservationMessage("❌ Tu usuario está baneado y no puede crear nuevas reservas.")
       return
     }
+
+    if (!canUserAccessReservationVehicle(selectedMatricula, userEmail)) {
+      setReservationMessage("❌ Este vehículo de pruebas solo está disponible para Roberto Quintela.")
+      return
+    }
     
     const coche = cochesVisibles.find(c => c.matricula === selectedMatricula)
     if (!coche) return
@@ -994,7 +1008,7 @@ const selectedMatriculaRef = useRef<string>("all")
       marcaModelo: `${coche.marca} ${coche.modelo}`
     })
     setShowReservaModal(true)
-  }, [selectedMatricula, cochesVisibles, usuarioBaneado])
+  }, [selectedMatricula, cochesVisibles, usuarioBaneado, userEmail])
 
   // Función para cerrar el modal y limpiar estados
   const handleCerrarReservaTemporal = useCallback(() => {

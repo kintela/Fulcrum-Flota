@@ -3,14 +3,15 @@
 import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { enviarEmailInicioReserva } from "@/lib/email"
 import { sendWhatsAppMessage, formatSpanishPhone } from "@/lib/whatsapp"
+import { canUserAccessReservationVehicle } from "@/lib/reserva-test-vehicles"
+import { getServerSession } from "next-auth/next"
+import { authOptions } from "@/lib/auth"
 
 // Helper para envío WhatsApp inicio (manual únicamente)
 async function enviarWhatsappInicioReserva(destino: string, mensaje: string) {
   const to = formatSpanishPhone(destino)
   return await sendWhatsAppMessage({ to, message: mensaje })
 }
-import { getServerSession } from "next-auth/next"
-import { authOptions } from "@/lib/auth"
 
 export interface CrearReservaData {
   matricula: string
@@ -157,6 +158,13 @@ export async function crearReservaTemporal(data: CrearReservaData) {
       return {
         success: false,
         error: "Usuario no autenticado"
+      }
+    }
+
+    if (!canUserAccessReservationVehicle(data.matricula, session.user.email)) {
+      return {
+        success: false,
+        error: "Este vehículo de pruebas solo está disponible para Roberto Quintela"
       }
     }
 
