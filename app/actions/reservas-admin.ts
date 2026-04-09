@@ -3,6 +3,7 @@
 import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
+import { revocarCodigoAccesoReserva } from "@/lib/reservas-casilleros"
 
 export interface ReservaTemporal {
   id: number
@@ -10,6 +11,8 @@ export interface ReservaTemporal {
   empleado_id: number
   fecha_inicio: string
   fecha_fin: string
+  bloqueo_desde?: string | null
+  margen_bloqueo?: number | null
   observaciones: string | null
   estado: string
   created_at: string
@@ -221,6 +224,20 @@ export async function cancelarReservaTemporal(reservaId: number) {
     }
 
     // Actualizar el estado de la reserva a cancelada
+    try {
+      await revocarCodigoAccesoReserva({
+        reservaId,
+        motivoFin: "cancelada",
+        origen: "manual",
+      })
+    } catch (error) {
+      console.error("Error revocando código al cancelar reserva temporal:", error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "No se pudo anular el código del casillero"
+      }
+    }
+
     const { error: updateError } = await supabase
       .from("reservas")
       .update({ estado: 'cancelada' })
@@ -335,6 +352,20 @@ export async function completarReservaTemporalAdmin(
     }
     if (estadoLimpieza && ["bien", "regular", "mal"].includes(estadoLimpieza)) {
       updateData.limpieza = estadoLimpieza
+    }
+
+    try {
+      await revocarCodigoAccesoReserva({
+        reservaId,
+        motivoFin: "completada",
+        origen: "manual",
+      })
+    } catch (error) {
+      console.error("Error revocando código al completar reserva temporal:", error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "No se pudo anular el código del casillero"
+      }
     }
 
     const { error: updateError } = await supabase

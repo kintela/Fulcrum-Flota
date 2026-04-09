@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { AlertCircle, CheckCircle, Clock, Mail, Settings } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectValue } from '@/components/ui/select'
+import { AlertCircle, CheckCircle, Clock, Mail, RefreshCw, Settings } from 'lucide-react'
 
 interface EstadisticasNotificaciones {
   totalNotificacionesEnviadas: number
@@ -46,6 +47,14 @@ interface ResultadoMantenimiento {
   timestamp: string
 }
 
+interface ReservaPendienteOption {
+  id: number
+  matricula: string
+  fechaInicio: string
+  fechaFin: string
+  readyOnNextCron: boolean
+}
+
 export default function NotificacionesAdmin() {
   const [cargando, setCargando] = useState(false)
   const [resultado, setResultado] = useState<ResultadoPrueba | null>(null)
@@ -53,6 +62,25 @@ export default function NotificacionesAdmin() {
   const [resultadoActivacion, setResultadoActivacion] = useState<any | null>(null)
   const [resultadoITV, setResultadoITV] = useState<ResultadoITV | null>(null)
   const [resultadoMantenimiento, setResultadoMantenimiento] = useState<ResultadoMantenimiento | null>(null)
+  const [reservasPendientes, setReservasPendientes] = useState<ReservaPendienteOption[]>([])
+  const [reservaPendienteSeleccionada, setReservaPendienteSeleccionada] = useState<string>("")
+  const [reservasPendientesError, setReservasPendientesError] = useState("")
+  const [simulatedReferenceTime, setSimulatedReferenceTime] = useState<string | null>(null)
+
+  const formatoFechaReserva = (value: string) =>
+    new Date(value).toLocaleString("es-ES", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+
+  const descripcionReservaSeleccionada = useMemo(() => {
+    const selected = reservasPendientes.find((reserva) => String(reserva.id) === reservaPendienteSeleccionada)
+    if (!selected) return null
+    return `${selected.matricula} · ${formatoFechaReserva(selected.fechaInicio)} → ${formatoFechaReserva(selected.fechaFin)}`
+  }, [reservasPendientes, reservaPendienteSeleccionada])
 
   const probarConfiguracion = async () => {
     setCargando(true)
@@ -124,11 +152,29 @@ export default function NotificacionesAdmin() {
   }
 
   const activarPendientesManual = async () => {
+    if (!reservaPendienteSeleccionada) {
+      setResultadoActivacion({
+        success: false,
+        error: 'Selecciona una reserva pendiente para probar',
+        timestamp: new Date().toISOString()
+      })
+      return
+    }
+
     setCargando(true)
     try {
-      const resp = await fetch('/api/cron/activar-reservas-pendientes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'run' }) })
+      const resp = await fetch('/api/cron/activar-reservas-pendientes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'run',
+          reservaId: Number(reservaPendienteSeleccionada),
+          forceWindowBypass: true,
+        })
+      })
       const data = await resp.json()
       setResultadoActivacion(data)
+      await cargarReservasPendientes()
     } catch (e:any) {
       setResultadoActivacion({ success:false, error:'Error ejecutando activación', details: e?.message, timestamp: new Date().toISOString() })
     }
@@ -196,6 +242,40 @@ export default function NotificacionesAdmin() {
     }
   }
 
+  const cargarReservasPendientes = async () => {
+    try {
+      setReservasPendientesError("")
+      const response = await fetch("/api/admin/reservas-pendientes", { cache: "no-store" })
+      const data = await response.json()
+
+      if (!response.ok || !data.success) {
+        setReservasPendientes([])
+        setReservasPendientesError(data.error || "No se pudieron cargar las reservas pendientes")
+        setSimulatedReferenceTime(null)
+        return
+      }
+
+      const reservas = Array.isArray(data.reservas) ? data.reservas : []
+      setReservasPendientes(reservas)
+      setSimulatedReferenceTime(data.simulatedReferenceTime || null)
+      setReservaPendienteSeleccionada((actual) => {
+        if (actual && reservas.some((reserva: ReservaPendienteOption) => String(reserva.id) === actual)) {
+          return actual
+        }
+        return reservas[0] ? String(reservas[0].id) : ""
+      })
+    } catch (error) {
+      setReservasPendientes([])
+      setReservasPendientesError("Error cargando reservas pendientes")
+      setSimulatedReferenceTime(null)
+    }
+  }
+
+  useEffect(() => {
+    cargarEstadisticas()
+    cargarReservasPendientes()
+  }, [])
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -205,7 +285,13 @@ export default function NotificacionesAdmin() {
             Monitoreo y configuración del sistema de notificaciones automáticas
           </p>
         </div>
-        <Button onClick={cargarEstadisticas} variant="outline">
+        <Button
+          onClick={() => {
+            cargarEstadisticas()
+            cargarReservasPendientes()
+          }}
+          variant="outline"
+        >
           <Settings className="mr-2 h-4 w-4" />
           Actualizar
         </Button>
@@ -346,17 +432,72 @@ export default function NotificacionesAdmin() {
           <CardHeader>
             <CardTitle>Activar Reservas Pendientes</CardTitle>
             <CardDescription>
-              Pasa a 'activa' las reservas cuyo inicio ya llegó
+              Selecciona una sola reserva pendiente y fuerza todo el proceso automático solo sobre esa reserva, aunque todavía no haya entrado en ventana
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-medium">Reserva pendiente a probar</div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={cargarReservasPendientes}
+                  disabled={cargando}
+                  className="h-8 px-2"
+                >
+                  <RefreshCw className="mr-1 h-4 w-4" />
+                  Recargar
+                </Button>
+              </div>
+              <Select
+                value={reservaPendienteSeleccionada}
+                onChange={(event) => setReservaPendienteSeleccionada(event.target.value)}
+                disabled={cargando || reservasPendientes.length === 0}
+              >
+                <SelectValue placeholder="Selecciona una reserva pendiente" />
+                <SelectContent>
+                  {reservasPendientes.map((reserva) => (
+                    <SelectItem key={reserva.id} value={String(reserva.id)}>
+                      {`${reserva.matricula} · ${formatoFechaReserva(reserva.fechaInicio)} → ${formatoFechaReserva(reserva.fechaFin)}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {descripcionReservaSeleccionada && (
+                <div className="text-xs text-muted-foreground">{descripcionReservaSeleccionada}</div>
+              )}
+              {simulatedReferenceTime && (
+                <div className="text-xs text-muted-foreground">
+                  Referencia del próximo cron: {new Date(simulatedReferenceTime).toLocaleString('es-ES')}
+                </div>
+              )}
+              {reservasPendientesError && (
+                <div className="text-xs text-red-600">{reservasPendientesError}</div>
+              )}
+              {!reservasPendientesError && reservasPendientes.length === 0 && (
+                <div className="text-xs text-muted-foreground">No hay reservas pendientes disponibles.</div>
+              )}
+              {reservaPendienteSeleccionada && (
+                <div className="text-xs text-muted-foreground">
+                  {(() => {
+                    const selected = reservasPendientes.find((reserva) => String(reserva.id) === reservaPendienteSeleccionada)
+                    if (!selected) return null
+                    return selected.readyOnNextCron
+                      ? "Esta reserva ya entraría en la próxima ventana automática."
+                      : "Esta reserva todavía no entra en la próxima ventana automática, pero puedes forzarla aquí."
+                  })()}
+                </div>
+              )}
+            </div>
             <Button
               onClick={activarPendientesManual}
-              disabled={cargando}
+              disabled={cargando || !reservaPendienteSeleccionada}
               variant="outline"
               className="w-full"
             >
-              {cargando ? 'Activando...' : 'Activar Pendientes'}
+              {cargando ? 'Forzando...' : 'Forzar activación completa de esta reserva'}
             </Button>
           </CardContent>
         </Card>
@@ -452,16 +593,39 @@ export default function NotificacionesAdmin() {
                     Ejecutado el {new Date(resultadoActivacion.timestamp || Date.now()).toLocaleString('es-ES')}
                   </div>
                 </div>
+                {resultadoActivacion.simulatedReferenceTime && (
+                  <div className="text-muted-foreground text-xs">
+                    Simulado como cron de las {new Date(resultadoActivacion.simulatedReferenceTime).toLocaleString('es-ES')}
+                  </div>
+                )}
+                {resultadoActivacion.targetReservaId && (
+                  <div className="text-muted-foreground text-xs">
+                    Reserva objetivo: #{resultadoActivacion.targetReservaId}
+                  </div>
+                )}
+                {resultadoActivacion.forceWindowBypass && (
+                  <div className="text-muted-foreground text-xs">
+                    Ejecución forzada ignorando la ventana automática de activación
+                  </div>
+                )}
                 <p className={resultadoActivacion.success ? 'text-green-600' : 'text-red-600'}>
                   {resultadoActivacion.success ? `Reservas activadas: ${resultadoActivacion.activadas || 0}` : (resultadoActivacion.error || 'Error')}
                 </p>
                 {resultadoActivacion.ids && (
                   <div className="text-muted-foreground text-xs">IDs: {resultadoActivacion.ids.join(', ')}</div>
                 )}
-                {(resultadoActivacion.emailsEnviados !== undefined || resultadoActivacion.whatsappsEnviados !== undefined) && (
+                {(resultadoActivacion.emailsEnviados !== undefined || resultadoActivacion.whatsappsEnviados !== undefined || resultadoActivacion.erroresAcceso !== undefined) && (
                   <div className="text-muted-foreground text-xs flex gap-4 mt-1">
                     {resultadoActivacion.emailsEnviados !== undefined && <span>Emails: {resultadoActivacion.emailsEnviados}</span>}
                     {resultadoActivacion.whatsappsEnviados !== undefined && <span>WhatsApps: {resultadoActivacion.whatsappsEnviados}</span>}
+                    {resultadoActivacion.erroresAcceso !== undefined && <span>Errores acceso: {resultadoActivacion.erroresAcceso}</span>}
+                  </div>
+                )}
+                {Array.isArray(resultadoActivacion.detalles) && resultadoActivacion.detalles.length > 0 && (
+                  <div className="space-y-1 text-xs text-muted-foreground">
+                    {resultadoActivacion.detalles.map((detalle: string, index: number) => (
+                      <div key={`${detalle}-${index}`}>• {detalle}</div>
+                    ))}
                   </div>
                 )}
               </div>

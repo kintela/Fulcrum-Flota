@@ -48,6 +48,10 @@ function getEstadoReserva(reserva: ReservaTemporal): { estado: string; color: st
     return { estado: 'Completada', color: 'secondary', descripcion: 'Reserva completada' }
   }
 
+  if (reserva.estado === "vencida") {
+    return { estado: "Vencida", color: "secondary", descripcion: "Reserva terminada" }
+  }
+
   const ahora = new Date()
   const fechaInicio = parseISO(reserva.fecha_inicio)
   const fechaFin = parseISO(reserva.fecha_fin)
@@ -56,8 +60,12 @@ function getEstadoReserva(reserva: ReservaTemporal): { estado: string; color: st
     return { estado: 'Vencida', color: 'secondary', descripcion: 'Reserva terminada' }
   }
 
-  if (isBefore(ahora, fechaInicio)) {
+  if (reserva.estado === "pendiente") {
     return { estado: 'Pendiente', color: 'outline', descripcion: 'Reserva programada' }
+  }
+
+  if (isBefore(ahora, fechaInicio)) {
+    return { estado: "Activa", color: "default", descripcion: "Acceso habilitado; inicio programado" }
   }
 
   return { estado: 'Activa', color: 'default', descripcion: 'Reserva en curso' }
@@ -66,13 +74,13 @@ function getEstadoReserva(reserva: ReservaTemporal): { estado: string; color: st
 function getTipoReserva(reserva: ReservaTemporal): Exclude<TipoReservaFiltro, "todas"> {
   if (reserva.estado === 'cancelada') return 'cancelada'
   if (reserva.estado === 'completada') return 'completada'
+  if (reserva.estado === "vencida") return "vencida"
+  if (reserva.estado === "pendiente") return "pendiente"
 
   const ahora = new Date()
-  const fechaInicio = parseISO(reserva.fecha_inicio)
   const fechaFin = parseISO(reserva.fecha_fin)
 
   if (isAfter(ahora, fechaFin)) return 'vencida'
-  if (isBefore(ahora, fechaInicio)) return 'pendiente'
   return 'activa'
 }
 

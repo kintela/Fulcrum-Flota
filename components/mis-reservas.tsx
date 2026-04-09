@@ -40,10 +40,12 @@ interface Reserva {
   matricula: string
   fecha_inicio: string
   fecha_fin: string
+  bloqueo_desde?: string | null
+  margen_bloqueo?: number | null
   observaciones?: string
   quejas?: string
   limpieza?: "bien" | "regular" | "mal" | null
-  estado: 'activa' | 'pendiente' | 'completada' | 'cancelada'
+  estado: "activa" | "pendiente" | "vencida" | "completada" | "cancelada"
   created_at: string
   coches: {
     matricula: string
@@ -539,6 +541,8 @@ export function MisReservas({
     switch (estadoReserva) {
       case 'pendiente':
         return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">Pendiente</Badge>
+      case 'activa':
+        return <Badge className="bg-cyan-100 text-cyan-800 hover:bg-cyan-100">Acceso listo</Badge>
       case 'en_curso':
         return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">En Curso</Badge>
       case 'vencida':
@@ -586,17 +590,23 @@ export function MisReservas({
     const inicio = new Date(reserva.fecha_inicio)
     const fin = new Date(reserva.fecha_fin)
 
-    if (reserva.estado !== 'activa') {
-      return reserva.estado // cancelada, completada, etc.
+    if (reserva.estado === "cancelada" || reserva.estado === "completada" || reserva.estado === "pendiente") {
+      return reserva.estado
+    }
+
+    if (reserva.estado === "vencida") {
+      return "vencida"
+    }
+
+    if (ahora > fin) {
+      return "vencida"
     }
 
     if (ahora < inicio) {
-      return 'pendiente' // Aún no ha comenzado
-    } else if (ahora >= inicio && ahora <= fin) {
-      return 'en_curso' // Está en curso ahora
-    } else {
-      return 'vencida' // Ya terminó pero sigue marcada como activa
+      return "activa"
     }
+
+    return "en_curso"
   }
 
   const reservasActivas = reservas.filter(r => r.estado === 'activa' || r.estado === 'pendiente' || r.estado === 'vencida')

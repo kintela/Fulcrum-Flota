@@ -396,7 +396,12 @@ export async function enviarEmailInicioReserva(
   nombreEmpleado: string,
   vehiculo: { matricula: string; marca: string; modelo: string },
   fechaInicio: Date,
-  fechaFin: Date
+  fechaFin: Date,
+  acceso?: {
+    casilleroNombre: string
+    codigoAcceso: string
+    keypadInstruction: string
+  }
 ) {
   try {
     const transporter = createEmailTransporter()
@@ -409,6 +414,16 @@ export async function enviarEmailInicioReserva(
     })
 
     const asunto = `✅ Comienza tu reserva - ${vehiculo.matricula}`
+    const accesoTexto = acceso
+      ? `
+Casillero: ${acceso.casilleroNombre}
+Código de acceso: ${acceso.codigoAcceso}
+Validez: Hasta que completes o canceles la reserva.
+`
+      : ""
+    const accesoHtml = acceso
+      ? `<div class="access"><strong>Casillero:</strong> ${acceso.casilleroNombre}<br/><strong>Código de acceso:</strong> <span class="code">${acceso.codigoAcceso}</span><br/><strong>Validez:</strong> Hasta que completes o canceles la reserva.</div>`
+      : ""
     const texto = `
 INICIO DE RESERVA
 
@@ -419,13 +434,15 @@ Tu reserva del vehículo ${vehiculo.marca} ${vehiculo.modelo} (${vehiculo.matric
 Inicio: ${inicioFmt}
 Fin previsto: ${finFmt}
 
+${accesoTexto}
+
 Recuerda marcarla como completada cuando devuelvas el vehículo
 
 ---
 ${avisoFooterText}
     `
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /><title>Inicio de Reserva</title><style>body{font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#333;max-width:620px;margin:0 auto;padding:24px;background:#f5f7fa} .card{background:#fff;border-radius:10px;padding:28px;box-shadow:0 2px 8px rgba(0,0,0,0.06)} h1{margin:0 0 12px;font-size:22px;color:#16a34a} .veh{background:#f0fdf4;border:1px solid #bbf7d0;padding:16px;border-radius:8px;margin:16px 0} .footer{margin-top:32px;font-size:12px;color:#666;text-align:center} .pill{display:inline-block;background:#16a34a;color:#fff;padding:4px 10px;border-radius:999px;font-size:12px;margin-bottom:8px}</style></head><body><div class="card"><span class="pill">Reserva activada</span><h1>Comienza tu reserva</h1><p>Hola <strong>${nombreEmpleado}</strong>,</p><p>Tu reserva ha pasado automáticamente de <strong>pendiente</strong> a <strong>activa</strong>.</p><div class="veh"><strong>Vehículo:</strong> ${vehiculo.marca} ${vehiculo.modelo} (${vehiculo.matricula})<br/><strong>Inicio:</strong> ${inicioFmt}<br/><strong>Fin previsto:</strong> ${finFmt}</div><p>Recuerda marcarla como <em>completada</em> cuando devuelvas el vehículo.</p><div class="footer">${avisoFooterHtml}</div></div></body></html>`
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /><title>Inicio de Reserva</title><style>body{font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#333;max-width:620px;margin:0 auto;padding:24px;background:#f5f7fa} .card{background:#fff;border-radius:10px;padding:28px;box-shadow:0 2px 8px rgba(0,0,0,0.06)} h1{margin:0 0 12px;font-size:22px;color:#16a34a} .veh{background:#f0fdf4;border:1px solid #bbf7d0;padding:16px;border-radius:8px;margin:16px 0} .access{background:#eff6ff;border:1px solid #bfdbfe;padding:16px;border-radius:8px;margin:16px 0} .code{display:inline-block;background:#111827;color:#fff;padding:2px 10px;border-radius:999px;font-weight:700;letter-spacing:1px} .footer{margin-top:32px;font-size:12px;color:#666;text-align:center} .pill{display:inline-block;background:#16a34a;color:#fff;padding:4px 10px;border-radius:999px;font-size:12px;margin-bottom:8px}</style></head><body><div class="card"><span class="pill">Reserva activada</span><h1>Comienza tu reserva</h1><p>Hola <strong>${nombreEmpleado}</strong>,</p><p>Tu reserva ha pasado automáticamente de <strong>pendiente</strong> a <strong>activa</strong>.</p><div class="veh"><strong>Vehículo:</strong> ${vehiculo.marca} ${vehiculo.modelo} (${vehiculo.matricula})<br/><strong>Inicio:</strong> ${inicioFmt}<br/><strong>Fin previsto:</strong> ${finFmt}</div>${accesoHtml}<p>Recuerda marcarla como <em>completada</em> cuando devuelvas el vehículo.</p><div class="footer">${avisoFooterHtml}</div></div></body></html>`
 
     const mailOptions = {
       from: { name: fromName, address: fromEmail },

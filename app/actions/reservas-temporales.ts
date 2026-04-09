@@ -2,6 +2,18 @@
 
 import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { enviarEmailInicioReserva } from "@/lib/email"
+import {
+  asegurarCodigoAccesoReserva,
+  marcarEmailCodigoReservaEnviado,
+  obtenerCasilleroActivoPorMatricula,
+  resolverCasilleroReserva,
+  revocarCodigoAccesoReserva,
+} from "@/lib/reservas-casilleros"
+import {
+  RESERVA_ACTIVACION_ANTELACION_MINUTOS,
+  getReservaBloqueoDesde,
+  isReservaListaParaActivacion,
+} from "@/lib/reservas-access-window"
 import { sendWhatsAppMessage, formatSpanishPhone } from "@/lib/whatsapp"
 import { canUserAccessReservationVehicle } from "@/lib/reserva-test-vehicles"
 import { getServerSession } from "next-auth/next"
@@ -149,6 +161,120 @@ async function obtenerReservaUsuarioPorId(
   }
 }
 
+async function procesarInicioReservaActiva(params: {
+  reservaId: number
+  matricula: string
+  casilleroId?: number | null
+  fechaInicio: Date
+  fechaFin: Date
+  empleadoEmail?: string | null
+  empleadoNombre?: string | null
+  empleadoMovil?: string | null
+  vehiculo?: { marca?: string | null; modelo?: string | null } | null
+  manualWhatsapp?: boolean
+  accesoPreparado?: Awaited<ReturnType<typeof asegurarCodigoAccesoReserva>>
+}) {
+  try {
+    const acceso =
+      params.accesoPreparado ||
+      (await (async () => {
+        const casillero = await resolverCasilleroReserva({
+          matricula: params.matricula,
+          casilleroId: params.casilleroId,
+        })
+
+        if (!casillero) {
+          return null
+        }
+
+        return await asegurarCodigoAccesoReserva({
+          reservaId: params.reservaId,
+          matricula: params.matricula,
+          fechaInicio: params.fechaInicio,
+          fechaFin: params.fechaFin,
+          casilleroId: casillero.id,
+        })
+      })())
+
+    let emailEnviado = false
+    let whatsappsEnviados = 0
+    let whatsappsErrores = 0
+    let emailError: string | null = null
+
+    if (params.empleadoEmail) {
+      const resEmail = await enviarEmailInicioReserva(
+        params.empleadoEmail,
+        params.empleadoNombre || "",
+        {
+          matricula: params.matricula,
+          marca: params.vehiculo?.marca || "",
+          modelo: params.vehiculo?.modelo || "",
+        },
+        params.fechaInicio,
+        params.fechaFin,
+        acceso
+          ? {
+              casilleroNombre: acceso.casillero.nombre,
+              codigoAcceso: acceso.codigo.codigoAcceso,
+              keypadInstruction: acceso.keypadInstruction,
+            }
+          : undefined,
+      )
+
+      if (resEmail.success) {
+        emailEnviado = true
+        if (acceso) {
+          await marcarEmailCodigoReservaEnviado(params.reservaId)
+        }
+      } else {
+        emailError = resEmail.error || "No se pudo enviar el email de inicio de reserva"
+      }
+    } else {
+      emailError = "El empleado no tiene email configurado"
+    }
+
+    if (params.manualWhatsapp && params.empleadoMovil) {
+      const telefonoTrim = String(params.empleadoMovil).trim()
+      if (/^\+?\d{7,15}$/.test(telefonoTrim.replace(/\s|-/g, ""))) {
+        const msg =
+          `✅ Inicio de tu reserva (${params.matricula})\n` +
+          (acceso
+            ? `Casillero: ${acceso.casillero.nombre}\n` +
+              `Código: ${acceso.codigo.codigoAcceso}\n` +
+              `Apertura: ${acceso.keypadInstruction}\n`
+            : "") +
+          `Inicio: ${params.fechaInicio.toLocaleString("es-ES", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}\n` +
+          `Fin previsto: ${params.fechaFin.toLocaleString("es-ES", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}`
+
+        const wa = await enviarWhatsappInicioReserva(telefonoTrim, msg)
+        if ((wa as any).success) {
+          whatsappsEnviados += 1
+        } else {
+          whatsappsErrores += 1
+        }
+      }
+    }
+
+    return {
+      success: true as const,
+      acceso,
+      accesoCreado: acceso?.created || false,
+      emailEnviado,
+      emailError,
+      whatsappsEnviados,
+      whatsappsErrores,
+    }
+  } catch (error) {
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Error inesperado preparando el acceso a la reserva",
+      emailEnviado: false,
+      whatsappsEnviados: 0,
+      whatsappsErrores: 0,
+    }
+  }
+}
+
 export async function crearReservaTemporal(data: CrearReservaData) {
   try {
     // Obtener información del usuario logueado
@@ -213,6 +339,8 @@ export async function crearReservaTemporal(data: CrearReservaData) {
       }
     }
 
+    const casillero = await obtenerCasilleroActivoPorMatricula(data.matricula)
+
     // Validar fechas
     const fechaInicio = new Date(data.fecha_inicio)
     const fechaFin = new Date(data.fecha_fin)
@@ -232,21 +360,24 @@ export async function crearReservaTemporal(data: CrearReservaData) {
       }
     }
 
-  // Determinar estado inicial: 'pendiente' si todavía no ha comenzado, sino 'activa'
-  const estadoInicial = fechaInicio > ahora ? 'pendiente' : 'activa'
+    const bloqueoDesde = getReservaBloqueoDesde(fechaInicio)
+    const estadoInicial = bloqueoDesde > ahora ? "pendiente" : "activa"
 
-  // Crear la reserva temporal
+    // Crear la reserva temporal
     const { data: reserva, error: reservaError } = await supabase
       .from("reservas")
       .insert([
         {
           matricula: data.matricula,
           empleado_id: empleado.id,
+          casillero_id: casillero?.id || null,
           fecha_inicio: data.fecha_inicio,
           fecha_fin: data.fecha_fin,
+          bloqueo_desde: bloqueoDesde.toISOString(),
+          margen_bloqueo: RESERVA_ACTIVACION_ANTELACION_MINUTOS,
           observaciones: data.observaciones || null,
-      estado: estadoInicial
-        }
+          estado: estadoInicial,
+        },
       ])
       .select()
       .single()
@@ -268,9 +399,45 @@ export async function crearReservaTemporal(data: CrearReservaData) {
       }
     }
 
+    let message = `Reserva temporal creada exitosamente para el vehículo ${data.matricula}`
+
+    if (estadoInicial === "activa") {
+      const inicioReserva = await procesarInicioReservaActiva({
+        reservaId: reserva.id,
+        matricula: data.matricula,
+        casilleroId: casillero?.id || null,
+        fechaInicio,
+        fechaFin,
+        empleadoEmail: empleado.email || session.user.email,
+        empleadoNombre: [empleado.nombre, empleado.apellidos].filter(Boolean).join(" ").trim(),
+        vehiculo: { marca: coche.marca, modelo: coche.modelo },
+        manualWhatsapp: false,
+      })
+
+      if (!inicioReserva.success) {
+        await supabase.from("reservas").delete().eq("id", reserva.id)
+        return {
+          success: false,
+          error: `No se pudo preparar el inicio de esta reserva: ${inicioReserva.error}`
+        }
+      }
+
+      if (!inicioReserva.emailEnviado) {
+        message += casillero
+          ? ". El código se generó, pero el email de inicio no se pudo enviar todavía."
+          : ". La reserva no tiene casillero asociado y el email de inicio todavía no se pudo enviar."
+      } else if (!casillero) {
+        message += ". Este vehículo no tiene casillero asociado, así que no se ha generado ningún código de acceso."
+      }
+    } else {
+      message += casillero
+        ? `. El código y el email de acceso se enviarán automáticamente cuando queden ${RESERVA_ACTIVACION_ANTELACION_MINUTOS} minutos para el inicio.`
+        : `. El email de inicio se enviará automáticamente cuando queden ${RESERVA_ACTIVACION_ANTELACION_MINUTOS} minutos para el inicio. Como este vehículo no tiene casillero asociado, la reserva seguirá sin código de acceso.`
+    }
+
     return {
       success: true,
-      message: `Reserva temporal creada exitosamente para el vehículo ${data.matricula}`,
+      message,
       reserva: reserva
     }
 
@@ -446,6 +613,20 @@ export async function cancelarReserva(
     }
 
     // Actualizar el estado de la reserva a cancelada
+    try {
+      await revocarCodigoAccesoReserva({
+        reservaId,
+        motivoFin: "cancelada",
+        origen: "app",
+      })
+    } catch (error) {
+      console.error("Error revocando código al cancelar reserva:", error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "No se pudo anular el código del casillero"
+      }
+    }
+
     const { error: updateError } = await supabase
       .from("reservas")
       .update(updateData)
@@ -515,6 +696,20 @@ export async function completarReserva(
     }
     if (estadoLimpieza && ["bien", "regular", "mal"].includes(estadoLimpieza)) {
       updateData.limpieza = estadoLimpieza
+    }
+
+    try {
+      await revocarCodigoAccesoReserva({
+        reservaId,
+        motivoFin: "completada",
+        origen: "app",
+      })
+    } catch (error) {
+      console.error("Error revocando código al completar reserva:", error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "No se pudo anular el código del casillero"
+      }
     }
 
     const { error: updateError } = await supabase
@@ -730,23 +925,46 @@ export async function obtenerEstadoReservasPorMatriculas(matriculas: string[]) {
   }
 }
 
-// Activar reservas pendientes cuyo inicio ya llegó (cron)
-export async function activarReservasPendientes(opciones?: { manual?: boolean }) {
+// Activar reservas pendientes cuando entran en su ventana de acceso.
+// La reserva pasa a "activa" cuando faltan 30 minutos para el inicio real.
+export async function activarReservasPendientes(opciones?: {
+  manual?: boolean
+  referenceTime?: Date | string
+  targetReservaId?: number | null
+  forceWindowBypass?: boolean
+}) {
   try {
-    const ahora = new Date()
+    const ahora = opciones?.referenceTime ? new Date(opciones.referenceTime) : new Date()
+    const targetReservaId =
+      typeof opciones?.targetReservaId === "number" && Number.isInteger(opciones.targetReservaId)
+        ? opciones.targetReservaId
+        : null
+    const forceWindowBypass = opciones?.forceWindowBypass === true
 
-    // Buscar solo reservas pendientes cuyo inicio ya llegó.
-    // Evita enviar avisos de inicio adelantados si el usuario cancela antes de comenzar.
-    // Nota: reducimos el SELECT para evitar fallar si ciertos campos no existen todavía (ej: whatsapp)
-    const { data: pendientes, error } = await supabase
+    // Buscar reservas pendientes y decidir en código cuáles ya deben activarse.
+    // Usamos bloqueo_desde cuando exista; si no, caemos al cálculo fecha_inicio - 30 minutos.
+    let query = supabase
       .from('reservas')
-      .select('id, fecha_inicio, fecha_fin, matricula, empleado_id, notificacion_inicio_reserva_enviada, fecha_notificacion_inicio_reserva, coches(marca,modelo), empleados(email,nombre,apellidos,movil)')
-      .eq('estado', 'pendiente')
-      .lte('fecha_inicio', ahora.toISOString())
+      .select('id, estado, fecha_inicio, fecha_fin, bloqueo_desde, margen_bloqueo, matricula, empleado_id, casillero_id, notificacion_inicio_reserva_enviada, fecha_notificacion_inicio_reserva, coches(marca,modelo), empleados(email,nombre,apellidos,movil)')
+      .in('estado', ['pendiente', 'activa'])
+
+    if (targetReservaId !== null) {
+      query = query.eq("id", targetReservaId)
+    }
+
+    const { data: pendientes, error } = await query
 
     if (error) {
       console.error('Error consultando reservas pendientes para activar:', error)
       return { success: false, error: 'Error consultando reservas pendientes', details: error.message }
+    }
+
+    if (targetReservaId !== null && (!pendientes || pendientes.length === 0)) {
+      return {
+        success: false,
+        error: `La reserva ${targetReservaId} no está pendiente o ya no existe`,
+        targetReservaId,
+      }
     }
 
     if (!pendientes || pendientes.length === 0) {
@@ -754,91 +972,169 @@ export async function activarReservasPendientes(opciones?: { manual?: boolean })
     }
 
     const ids: number[] = []
-  let emailsEnviados = 0
-  let avisosPreviosEnviados = 0
-  let whatsappsEnviados = 0
-  let whatsappsErrores = 0
-  for (const r of pendientes) {
+    let emailsEnviados = 0
+    let avisosPreviosEnviados = 0
+    let whatsappsEnviados = 0
+    let whatsappsErrores = 0
+    let codigosGenerados = 0
+    let erroresAcceso = 0
+    const detalles: string[] = []
+
+    for (const r of pendientes) {
       try {
         const fechaInicio = new Date(r.fecha_inicio)
         const fechaFin = new Date(r.fecha_fin)
+        const estadoReserva = String((r as any).estado || "")
+        const notificacionEnviada = Boolean((r as any).notificacion_inicio_reserva_enviada)
+        const esPendiente = estadoReserva === "pendiente"
+        const esActivaSinNotificar = estadoReserva === "activa" && !notificacionEnviada
 
-        // Activar solo si ya empezó
-        if (fechaInicio <= ahora) {
-        const { data: reservaActivada, error: upErr } = await supabase
-          .from('reservas')
-          .update({ estado: 'activa' })
-          .eq('id', r.id)
-          .eq('estado', 'pendiente')
-          .select('id')
-          .maybeSingle()
-        if (upErr) {
-          console.error('Error activando reserva', r.id, upErr)
+        if (!esPendiente && !esActivaSinNotificar) {
           continue
         }
-        if (!reservaActivada) {
-          console.log('ℹ️ Reserva', r.id, 'ya no está pendiente (posible cancelación), se omite aviso de inicio')
-          continue
-        }
-        ids.push(r.id)
-        // Enviar email si hay datos
-        const email = (r as any).empleados?.email
-        const nombre = (r as any).empleados?.nombre || ''
-        const coche = (r as any).coches
-        if (email && coche && !(r as any).notificacion_inicio_reserva_enviada) {
-          const resEmail = await enviarEmailInicioReserva(
-            email,
-            nombre,
-            { matricula: r.matricula, marca: coche.marca, modelo: coche.modelo },
-            fechaInicio,
-            fechaFin
+
+        const shouldActivateNow = forceWindowBypass || isReservaListaParaActivacion(r, ahora)
+
+        if (esPendiente && !shouldActivateNow) {
+          detalles.push(
+            `Reserva ${r.id} (${r.matricula}) fuera de ventana de activación para ${ahora.toLocaleString("es-ES")}`,
           )
-          if (resEmail.success) {
-            emailsEnviados++
-            await supabase
-              .from('reservas')
-              .update({ 
-                notificacion_inicio_reserva_enviada: true,
-                fecha_notificacion_inicio_reserva: new Date().toISOString()
-              })
-              .eq('id', r.id)
-          }
-        }
-        // Envío de WhatsApp solo en ejecución manual (no cron) y si hay teléfono
-        if (opciones?.manual) {
-          // Obtener teléfono del empleado si existe
-          const telefono = (r as any).empleados?.movil || null
-          if (telefono) {
-            const telefonoTrim = String(telefono).trim()
-            // Validar formato básico: dígitos opcional + y longitud mínima 7
-            if (/^\+?\d{7,15}$/.test(telefonoTrim.replace(/\s|-/g,''))) {
-              const msg = `✅ Inicio de tu reserva (${r.matricula})\nInicio: ${new Date(r.fecha_inicio).toLocaleString('es-ES',{ hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit' })}\nFin previsto: ${new Date(r.fecha_fin).toLocaleString('es-ES',{ hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit' })}\nRecuerda marcarla completada al devolver el vehículo.`
-              console.log('[ActivarPendientes] Intentando WhatsApp a', telefonoTrim, 'reserva', r.id)
-              const wa = await enviarWhatsappInicioReserva(telefonoTrim, msg)
-              if ((wa as any).success) {
-                whatsappsEnviados++
-                console.log('[ActivarPendientes] WhatsApp OK reserva', r.id)
-              } else {
-                whatsappsErrores++
-                console.warn('[ActivarPendientes] WhatsApp fallo reserva', r.id, (wa as any).error)
-              }
-            } else {
-              console.log('ℹ️ Número móvil inválido/ausente para WhatsApp, se omite:', telefono)
-            }
-          }
-        }
-
           continue
         }
 
+        if (esPendiente && forceWindowBypass && !isReservaListaParaActivacion(r, ahora)) {
+          detalles.push(
+            `Reserva ${r.id} (${r.matricula}) forzada manualmente fuera de ventana para ${ahora.toLocaleString("es-ES")}`,
+          )
+        }
+
+        let accesoReserva: Awaited<ReturnType<typeof asegurarCodigoAccesoReserva>> | null = null
+
+        if (esPendiente) {
+          const casillero = await resolverCasilleroReserva({
+            matricula: r.matricula,
+            casilleroId: (r as any).casillero_id || null,
+          })
+
+          if (casillero) {
+            accesoReserva = await asegurarCodigoAccesoReserva({
+              reservaId: r.id,
+              matricula: r.matricula,
+              fechaInicio,
+              fechaFin,
+              casilleroId: casillero.id,
+            })
+          } else {
+            detalles.push(`Reserva ${r.id} (${r.matricula}) sin casillero asociado: se activará y avisará sin código de acceso`)
+          }
+
+          const { data: reservaActivada, error: upErr } = await supabase
+            .from('reservas')
+            .update({ estado: 'activa' })
+            .eq('id', r.id)
+            .eq('estado', 'pendiente')
+            .select('id')
+            .maybeSingle()
+
+          if (upErr) {
+            if (accesoReserva?.created) {
+              await revocarCodigoAccesoReserva({ reservaId: r.id, motivoFin: "error", origen: "system" })
+            }
+            detalles.push(`Reserva ${r.id} (${r.matricula}): error actualizando a activa`)
+            console.error('Error activando reserva', r.id, upErr)
+            continue
+          }
+
+          if (!reservaActivada) {
+            const { data: reservaActual } = await supabase
+              .from("reservas")
+              .select("estado")
+              .eq("id", r.id)
+              .maybeSingle()
+
+            if (accesoReserva?.created && reservaActual?.estado !== "activa") {
+              await revocarCodigoAccesoReserva({ reservaId: r.id, motivoFin: "error", origen: "system" })
+            }
+
+            detalles.push(`Reserva ${r.id} (${r.matricula}): dejó de estar pendiente durante la simulación`)
+            console.log('ℹ️ Reserva', r.id, 'ya no está pendiente (posible cancelación o activación concurrente), se omite aviso de inicio')
+            continue
+          }
+
+          ids.push(r.id)
+        }
+
+        const empleado = (r as any).empleados
+        const coche = (r as any).coches
+        const inicioReserva = await procesarInicioReservaActiva({
+          reservaId: r.id,
+          matricula: r.matricula,
+          casilleroId: (r as any).casillero_id || null,
+          fechaInicio,
+          fechaFin,
+          empleadoEmail: empleado?.email || null,
+          empleadoNombre: [empleado?.nombre, empleado?.apellidos].filter(Boolean).join(" ").trim(),
+          empleadoMovil: empleado?.movil || null,
+          vehiculo: { marca: coche?.marca, modelo: coche?.modelo },
+          manualWhatsapp: Boolean(opciones?.manual),
+          accesoPreparado: accesoReserva || undefined,
+        })
+
+        if (!inicioReserva.success) {
+          erroresAcceso++
+          detalles.push(`Reserva ${r.id} (${r.matricula}): ${inicioReserva.error}`)
+          console.error("Error preparando acceso de reserva activada:", r.id, inicioReserva.error)
+          continue
+        }
+
+        if (inicioReserva.accesoCreado) {
+          codigosGenerados++
+        }
+
+        if (inicioReserva.emailEnviado) {
+          emailsEnviados++
+          await supabase
+            .from('reservas')
+            .update({ 
+              notificacion_inicio_reserva_enviada: true,
+              fecha_notificacion_inicio_reserva: new Date().toISOString()
+            })
+            .eq('id', r.id)
+        } else if (inicioReserva.emailError) {
+          detalles.push(`Reserva ${r.id} (${r.matricula}): email no enviado: ${inicioReserva.emailError}`)
+        }
+
+        whatsappsEnviados += inicioReserva.whatsappsEnviados || 0
+        whatsappsErrores += inicioReserva.whatsappsErrores || 0
       } catch (e) {
+        erroresAcceso++
+        detalles.push(
+          `Reserva ${r.id} (${r.matricula}): ${e instanceof Error ? e.message : "Error inesperado en la simulación"}`,
+        )
         console.error('Error procesando activación individual', r.id, e)
       }
     }
 
-  return { success: true, activadas: ids.length, ids, emailsEnviados, avisosPreviosEnviados, whatsappsEnviados, whatsappsErrores }
+    return {
+      success: true,
+      activadas: ids.length,
+      targetReservaId,
+      forceWindowBypass,
+      ids,
+      emailsEnviados,
+      avisosPreviosEnviados,
+      whatsappsEnviados,
+      whatsappsErrores,
+      codigosGenerados,
+      erroresAcceso,
+      detalles,
+    }
   } catch (error) {
-  console.error('Error en activarReservasPendientes:', error)
-  return { success: false, error: 'Error inesperado activando reservas', details: error instanceof Error ? error.message : 'desconocido' }
+    console.error('Error en activarReservasPendientes:', error)
+    return {
+      success: false,
+      error: 'Error inesperado activando reservas',
+      details: error instanceof Error ? error.message : 'desconocido',
+    }
   }
 }
