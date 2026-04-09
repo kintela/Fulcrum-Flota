@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
+import { supabaseServer as supabase } from "@/lib/supabase-server"
 import {
   activateAccessCode,
   buildSingleOutputMask,
@@ -19,6 +20,66 @@ import {
 
 function noStoreHeaders() {
   return { "Cache-Control": "no-store" }
+}
+
+interface LockerAssignmentRow {
+  id: number
+  codigo: string
+  nombre: string
+  matricula: string | null
+  activo: boolean
+  loxone_control_uuid: string
+  loxone_output_number: number
+  loxone_output_key: string
+  updated_at?: string | null
+}
+
+function mapLockerAssignment(row: LockerAssignmentRow) {
+  return {
+    id: row.id,
+    codigo: row.codigo,
+    nombre: row.nombre,
+    matricula: row.matricula,
+    activo: row.activo,
+    loxoneControlUuid: row.loxone_control_uuid,
+    loxoneOutputNumber: row.loxone_output_number,
+    loxoneOutputKey: row.loxone_output_key,
+    updatedAt: row.updated_at || null,
+  }
+}
+
+function normalizeMatricula(value: unknown) {
+  return String(value || "").trim().toUpperCase()
+}
+
+function buildLockerInternalCode(controlUuid: string, outputNumber: number) {
+  return `LOXONE_${controlUuid.trim().toUpperCase()}_Q${outputNumber}`
+}
+
+async function loadLockerAdminData() {
+  const [{ data: cars, error: carsError }, { data: lockerAssignments, error: lockersError }] = await Promise.all([
+    supabase.from("coches").select("matricula, marca, modelo, asignadoa, donante, eliminado").order("matricula", {
+      ascending: true,
+    }),
+    supabase
+      .from("casilleros")
+      .select("id, codigo, nombre, matricula, activo, loxone_control_uuid, loxone_output_number, loxone_output_key, updated_at")
+      .order("loxone_control_uuid", { ascending: true })
+      .order("loxone_output_number", { ascending: true }),
+  ])
+
+  if (carsError) {
+    throw new Error(`No se pudieron cargar los coches: ${carsError.message}`)
+  }
+
+  if (lockersError) {
+    throw new Error(`No se pudieron cargar los casilleros: ${lockersError.message}`)
+  }
+
+  return {
+    cars: (cars || []).filter((car) => car.eliminado !== true && car.donante !== true),
+    lockerAssignments: ((lockerAssignments || []) as LockerAssignmentRow[]).map(mapLockerAssignment),
+  }
 }
 
 async function requireAdmin() {
@@ -55,6 +116,7 @@ export async function GET() {
   if (!auth.ok) return auth.response
 
   try {
+    const adminData = await loadLockerAdminData()
     const config = getLoxoneConfig()
     const apiKeyInfo = await getLoxoneApiKeyInfo()
 
@@ -65,6 +127,8 @@ export async function GET() {
           message: "Conectividad básica OK. Faltan credenciales para descargar la estructura del Miniserver.",
           connection: buildConnectionPayload(config.baseUrl, false, config.username),
           apiKeyInfo,
+          cars: adminData.cars,
+          lockerAssignments: adminData.lockerAssignments,
           accessControls: [],
         },
         { headers: noStoreHeaders() },
@@ -88,6 +152,8 @@ export async function GET() {
           controlCount: Object.keys(structure.controls || {}).length,
           msInfo: structure.msInfo || null,
         },
+        cars: adminData.cars,
+        lockerAssignments: adminData.lockerAssignments,
         accessControls,
       },
       { headers: noStoreHeaders() },
@@ -265,6 +331,97 @@ export async function POST(request: NextRequest) {
           loxoneCode: result.code,
           value: result.value,
           rawValue: result.rawValue,
+        },
+        { headers: noStoreHeaders() },
+      )
+    }
+
+    if (action === "saveLockerVehicle") {
+      const outputNumber = Number(body?.outputNumber)
+      const outputKey = String(body?.outputKey || `q${outputNumber}`).trim() || `q${outputNumber}`
+      const outputLabel = String(body?.outputLabel || outputKey).trim() || outputKey
+      const matricula = normalizeMatricula(body?.matricula)
+
+      if (!Number.isInteger(outputNumber) || outputNumber < 1 || outputNumber > 31) {
+        return NextResponse.json(
+          { success: false, error: "outputNumber debe estar entre 1 y 31" },
+          { status: 400, headers: noStoreHeaders() },
+        )
+      }
+
+      if (matricula) {
+        const { data: car, error: carError } = await supabase
+          .from("coches")
+          .select("matricula, marca, modelo, donante, eliminado")
+          .eq("matricula", matricula)
+          .maybeSingle()
+
+        if (carError) {
+          throw new Error(`No se pudo validar el coche ${matricula}: ${carError.message}`)
+        }
+
+        if (!car) {
+          return NextResponse.json(
+            { success: false, error: `No existe ningún coche con matrícula ${matricula}` },
+            { status: 400, headers: noStoreHeaders() },
+          )
+        }
+
+        if (car.eliminado === true) {
+          return NextResponse.json(
+            { success: false, error: `El coche ${matricula} está eliminado y no se puede asociar al casillero` },
+            { status: 400, headers: noStoreHeaders() },
+          )
+        }
+
+        if (car.donante === true) {
+          return NextResponse.json(
+            { success: false, error: `El coche ${matricula} es donante y no se puede asociar a un casillero` },
+            { status: 400, headers: noStoreHeaders() },
+          )
+        }
+      }
+
+      const { data: lockerAssignment, error: lockerError } = await supabase
+        .from("casilleros")
+        .upsert(
+          {
+            codigo: buildLockerInternalCode(controlUuid, outputNumber),
+            nombre: outputLabel,
+            matricula: matricula || null,
+            activo: true,
+            loxone_control_uuid: controlUuid,
+            loxone_output_number: outputNumber,
+            loxone_output_key: outputKey,
+          },
+          { onConflict: "loxone_control_uuid,loxone_output_number" },
+        )
+        .select("id, codigo, nombre, matricula, activo, loxone_control_uuid, loxone_output_number, loxone_output_key, updated_at")
+        .single()
+
+      if (lockerError) {
+        if (lockerError.code === "23505") {
+          return NextResponse.json(
+            {
+              success: false,
+              error: matricula
+                ? `La matrícula ${matricula} ya está asociada a otro casillero`
+                : "Ya existe un casillero con esos datos",
+            },
+            { status: 409, headers: noStoreHeaders() },
+          )
+        }
+
+        throw new Error(`No se pudo guardar la asociación del casillero: ${lockerError.message}`)
+      }
+
+      return NextResponse.json(
+        {
+          success: true,
+          message: matricula
+            ? `Casillero ${outputLabel} asociado a ${matricula}`
+            : `Casillero ${outputLabel} actualizado sin coche asociado`,
+          lockerAssignment: mapLockerAssignment(lockerAssignment as LockerAssignmentRow),
         },
         { headers: noStoreHeaders() },
       )

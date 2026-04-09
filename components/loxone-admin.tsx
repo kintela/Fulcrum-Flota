@@ -40,6 +40,27 @@ interface AccessHistoryEntry {
   extAuthority?: string
 }
 
+interface LockerCarOption {
+  matricula: string
+  marca?: string | null
+  modelo?: string | null
+  asignadoa?: string | number | null
+  donante?: boolean | null
+  eliminado?: boolean | null
+}
+
+interface LockerAssignment {
+  id: number
+  codigo: string
+  nombre: string
+  matricula: string | null
+  activo: boolean
+  loxoneControlUuid: string
+  loxoneOutputNumber: number
+  loxoneOutputKey: string
+  updatedAt?: string | null
+}
+
 interface ConnectionData {
   success: boolean
   message?: string
@@ -62,6 +83,8 @@ interface ConnectionData {
   loxoneStatus?: number
   loxoneCode?: number | null
   loxoneBody?: string | null
+  cars?: LockerCarOption[]
+  lockerAssignments?: LockerAssignment[]
 }
 
 type LockerFeedbackTone = "success" | "error" | "info"
@@ -74,6 +97,11 @@ function formatDateTimeInputValue(date: Date) {
 function formatUnixDateTime(seconds?: number) {
   if (!seconds) return "-"
   return new Date(seconds * 1000).toLocaleString("es-ES")
+}
+
+function formatSavedAt(value?: string | null) {
+  if (!value) return "-"
+  return new Date(value).toLocaleString("es-ES")
 }
 
 function outputMaskIncludes(mask: number, outputNumber: number) {
@@ -114,6 +142,19 @@ function sanitizeLoxoneAccessCodeNameForLookup(name: string) {
     .replace(/-+/g, "-")
 
   return normalized || "codigo-acceso"
+}
+
+function hasPermanentAssignment(value: unknown) {
+  if (value === null || value === undefined) return false
+  if (typeof value === "string") return value.trim() !== ""
+  return true
+}
+
+function getCarOptionLabel(car: LockerCarOption | null | undefined) {
+  if (!car?.matricula) return "-"
+
+  const description = [car.marca, car.modelo].filter(Boolean).join(" ")
+  return description ? `${car.matricula} · ${description}` : car.matricula
 }
 
 function getCodeTypeLabel(type: number) {
@@ -187,6 +228,10 @@ export default function LoxoneAdmin() {
   const [quickAssignMode, setQuickAssignMode] = useState("24h")
   const [lockerCodeValues, setLockerCodeValues] = useState<Record<number, string>>({})
   const [lockerFeedback, setLockerFeedback] = useState<Record<number, { tone: LockerFeedbackTone; message: string }>>({})
+  const [cars, setCars] = useState<LockerCarOption[]>([])
+  const [lockerAssignments, setLockerAssignments] = useState<LockerAssignment[]>([])
+  const [lockerVehicleSelections, setLockerVehicleSelections] = useState<Record<number, string>>({})
+  const [lockerVehicleFeedback, setLockerVehicleFeedback] = useState<Record<number, { tone: LockerFeedbackTone; message: string }>>({})
 
   const accessControls = connection?.accessControls || []
   const selectedControl = accessControls.find((control) => control.uuid === selectedControlUuid) || null
@@ -195,6 +240,18 @@ export default function LoxoneAdmin() {
   const filteredCodes = codes.filter((code) =>
     selectedOutputNumber ? outputMaskIncludes(code.outputs, selectedOutput) : true,
   )
+  const lockerAssignmentsByOutput = useMemo(() => {
+    const entries = lockerAssignments
+      .filter((assignment) => assignment.loxoneControlUuid === selectedControlUuid)
+      .map((assignment) => [assignment.loxoneOutputNumber, assignment] as const)
+    return new Map(entries)
+  }, [lockerAssignments, selectedControlUuid])
+  const lockerAssignmentByMatricula = useMemo(() => {
+    const entries = lockerAssignments
+      .filter((assignment) => assignment.matricula)
+      .map((assignment) => [String(assignment.matricula), assignment] as const)
+    return new Map(entries)
+  }, [lockerAssignments])
 
   useEffect(() => {
     void loadConnection()
@@ -228,13 +285,32 @@ export default function LoxoneAdmin() {
       setHistory([])
       setLockerCodeValues({})
       setLockerFeedback({})
+      setLockerVehicleSelections({})
+      setLockerVehicleFeedback({})
       return
     }
 
     setLockerCodeValues({})
     setLockerFeedback({})
+    setLockerVehicleFeedback({})
     void handleLoadCodes()
   }, [selectedControlUuid])
+
+  useEffect(() => {
+    if (!selectedControlUuid) {
+      setLockerVehicleSelections({})
+      return
+    }
+
+    const nextSelections: Record<number, string> = {}
+    lockerAssignments
+      .filter((assignment) => assignment.loxoneControlUuid === selectedControlUuid)
+      .forEach((assignment) => {
+        nextSelections[assignment.loxoneOutputNumber] = assignment.matricula || ""
+      })
+
+    setLockerVehicleSelections(nextSelections)
+  }, [selectedControlUuid, lockerAssignments])
 
   async function readJson(response: Response) {
     try {
@@ -256,6 +332,8 @@ export default function LoxoneAdmin() {
       })
       const payload = await readJson(response)
       setConnection(payload)
+      setCars(Array.isArray(payload.cars) ? (payload.cars as LockerCarOption[]) : [])
+      setLockerAssignments(Array.isArray(payload.lockerAssignments) ? (payload.lockerAssignments as LockerAssignment[]) : [])
       if (!response.ok || payload.success === false) {
         setActionError(payload.error || "No se pudo comprobar la conexión con Loxone")
         return
@@ -328,6 +406,18 @@ export default function LoxoneAdmin() {
       ...current,
       [outputNumber]: value,
     }))
+  }
+
+  function updateLockerVehicleSelection(outputNumber: number, value: string) {
+    setLockerVehicleSelections((current) => ({
+      ...current,
+      [outputNumber]: value.toUpperCase(),
+    }))
+    setLockerVehicleFeedback((current) => {
+      const next = { ...current }
+      delete next[outputNumber]
+      return next
+    })
   }
 
   async function handleLoadCodes(options?: { preserveStatus?: boolean; silentSuccess?: boolean }) {
@@ -468,6 +558,82 @@ export default function LoxoneAdmin() {
       [outputNumber]: {
         tone: "error",
         message: "Loxone respondió OK, pero el código no aparece activo en la lista real del casillero.",
+      },
+    }))
+  }
+
+  async function handleSaveLockerVehicle(outputNumber: number) {
+    if (!selectedControlUuid || !selectedControl) return
+
+    const matricula = (lockerVehicleSelections[outputNumber] || "").trim().toUpperCase()
+    const outputLabel = getOutputLabel(selectedControl, outputNumber)
+
+    setLockerVehicleFeedback((current) => {
+      const next = { ...current }
+      delete next[outputNumber]
+      return next
+    })
+
+    const result = await runAction(
+      "saveLockerVehicle",
+      {
+        controlUuid: selectedControlUuid,
+        outputNumber,
+        outputKey: `q${outputNumber}`,
+        outputLabel,
+        controlName: selectedControl.name,
+        matricula: matricula || null,
+      },
+      {
+        busyKey: `saveLockerVehicle-${outputNumber}`,
+      },
+    )
+
+    if (!result.ok) {
+      setLockerVehicleFeedback((current) => ({
+        ...current,
+        [outputNumber]: {
+          tone: "error",
+          message: result.error,
+        },
+      }))
+      return
+    }
+
+    const savedAssignment = result.payload.lockerAssignment as LockerAssignment | undefined
+    if (savedAssignment) {
+      setLockerAssignments((current) => {
+        const next = current.filter(
+          (assignment) =>
+            !(
+              assignment.loxoneControlUuid === savedAssignment.loxoneControlUuid &&
+              assignment.loxoneOutputNumber === savedAssignment.loxoneOutputNumber
+            ),
+        )
+
+        return [...next, savedAssignment].sort((a, b) => {
+          if (a.loxoneControlUuid !== b.loxoneControlUuid) {
+            return a.loxoneControlUuid.localeCompare(b.loxoneControlUuid)
+          }
+          return a.loxoneOutputNumber - b.loxoneOutputNumber
+        })
+      })
+    }
+
+    const selectedCar = cars.find((car) => car.matricula === savedAssignment?.matricula)
+    const successMessage = savedAssignment?.matricula
+      ? `Coche asociado: ${getCarOptionLabel(selectedCar || { matricula: savedAssignment.matricula })}.`
+      : "Casillero guardado sin coche asociado."
+
+    setLockerVehicleSelections((current) => ({
+      ...current,
+      [outputNumber]: savedAssignment?.matricula || "",
+    }))
+    setLockerVehicleFeedback((current) => ({
+      ...current,
+      [outputNumber]: {
+        tone: "success",
+        message: successMessage,
       },
     }))
   }
@@ -683,7 +849,13 @@ export default function LoxoneAdmin() {
                 const outputCodes = codes.filter((code) => outputMaskIncludes(code.outputs, output))
                 const activeCodes = outputCodes.filter((code) => code.isActive)
                 const latestActiveCode = activeCodes[0] || null
+                const currentAssignment = lockerAssignmentsByOutput.get(output) || null
+                const selectedMatricula = lockerVehicleSelections[output] || ""
+                const assignedCar = cars.find((car) => car.matricula === (currentAssignment?.matricula || selectedMatricula)) || null
+                const currentSelectedCarMissing =
+                  !!selectedMatricula && !cars.some((car) => car.matricula === selectedMatricula)
                 const feedback = lockerFeedback[output]
+                const vehicleFeedback = lockerVehicleFeedback[output]
                 return (
                   <div key={output} className="space-y-3 rounded-lg border p-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -695,8 +867,78 @@ export default function LoxoneAdmin() {
                         <Badge variant={activeCodes.length > 0 ? "default" : "secondary"}>
                           {activeCodes.length > 0 ? `${activeCodes.length} activo${activeCodes.length > 1 ? "s" : ""}` : "Sin códigos activos"}
                         </Badge>
+                        <Badge variant={currentAssignment?.matricula ? "secondary" : "outline"}>
+                          {currentAssignment?.matricula || "Sin coche"}
+                        </Badge>
                         <Badge variant="outline">{output === 1 ? "PIN directo" : `${output} + confirmar + PIN`}</Badge>
                       </div>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+                      <select
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        value={selectedMatricula}
+                        onChange={(event) => updateLockerVehicleSelection(output, event.target.value)}
+                        disabled={busyAction !== null}
+                      >
+                        <option value="">Sin coche asociado</option>
+                        {currentSelectedCarMissing && (
+                          <option value={selectedMatricula}>
+                            {selectedMatricula} · no disponible en el catálogo actual
+                          </option>
+                        )}
+                        {cars.map((car) => {
+                          const existingAssignment = lockerAssignmentByMatricula.get(car.matricula)
+                          const isCurrentSelection = selectedMatricula === car.matricula || currentAssignment?.matricula === car.matricula
+                          const assignedElsewhere =
+                            existingAssignment &&
+                            !(
+                              existingAssignment.loxoneControlUuid === selectedControlUuid &&
+                              existingAssignment.loxoneOutputNumber === output
+                            )
+                          const disabled = Boolean(assignedElsewhere && !isCurrentSelection)
+                          const labelParts = [getCarOptionLabel(car)]
+
+                          if (hasPermanentAssignment(car.asignadoa)) {
+                            labelParts.push("asignado permanente")
+                          }
+
+                          if (assignedElsewhere) {
+                            labelParts.push(
+                              `ligado a ${existingAssignment.nombre || `q${existingAssignment.loxoneOutputNumber}`}`,
+                            )
+                          }
+
+                          return (
+                            <option key={car.matricula} value={car.matricula} disabled={disabled}>
+                              {labelParts.join(" · ")}
+                            </option>
+                          )
+                        })}
+                      </select>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => void handleSaveLockerVehicle(output)}
+                        disabled={!selectedControlUuid || busyAction !== null}
+                      >
+                        {isBusy(`saveLockerVehicle-${output}`) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        Guardar coche
+                      </Button>
+                    </div>
+
+                    <div className="text-sm text-muted-foreground">
+                      {currentAssignment?.matricula ? (
+                        <>
+                          Coche asociado:{" "}
+                          {getCarOptionLabel(
+                            assignedCar || { matricula: currentAssignment.matricula },
+                          )}{" "}
+                          · guardado {formatSavedAt(currentAssignment.updatedAt)}
+                        </>
+                      ) : (
+                        "Todavía no hay ningún coche asociado a este casillero en la tabla casilleros."
+                      )}
                     </div>
 
                     <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center">
@@ -731,6 +973,20 @@ export default function LoxoneAdmin() {
                         </div>
                       )}
                     </div>
+
+                    {vehicleFeedback && (
+                      <div
+                        className={
+                          vehicleFeedback.tone === "success"
+                            ? "rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"
+                            : vehicleFeedback.tone === "error"
+                              ? "rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+                              : "rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800"
+                        }
+                      >
+                        {vehicleFeedback.message}
+                      </div>
+                    )}
 
                     {feedback && (
                       <div
