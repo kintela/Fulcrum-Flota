@@ -9,11 +9,14 @@ DECLARE
   t text;
   tablas text[] := ARRAY[
     'alquileres',
+    'casilleros',
+    'casilleros_eventos',
     'coches',
     'empleados',
     'itvs',
     'mantenimientos',
     'reservas',
+    'reservas_codigos_acceso',
     'seguros',
     'solred_coches',
     'tarjetassolred',
@@ -37,11 +40,14 @@ FROM pg_tables
 WHERE schemaname = 'public'
   AND tablename IN (
     'alquileres',
+    'casilleros',
+    'casilleros_eventos',
     'coches',
     'empleados',
     'itvs',
     'mantenimientos',
     'reservas',
+    'reservas_codigos_acceso',
     'seguros',
     'solred_coches',
     'tarjetassolred',
