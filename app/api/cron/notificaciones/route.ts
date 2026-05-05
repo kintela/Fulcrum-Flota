@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verificarReservasVencidas } from '@/app/actions/notificaciones'
 import { probarConfiguracionEmail, enviarEmailPrueba } from '@/lib/email'
+import { getServerSession } from 'next-auth/next'
+import { authOptions } from '@/lib/auth'
+import { obtenerEmpleadoPorEmail } from '@/lib/roles'
 
 export async function GET(request: NextRequest) {
   try {
@@ -92,8 +95,56 @@ export async function POST(request: NextRequest) {
           ? `Email de prueba enviado exitosamente a ${resultado.destinatario}` 
           : `Error enviando email: ${resultado.error}`,
         data: resultado.success ? {
+          from: resultado.from,
+          to: resultado.to,
+          subject: resultado.subject,
           messageId: resultado.messageId,
-          destinatario: resultado.destinatario
+          destinatario: resultado.destinatario,
+          accepted: resultado.accepted,
+          rejected: resultado.rejected,
+          response: resultado.response,
+          timestamp: resultado.timestamp,
+        } : undefined,
+        timestamp: new Date().toISOString(),
+        source: 'manual'
+      }, { headers: { 'Cache-Control': 'no-store' } })
+    }
+
+    if (body.action === 'send-test-auth-user') {
+      const session = await getServerSession(authOptions)
+
+      if (!session?.user?.email) {
+        return NextResponse.json({
+          success: false,
+          message: 'Usuario no autenticado',
+          timestamp: new Date().toISOString(),
+          source: 'manual'
+        }, { status: 401, headers: { 'Cache-Control': 'no-store' } })
+      }
+
+      const empleado = await obtenerEmpleadoPorEmail(session.user.email)
+      const destinatario = empleado?.email || session.user.email
+      const nombreDestinatario = empleado
+        ? `${empleado.nombre || ''} ${empleado.apellidos || ''}`.trim() || session.user.name || destinatario
+        : session.user.name || destinatario
+
+      const resultado = await enviarEmailPrueba(destinatario, nombreDestinatario)
+
+      return NextResponse.json({
+        success: resultado.success,
+        message: resultado.success
+          ? `Email de prueba enviado a ${resultado.destinatario}`
+          : `Error enviando email: ${resultado.error}`,
+        data: resultado.success ? {
+          from: resultado.from,
+          to: resultado.to,
+          subject: resultado.subject,
+          messageId: resultado.messageId,
+          destinatario: resultado.destinatario,
+          accepted: resultado.accepted,
+          rejected: resultado.rejected,
+          response: resultado.response,
+          timestamp: resultado.timestamp,
         } : undefined,
         timestamp: new Date().toISOString(),
         source: 'manual'

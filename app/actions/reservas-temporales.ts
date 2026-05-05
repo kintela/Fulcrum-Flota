@@ -2,15 +2,16 @@
 
 import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { enviarEmailInicioReserva } from "@/lib/email"
+import { notificarQuejaReservaAdministradores } from "@/lib/reserva-quejas"
 import { sendWhatsAppMessage, formatSpanishPhone } from "@/lib/whatsapp"
+import { getServerSession } from "next-auth/next"
+import { authOptions } from "@/lib/auth"
 
 // Helper para envío WhatsApp inicio (manual únicamente)
 async function enviarWhatsappInicioReserva(destino: string, mensaje: string) {
   const to = formatSpanishPhone(destino)
   return await sendWhatsAppMessage({ to, message: mensaje })
 }
-import { getServerSession } from "next-auth/next"
-import { authOptions } from "@/lib/auth"
 
 export interface CrearReservaData {
   matricula: string
@@ -113,8 +114,15 @@ async function obtenerReservaUsuarioPorId(
     .from("reservas")
     .select(`
       *,
+      coches (
+        matricula,
+        marca,
+        modelo
+      ),
       empleados (
         id,
+        nombre,
+        apellidos,
         email
       )
     `)
@@ -451,6 +459,27 @@ export async function cancelarReserva(
       }
     }
 
+    if (q) {
+      const payload = {
+        accion: "cancelada",
+        queja: q,
+        observacion: obs || null,
+        estadoLimpieza: estadoLimpieza || null,
+        reserva: reserva,
+        reportadaPor: empleadosSesion.principal || null,
+      } as const
+
+      void notificarQuejaReservaAdministradores(payload)
+        .then((notificacion) => {
+          if (!notificacion.success) {
+            console.error(`❌ No se pudo notificar la queja de la reserva ${reservaId}:`, notificacion.error)
+          }
+        })
+        .catch((error) => {
+          console.error(`❌ Error inesperado notificando la queja de la reserva ${reservaId}:`, error)
+        })
+    }
+
     return {
       success: true,
       message: "Reserva cancelada exitosamente"
@@ -517,6 +546,28 @@ export async function completarReserva(
       console.error('Error completando reserva:', updateError)
       return { success: false, error: 'Error al completar la reserva' }
     }
+
+    if (q) {
+      const payload = {
+        accion: "completada",
+        queja: q,
+        observacion: obs || null,
+        estadoLimpieza: estadoLimpieza || null,
+        reserva: reserva,
+        reportadaPor: empleadosSesion.principal || null,
+      } as const
+
+      void notificarQuejaReservaAdministradores(payload)
+        .then((notificacion) => {
+          if (!notificacion.success) {
+            console.error(`❌ No se pudo notificar la queja de la reserva ${reservaId}:`, notificacion.error)
+          }
+        })
+        .catch((error) => {
+          console.error(`❌ Error inesperado notificando la queja de la reserva ${reservaId}:`, error)
+        })
+    }
+
     return { success: true, message: 'Reserva marcada como completada' }
   } catch (error) {
     console.error('Error en completarReserva:', error)

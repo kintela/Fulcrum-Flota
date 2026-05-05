@@ -3,6 +3,7 @@
 import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
+import { notificarQuejaReservaAdministradores } from "@/lib/reserva-quejas"
 
 export interface ReservaTemporal {
   id: number
@@ -284,7 +285,25 @@ export async function completarReservaTemporalAdmin(
     // Verificar que la reserva existe
     const { data: reserva, error: reservaError } = await supabase
       .from("reservas")
-      .select("id, estado, fecha_fin, observaciones, quejas")
+      .select(`
+        id,
+        estado,
+        matricula,
+        fecha_inicio,
+        fecha_fin,
+        observaciones,
+        quejas,
+        coches (
+          matricula,
+          marca,
+          modelo
+        ),
+        empleados (
+          nombre,
+          apellidos,
+          email
+        )
+      `)
       .eq('id', reservaId)
       .single()
 
@@ -348,6 +367,33 @@ export async function completarReservaTemporalAdmin(
         success: false,
         error: "Error al completar la reserva temporal"
       }
+    }
+
+    if (q) {
+      const { data: adminReporter } = await supabase
+        .from("empleados")
+        .select("nombre, apellidos, email")
+        .eq("email", session.user.email)
+        .maybeSingle()
+
+      const payload = {
+        accion: "completada",
+        queja: q,
+        observacion: obs || null,
+        estadoLimpieza: estadoLimpieza || null,
+        reserva: reserva as any,
+        reportadaPor: adminReporter || { email: session.user.email },
+      } as const
+
+      void notificarQuejaReservaAdministradores(payload)
+        .then((notificacion) => {
+          if (!notificacion.success) {
+            console.error(`❌ No se pudo notificar la queja de la reserva ${reservaId}:`, notificacion.error)
+          }
+        })
+        .catch((error) => {
+          console.error(`❌ Error inesperado notificando la queja de la reserva ${reservaId}:`, error)
+        })
     }
 
     return {

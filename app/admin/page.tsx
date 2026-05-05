@@ -3,10 +3,57 @@
 import { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Button } from '@/components/ui/button'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import NotificacionesAdmin from '@/components/notificaciones-admin'
 import { Bell, Settings, Database, Mail } from 'lucide-react'
 
 export default function AdminPage() {
+  const [probandoEmail, setProbandoEmail] = useState(false)
+  const [resultadoEmail, setResultadoEmail] = useState<null | {
+    success: boolean
+    message: string
+    data?: {
+      from?: string
+      to?: string
+      subject?: string
+      destinatario?: string
+      messageId?: string
+      accepted?: string[]
+      rejected?: string[]
+      response?: string
+      timestamp?: string
+    }
+  }>(null)
+
+  const enviarPruebaEmailEmpleado = async () => {
+    setProbandoEmail(true)
+    try {
+      const response = await fetch('/api/cron/notificaciones', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: 'send-test-auth-user' })
+      })
+
+      const data = await response.json()
+      setResultadoEmail({
+        success: Boolean(data.success),
+        message: data.message || 'Respuesta sin mensaje',
+        data: data.data,
+      })
+    } catch (error) {
+      setResultadoEmail({
+        success: false,
+        message: 'Error enviando email de prueba al empleado autenticado',
+      })
+    } finally {
+      setProbandoEmail(false)
+    }
+  }
+
   return (
     <div className="container mx-auto p-6">
       <div className="flex items-center justify-between mb-6">
@@ -69,6 +116,80 @@ export default function AdminPage() {
                       <div><code>EMAIL_USER</code>: Usuario de email corporativo</div>
                       <div><code>EMAIL_PASSWORD</code>: Contraseña de aplicación</div>
                     </div>
+                  </div>
+
+                  <div className="rounded-lg border p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-lg font-semibold">Prueba de envío</h3>
+                        <p className="text-sm text-muted-foreground">
+                          Envía un correo de prueba al email del empleado autenticado.
+                        </p>
+                      </div>
+                      <Badge variant="outline">SMTP</Badge>
+                    </div>
+
+                    <Button onClick={enviarPruebaEmailEmpleado} disabled={probandoEmail}>
+                      <Mail className="mr-2 h-4 w-4" />
+                      {probandoEmail ? 'Enviando prueba...' : 'Enviar prueba a mi empleado'}
+                    </Button>
+
+                    {resultadoEmail && (
+                      <Alert variant={resultadoEmail.success ? 'default' : 'destructive'}>
+                        <Mail className="h-4 w-4" />
+                        <AlertTitle>
+                          {resultadoEmail.success ? 'Correo de prueba enviado' : 'Error en la prueba'}
+                        </AlertTitle>
+                        <AlertDescription>
+                          <div>{resultadoEmail.message}</div>
+                          {resultadoEmail.data?.destinatario && (
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              Destinatario: {resultadoEmail.data.destinatario}
+                            </div>
+                          )}
+                          {resultadoEmail.data?.from && (
+                            <div className="mt-1 text-xs text-muted-foreground break-all">
+                              From: {resultadoEmail.data.from}
+                            </div>
+                          )}
+                          {resultadoEmail.data?.to && (
+                            <div className="mt-1 text-xs text-muted-foreground break-all">
+                              To: {resultadoEmail.data.to}
+                            </div>
+                          )}
+                          {resultadoEmail.data?.subject && (
+                            <div className="mt-1 text-xs text-muted-foreground break-all">
+                              Subject: {resultadoEmail.data.subject}
+                            </div>
+                          )}
+                          {resultadoEmail.data?.messageId && (
+                            <div className="mt-1 text-xs text-muted-foreground break-all">
+                              Message-ID: {resultadoEmail.data.messageId}
+                            </div>
+                          )}
+                          {resultadoEmail.data?.accepted && (
+                            <div className="mt-1 text-xs text-muted-foreground break-all">
+                              Accepted: {resultadoEmail.data.accepted.join(', ') || '[]'}
+                            </div>
+                          )}
+                          {resultadoEmail.data?.rejected && (
+                            <div className="mt-1 text-xs text-muted-foreground break-all">
+                              Rejected: {resultadoEmail.data.rejected.join(', ') || '[]'}
+                            </div>
+                          )}
+                          {resultadoEmail.data?.response && (
+                            <div className="mt-1 text-xs text-muted-foreground break-all">
+                              SMTP: {resultadoEmail.data.response}
+                            </div>
+                          )}
+                          {resultadoEmail.data?.timestamp && (
+                            <div className="mt-1 text-xs text-muted-foreground break-all">
+                              Hora: {resultadoEmail.data.timestamp}
+                            </div>
+                          )}
+                        </AlertDescription>
+                      </Alert>
+                    )}
                   </div>
                 </div>
               </div>

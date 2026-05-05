@@ -284,20 +284,26 @@ export async function probarConfiguracionEmail() {
 }
 
 // Función para enviar email de prueba
-export async function enviarEmailPrueba() {
+export async function enviarEmailPrueba(destinatario?: string, nombreDestinatario?: string) {
   try {
     const transporter = createEmailTransporter();
+    const emailDestino = destinatario || emailConfig.auth.user
+    const nombre = nombreDestinatario || emailDestino
+    const fechaPrueba = new Date()
+    const subject = `🧪 Prueba del Sistema de Notificaciones - Fulcrum Flota`
 
     const mailOptions = {
       from: {
         name: fromName,
         address: fromEmail
       },
-      to: emailConfig.auth.user, // Enviar a nosotros mismos
-      subject: '🧪 Prueba del Sistema de Notificaciones - Fulcrum Flota',
+      to: emailDestino,
+      subject,
       text: `
 Prueba del Sistema de Notificaciones
 ====================================
+
+Hola ${nombre},
 
 Este es un email de prueba del sistema de notificaciones automáticas de Fulcrum Flota.
 
@@ -309,7 +315,7 @@ Si recibe este mensaje, significa que:
 Detalles técnicos:
 - Servidor SMTP: ${emailConfig.host}:${emailConfig.port}
 - Usuario: ${emailConfig.auth.user}
-- Fecha de prueba: ${new Date().toLocaleString('es-ES')}
+- Fecha de prueba: ${fechaPrueba.toLocaleString('es-ES')}
 
 ---
 Fulcrum Flota
@@ -342,6 +348,8 @@ Sistema de Notificaciones Automáticas
             Si recibe este mensaje, el sistema de notificaciones está funcionando correctamente.
         </div>
         
+        <p>Hola <strong>${nombre}</strong>,</p>
+        
         <p>Este es un email de prueba del sistema de notificaciones automáticas de Fulcrum Flota.</p>
         
         <h3>✅ Verificaciones Completadas:</h3>
@@ -356,7 +364,7 @@ Sistema de Notificaciones Automáticas
             <ul>
                 <li><strong>Servidor SMTP:</strong> ${emailConfig.host}:${emailConfig.port}</li>
                 <li><strong>Usuario:</strong> ${emailConfig.auth.user}</li>
-                <li><strong>Fecha de prueba:</strong> ${new Date().toLocaleString('es-ES')}</li>
+                <li><strong>Fecha de prueba:</strong> ${fechaPrueba.toLocaleString('es-ES')}</li>
             </ul>
         </div>
         
@@ -373,12 +381,28 @@ Sistema de Notificaciones Automáticas
     };
 
     const resultado = await transporter.sendMail(mailOptions);
-    console.log('✅ Email de prueba enviado exitosamente:', resultado.messageId);
+    console.log('✅ Email de prueba enviado exitosamente:', {
+      from: `${fromName} <${fromEmail}>`,
+      to: emailDestino,
+      subject,
+      messageId: resultado.messageId,
+      accepted: resultado.accepted,
+      rejected: resultado.rejected,
+      response: resultado.response,
+      at: fechaPrueba.toISOString(),
+    });
     
     return {
       success: true,
       messageId: resultado.messageId,
-      destinatario: emailConfig.auth.user
+      destinatario: emailDestino,
+      from: `${fromName} <${fromEmail}>`,
+      to: emailDestino,
+      subject,
+      accepted: resultado.accepted,
+      rejected: resultado.rejected,
+      response: resultado.response,
+      timestamp: fechaPrueba.toISOString(),
     };
 
   } catch (error) {
@@ -701,6 +725,147 @@ export async function enviarEmailAlertasMantenimiento(
     return {
       success: false,
       error: error instanceof Error ? error.message : "Error enviando email de alertas mantenimiento",
+    }
+  }
+}
+
+export async function enviarEmailQuejaReservaAdministradores(
+  emailDestino: string | string[],
+  payload: {
+    accion: "cancelada" | "completada"
+    reservaId: number
+    matricula: string
+    marca?: string | null
+    modelo?: string | null
+    fechaInicio?: string | null
+    fechaFin?: string | null
+    titularNombre?: string | null
+    titularEmail?: string | null
+    reportadaPorNombre?: string | null
+    reportadaPorEmail?: string | null
+    observacion?: string | null
+    estadoLimpieza?: string | null
+    queja: string
+  }
+) {
+  try {
+    const transporter = createEmailTransporter()
+
+    const formatDateTime = (fecha?: string | null) => {
+      if (!fecha) return "N/D"
+      const date = new Date(fecha)
+      if (Number.isNaN(date.getTime())) return "N/D"
+      return date.toLocaleString("es-ES", {
+        timeZone: "Europe/Madrid",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    }
+
+    const accionTexto = payload.accion === "cancelada" ? "cancelar" : "completar"
+    const vehiculoTexto = [payload.marca, payload.modelo].filter(Boolean).join(" ").trim()
+    const observacion = payload.observacion?.trim() || "Sin observaciones adicionales"
+    const limpieza = payload.estadoLimpieza?.trim() || "Sin informar"
+    const titular = payload.titularNombre?.trim() || "No disponible"
+    const reportadaPor = payload.reportadaPorNombre?.trim() || "No disponible"
+
+    const asunto = `📝 Queja en reserva ${payload.accion} - ${payload.matricula}`
+
+    const contenidoHTML = `
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Queja en reserva</title>
+      </head>
+      <body style="font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#1f2937;background:#f3f4f6;padding:20px;">
+        <div style="max-width:680px;margin:0 auto;background:#ffffff;border-radius:12px;padding:24px;box-shadow:0 4px 16px rgba(0,0,0,0.08);">
+          <h2 style="margin:0 0 8px;color:#b91c1c;">Nueva queja registrada en una reserva</h2>
+          <p style="margin:0 0 16px;color:#4b5563;">Se ha guardado una queja al <strong>${accionTexto}</strong> una reserva. Revisadla para tomar nota.</p>
+
+          <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:16px;">
+            <tbody>
+              <tr><td style="padding:8px 0;font-weight:700;width:180px;">Reserva</td><td style="padding:8px 0;">#${payload.reservaId}</td></tr>
+              <tr><td style="padding:8px 0;font-weight:700;">Matrícula</td><td style="padding:8px 0;">${payload.matricula}</td></tr>
+              <tr><td style="padding:8px 0;font-weight:700;">Vehículo</td><td style="padding:8px 0;">${vehiculoTexto || "N/D"}</td></tr>
+              <tr><td style="padding:8px 0;font-weight:700;">Inicio</td><td style="padding:8px 0;">${formatDateTime(payload.fechaInicio)}</td></tr>
+              <tr><td style="padding:8px 0;font-weight:700;">Fin</td><td style="padding:8px 0;">${formatDateTime(payload.fechaFin)}</td></tr>
+              <tr><td style="padding:8px 0;font-weight:700;">Titular de la reserva</td><td style="padding:8px 0;">${titular}${payload.titularEmail ? ` (${payload.titularEmail})` : ""}</td></tr>
+              <tr><td style="padding:8px 0;font-weight:700;">Queja reportada por</td><td style="padding:8px 0;">${reportadaPor}${payload.reportadaPorEmail ? ` (${payload.reportadaPorEmail})` : ""}</td></tr>
+              <tr><td style="padding:8px 0;font-weight:700;">Estado de limpieza</td><td style="padding:8px 0;">${limpieza}</td></tr>
+            </tbody>
+          </table>
+
+          <div style="margin:16px 0;padding:16px;border-radius:10px;background:#fef2f2;border:1px solid #fecaca;">
+            <div style="font-weight:700;margin-bottom:8px;color:#991b1b;">Queja</div>
+            <div style="white-space:pre-wrap;">${payload.queja.trim()}</div>
+          </div>
+
+          <div style="margin:16px 0;padding:16px;border-radius:10px;background:#f9fafb;border:1px solid #e5e7eb;">
+            <div style="font-weight:700;margin-bottom:8px;">Observaciones</div>
+            <div style="white-space:pre-wrap;">${observacion}</div>
+          </div>
+
+          <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e7eb;color:#6b7280;font-size:12px;text-align:center;">
+            ${avisoFooterHtml}
+          </div>
+        </div>
+      </body>
+      </html>
+    `
+
+    const contenidoTexto = `
+QUEJA REGISTRADA EN UNA RESERVA
+
+Se ha guardado una queja al ${accionTexto} una reserva. Revisadla para tomar nota.
+
+Reserva: #${payload.reservaId}
+Matrícula: ${payload.matricula}
+Vehículo: ${vehiculoTexto || "N/D"}
+Inicio: ${formatDateTime(payload.fechaInicio)}
+Fin: ${formatDateTime(payload.fechaFin)}
+Titular de la reserva: ${titular}${payload.titularEmail ? ` (${payload.titularEmail})` : ""}
+Queja reportada por: ${reportadaPor}${payload.reportadaPorEmail ? ` (${payload.reportadaPorEmail})` : ""}
+Estado de limpieza: ${limpieza}
+
+QUEJA
+${payload.queja.trim()}
+
+OBSERVACIONES
+${observacion}
+
+---
+${avisoFooterText}
+    `
+
+    const destinatarios = Array.isArray(emailDestino) ? emailDestino : [emailDestino]
+    const mailOptions: any = {
+      from: { name: fromName, address: fromEmail },
+      subject: asunto,
+      text: contenidoTexto,
+      html: contenidoHTML,
+    }
+
+    mailOptions.to = destinatarios.length > 1 ? destinatarios : destinatarios[0]
+
+    const resultado = await transporter.sendMail(mailOptions)
+    console.log("📧 Email de queja de reserva enviado:", {
+      messageId: resultado.messageId,
+      accepted: resultado.accepted,
+      rejected: resultado.rejected,
+      response: resultado.response,
+    })
+
+    return { success: true, messageId: resultado.messageId }
+  } catch (error) {
+    console.error("❌ Error enviando email de queja de reserva:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Error enviando email de queja de reserva",
     }
   }
 }
