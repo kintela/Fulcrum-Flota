@@ -103,6 +103,7 @@ export async function obtenerFichaCoche(matricula: string) {
       .from("itvs")
       .select("fechaproximarevision, fecharevision")
       .eq("matricula", matriculaNormalizada)
+      .order("fechaproximarevision", { ascending: false })
       .order("fecharevision", { ascending: false })
       .limit(1)
 

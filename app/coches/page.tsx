@@ -1,7 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Car, Plus, Filter, Users, Calendar, AlertTriangle, Clock, CreditCard, Truck, Search } from "lucide-react"
 import Link from "next/link"
+import { getServerSession } from "next-auth/next"
 import { supabaseServer as supabase } from "@/lib/supabase-server"
+import { authOptions } from "@/lib/auth"
 import { obtenerFotosCoche } from "@/lib/storage"
 import { CarThumbnail } from "@/components/car-thumbnail"
 import { DeleteCocheButton } from "@/components/delete-coche-button"
@@ -92,8 +94,17 @@ function buildCochesHref(filter?: string, q?: string): string {
   return queryString ? `/coches?${queryString}` : "/coches"
 }
 
-async function getCoches(filter?: string, q?: string) {
+function esCochePruebaOculto(matricula: unknown): boolean {
+  return String(matricula ?? "")
+    .trim()
+    .toUpperCase()
+    .startsWith("0000-")
+}
+
+async function getCoches(userEmail?: string, filter?: string, q?: string) {
   try {
+    const puedeVerCochesPrueba = String(userEmail || "").trim().toLowerCase() === "rquintela@fulcrum.es"
+
     // Primero obtenemos todos los empleados para crear un mapa
     const { data: empleados } = await supabase.from("empleados").select("id, nombre, apellidos")
 
@@ -118,6 +129,10 @@ async function getCoches(filter?: string, q?: string) {
 
     // Aplicamos los filtros en JavaScript en lugar de SQL para evitar problemas de conversión
     let cochesFiltrados = [...(coches || [])]
+
+    if (!puedeVerCochesPrueba) {
+      cochesFiltrados = cochesFiltrados.filter((coche) => !esCochePruebaOculto(coche.matricula))
+    }
 
     if (filter === "assigned") {
       // Coches asignados: tienen valor en asignadoa y no son donantes
@@ -146,7 +161,8 @@ async function getCoches(filter?: string, q?: string) {
     // Obtener ITVs para todos los coches - usando los nombres correctos de las columnas
     const { data: itvs } = await supabase
       .from("itvs")
-      .select("matricula, fechaproximarevision")
+      .select("matricula, fechaproximarevision, fecharevision")
+      .order("fechaproximarevision", { ascending: false })
       .order("fecharevision", { ascending: false })
 
     // Crear un mapa de próximas revisiones por matrícula
@@ -288,10 +304,13 @@ async function getCoches(filter?: string, q?: string) {
 }
 
 export default async function CochesPage({ searchParams }: { searchParams: SearchParams }) {
+  const session = await getServerSession(authOptions)
+  const userEmail = String(session?.user?.email || "")
+
   // Obtener el filtro de los parámetros de búsqueda
   const filter = searchParams.filter
   const q = searchParams.q?.trim() || ""
-  const coches = await getCoches(filter, q)
+  const coches = await getCoches(userEmail, filter, q)
   const hasSearch = q.length > 0
 
   // Determinar el título según el filtro
