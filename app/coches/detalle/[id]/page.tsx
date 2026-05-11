@@ -1,9 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { ArrowLeft, Car, Calendar, User, Wrench, CreditCard } from "lucide-react"
+import { ArrowLeft, Car, Calendar, CreditCard, MapPin, User, Wrench } from "lucide-react"
 import Link from "next/link"
 import { supabaseServer as supabase } from "@/lib/supabase-server"
+import { AlquilerManager } from "@/components/alquiler-manager"
 import { FotosManager } from "@/components/fotos-manager"
+import { ITVManager } from "@/components/itv-manager"
 import { MantenimientoManager } from "@/components/mantenimiento-manager"
+import { SeguroManager } from "@/components/seguro-manager"
+import { ViatManager } from "@/components/viat-manager"
 
 async function getCoche(id: string) {
   if (!id || id === "undefined") {
@@ -86,7 +90,7 @@ export default async function CocheDetailPage({ params }: CocheDetailPageProps) 
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center">
             <Link href="/coches" className="flex items-center text-gray-600 hover:text-gray-900 mr-4">
@@ -292,6 +296,55 @@ export default async function CocheDetailPage({ params }: CocheDetailPageProps) 
               )}
             </CardContent>
           </Card>
+
+          {/* Ubicación actual */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <MapPin className="h-5 w-5 mr-2" />
+                Ubicación Actual
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {coche.direccion_actual ? (
+                <div className="flex justify-between gap-4">
+                  <span className="text-gray-500">Dirección:</span>
+                  <span className="text-right">{coche.direccion_actual}</span>
+                </div>
+              ) : (
+                <div className="text-center py-2 text-gray-500">Sin dirección disponible</div>
+              )}
+
+              {(coche.latitud || coche.longitud) && (
+                <div className="flex justify-between gap-4">
+                  <span className="text-gray-500">Coordenadas:</span>
+                  <span className="text-right">
+                    {coche.latitud ?? "-"}, {coche.longitud ?? "-"}
+                  </span>
+                </div>
+              )}
+
+              {coche.ultima_ubicacion && (
+                <div className="flex justify-between gap-4">
+                  <span className="text-gray-500">Última actualización:</span>
+                  <span className="text-right">{new Date(coche.ultima_ubicacion).toLocaleString("es-ES")}</span>
+                </div>
+              )}
+
+              {coche.latitud && coche.longitud && (
+                <div className="pt-2">
+                  <a
+                    href={`https://www.google.com/maps?q=${coche.latitud},${coche.longitud}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-blue-600 hover:underline text-sm"
+                  >
+                    Ver en Google Maps
+                  </a>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         {/* Fotos del vehículo */}
@@ -299,9 +352,29 @@ export default async function CocheDetailPage({ params }: CocheDetailPageProps) 
           <FotosManager matricula={coche.matricula} isEditing={false} />
         </div>
 
+        {/* Tarjeta ViaT */}
+        <div className="mt-6">
+          <ViatManager matricula={coche.matricula} isEditing={false} />
+        </div>
+
+        {/* ITV */}
+        <div className="mt-6">
+          <ITVManager matricula={coche.matricula} isEditing={false} />
+        </div>
+
+        {/* Seguros */}
+        <div className="mt-6">
+          <SeguroManager matricula={coche.matricula} isEditing={false} />
+        </div>
+
+        {/* Alquileres */}
+        <div className="mt-6">
+          <AlquilerManager matricula={coche.matricula} isEditing={false} />
+        </div>
+
         {/* Mantenimientos */}
         <div className="mt-6">
-          <MantenimientoManager matricula={coche.matricula} isEditing />
+          <MantenimientoManager matricula={coche.matricula} isEditing={false} />
         </div>
       </div>
     </div>
