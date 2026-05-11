@@ -92,25 +92,30 @@ export default async function CocheDetailPage({ params }: CocheDetailPageProps) 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
       <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center">
-            <Link href="/coches" className="flex items-center text-gray-600 hover:text-gray-900 mr-4">
-              <ArrowLeft className="h-5 w-5 mr-2" />
+        <div className="grid grid-cols-1 gap-4 mb-8 md:grid-cols-3 md:items-center">
+          <div className="flex justify-start">
+            <Link
+              href="/coches"
+              className="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 hover:text-gray-900"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
               Volver a Coches
             </Link>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">{coche.matricula}</h1>
-              <p className="text-gray-600">
-                {coche.marca} {coche.modelo}
-              </p>
-            </div>
           </div>
+          <div className="text-center">
+            <h1 className="text-3xl font-bold text-gray-900">{coche.matricula}</h1>
+            <p className="text-gray-600">
+              {coche.marca} {coche.modelo}
+            </p>
+          </div>
+          <div className="flex justify-start md:justify-end">
           <Link
             href={`/coches/editar/${encodeURIComponent(coche.matricula)}`}
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md"
           >
             Editar Coche
           </Link>
+        </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
