@@ -3,6 +3,7 @@ import { ArrowLeft, Car, Calendar, CreditCard, MapPin, User, Wrench } from "luci
 import Link from "next/link"
 import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { AlquilerManager } from "@/components/alquiler-manager"
+import { CocheUbicacionMapa } from "@/components/coche-ubicacion-mapa"
 import { FotosManager } from "@/components/fotos-manager"
 import { ITVManager } from "@/components/itv-manager"
 import { MantenimientoManager } from "@/components/mantenimiento-manager"
@@ -375,6 +376,16 @@ export default async function CocheDetailPage({ params }: CocheDetailPageProps) 
         {/* Mantenimientos */}
         <div className="mt-6">
           <MantenimientoManager matricula={coche.matricula} isEditing={false} />
+        </div>
+
+        {/* Mapa */}
+        <div className="mt-6">
+          <CocheUbicacionMapa
+            matricula={coche.matricula}
+            latitud={coche.latitud}
+            longitud={coche.longitud}
+            direccion={coche.direccion_actual}
+          />
         </div>
       </div>
     </div>
