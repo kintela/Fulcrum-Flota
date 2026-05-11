@@ -233,14 +233,14 @@ export default function ReservasTemporalesList({
       matricula,
       coche: data.coche,
       reservas: [...data.reservas].sort((a, b) => 
-        new Date(a.fecha_inicio).getTime() - new Date(b.fecha_inicio).getTime()
+        new Date(b.fecha_inicio).getTime() - new Date(a.fecha_inicio).getTime()
       )
     }))
     .sort((a, b) => {
       if (ordenarPorFecha) {
-        const fechaA = a.reservas[0] ? new Date(a.reservas[0].fecha_inicio).getTime() : Number.MAX_SAFE_INTEGER
-        const fechaB = b.reservas[0] ? new Date(b.reservas[0].fecha_inicio).getTime() : Number.MAX_SAFE_INTEGER
-        if (fechaA !== fechaB) return fechaA - fechaB
+        const fechaA = a.reservas[0] ? new Date(a.reservas[0].fecha_inicio).getTime() : Number.MIN_SAFE_INTEGER
+        const fechaB = b.reservas[0] ? new Date(b.reservas[0].fecha_inicio).getTime() : Number.MIN_SAFE_INTEGER
+        if (fechaA !== fechaB) return fechaB - fechaA
       }
       return matriculaCollator.compare(a.matricula, b.matricula)
     })
@@ -248,7 +248,7 @@ export default function ReservasTemporalesList({
   const reservasOrdenadasPorFecha = [...reservasFiltradas].sort((a, b) => {
     const fechaA = new Date(a.fecha_inicio).getTime()
     const fechaB = new Date(b.fecha_inicio).getTime()
-    if (fechaA !== fechaB) return fechaA - fechaB
+    if (fechaA !== fechaB) return fechaB - fechaA
     return matriculaCollator.compare(normalizarMatricula(a.matricula), normalizarMatricula(b.matricula))
   })
 
