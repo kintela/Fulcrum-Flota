@@ -539,7 +539,9 @@ export default async function CochesPage({ searchParams }: { searchParams: Searc
                           {coche.tarjetaSolred ? (
                             <>
                               <CreditCard className="h-4 w-4 text-blue-600 mr-1" />
-                              <span className="text-blue-600 font-semibold">PIN: {coche.tarjetaSolred.pin}</span>
+                              <span className="text-blue-600 font-semibold">
+                                {coche.tarjetaSolred.numero_tarjeta} · PIN: {coche.tarjetaSolred.pin}
+                              </span>
                             </>
                           ) : (
                             <span className="text-gray-400 italic">Sin tarjeta</span>
