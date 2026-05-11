@@ -7,8 +7,9 @@ function normalizarMatricula(matricula: string) {
   return matricula.trim().toUpperCase()
 }
 
-export async function obtenerTarjetasViat() {
+export async function obtenerTarjetasViat(matricula?: string | null) {
   try {
+    const matriculaNormalizada = normalizarMatricula(matricula || "")
     const { data, error } = await supabase.from("viats").select("*").eq("activo", true).order("id", { ascending: true })
 
     if (error) {
@@ -16,7 +17,34 @@ export async function obtenerTarjetasViat() {
       return []
     }
 
-    return data || []
+    const tarjetas = data || []
+    if (tarjetas.length === 0) return []
+
+    const { data: asignacionesActivas, error: asignacionesError } = await supabase
+      .from("viat_coches")
+      .select("viat_id, matricula")
+      .is("fecha_desasignacion", null)
+
+    if (asignacionesError) {
+      console.error("Error al obtener asignaciones activas ViaT:", asignacionesError)
+      return tarjetas
+    }
+
+    const matriculaPorViat = new Map(
+      (asignacionesActivas || []).map((asignacion) => [
+        String(asignacion.viat_id || "").trim(),
+        normalizarMatricula(asignacion.matricula || ""),
+      ]),
+    )
+
+    return tarjetas.filter((tarjeta) => {
+      const matriculaAsignada = matriculaPorViat.get(String(tarjeta.id || "").trim())
+
+      if (!matriculaAsignada) return true
+      if (!matriculaNormalizada) return false
+
+      return matriculaAsignada === matriculaNormalizada
+    })
   } catch (error) {
     console.error("Error en obtenerTarjetasViat:", error)
     return []

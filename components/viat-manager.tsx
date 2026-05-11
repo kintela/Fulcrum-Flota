@@ -66,7 +66,7 @@ export function ViatManager({ matricula, isEditing = false }: ViatManagerProps) 
     try {
       setIsLoading(true)
       setError(null)
-      const tarjetas = await obtenerTarjetasViat()
+      const tarjetas = await obtenerTarjetasViat(matriculaNormalizada || null)
       setTarjetasViat(tarjetas)
 
       if (matriculaNormalizada) {
