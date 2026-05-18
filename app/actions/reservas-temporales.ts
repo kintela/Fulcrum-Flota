@@ -20,6 +20,24 @@ export interface CrearReservaData {
   observaciones?: string
 }
 
+export interface HistorialReservaVehiculo {
+  id: number
+  matricula: string
+  fecha_inicio: string
+  fecha_fin: string
+  observaciones: string | null
+  quejas: string | null
+  limpieza: string | null
+  estado: string
+  created_at: string
+  empleados: {
+    id: number
+    nombre: string | null
+    apellidos: string | null
+    email: string | null
+  } | null
+}
+
 interface EmpleadoSesion {
   id: number
   nombre?: string | null
@@ -381,6 +399,85 @@ export async function obtenerReservasUsuario() {
     return {
       success: false,
       error: "Error inesperado al obtener las reservas"
+    }
+  }
+}
+
+export async function obtenerHistorialReservasPorMatricula(matricula: string): Promise<{
+  success: boolean
+  error?: string
+  reservas?: HistorialReservaVehiculo[]
+}> {
+  try {
+    const session = await getServerSession(authOptions)
+
+    if (!session?.user?.email) {
+      return {
+        success: false,
+        error: "Usuario no autenticado",
+      }
+    }
+
+    const matriculaNormalizada = String(matricula || "").trim().toUpperCase()
+    if (!matriculaNormalizada) {
+      return {
+        success: false,
+        error: "Matrícula no válida",
+      }
+    }
+
+    const { data, error } = await supabase
+      .from("reservas")
+      .select(`
+        id,
+        matricula,
+        fecha_inicio,
+        fecha_fin,
+        observaciones,
+        quejas,
+        limpieza,
+        estado,
+        created_at,
+        empleados (
+          id,
+          nombre,
+          apellidos,
+          email
+        )
+      `)
+      .eq("matricula", matriculaNormalizada)
+      .order("fecha_inicio", { ascending: false })
+
+    if (error) {
+      console.error("Error obteniendo historial de reservas:", error)
+      return {
+        success: false,
+        error: "Error al obtener el historial de reservas",
+      }
+    }
+
+    const reservas = (data || []).map((reserva: any) => ({
+      id: reserva.id,
+      matricula: reserva.matricula,
+      fecha_inicio: reserva.fecha_inicio,
+      fecha_fin: reserva.fecha_fin,
+      observaciones: reserva.observaciones ?? null,
+      quejas: reserva.quejas ?? null,
+      limpieza: reserva.limpieza ?? null,
+      estado: reserva.estado,
+      created_at: reserva.created_at,
+      empleados: Array.isArray(reserva.empleados) ? (reserva.empleados[0] ?? null) : (reserva.empleados ?? null),
+    })) as HistorialReservaVehiculo[]
+
+    return {
+      success: true,
+      reservas,
+    }
+  } catch (error) {
+    console.error("Error en obtenerHistorialReservasPorMatricula:", error)
+    return {
+      success: false,
+      error: "Error inesperado al obtener el historial de reservas",
     }
   }
 }

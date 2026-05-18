@@ -9,6 +9,7 @@ import { MapPin, RefreshCw, Navigation, AlertCircle, Car, UserCheck, UserX, Cale
 import { liberarCoche } from "@/app/actions/reservas"
 import { actualizarUbicacionCoche } from "@/app/actions/ubicacion"
 import { obtenerEstadoReservasPorMatriculas } from "@/app/actions/reservas-temporales"
+import { HistorialReservasModal } from "@/components/historial-reservas-modal"
 import { ReservaModal } from "@/components/reserva-modal"
 
 interface Coche {
@@ -195,6 +196,11 @@ const selectedMatriculaRef = useRef<string>("all")
   const [selectKey, setSelectKey] = useState(0) // Clave para forzar re-renderizado del select
   const [showReservaModal, setShowReservaModal] = useState(false)
   const [selectedVehicleForReservation, setSelectedVehicleForReservation] = useState<{
+    matricula: string
+    marcaModelo: string
+  } | null>(null)
+  const [showHistorialModal, setShowHistorialModal] = useState(false)
+  const [selectedVehicleForHistory, setSelectedVehicleForHistory] = useState<{
     matricula: string
     marcaModelo: string
   } | null>(null)
@@ -571,14 +577,22 @@ const selectedMatriculaRef = useRef<string>("all")
                   ${empleadoInfo ? `<p style="margin: 4px 0; color: #6b7280;"><strong>Asignado a:</strong> ${empleadoInfo.nombre} ${empleadoInfo.apellidos || ""}</p>` : ""}
                   ${coche.direccion_actual ? `<p style="margin: 4px 0; color: #6b7280;"><strong>Ubicación:</strong> ${coche.direccion_actual}</p>` : ""}
                   ${canRelocate ? `<p style="margin: 6px 0; color: #10b981; font-size: 12px;"><strong>💡 Tip:</strong> Mantén pulsado el marcador y arrástralo para reubicar</p>` : ""}
+                  <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top: 10px;">
+                    <button
+                      type="button"
+                      data-historial-matricula="${coche.matricula}"
+                      data-historial-marca-modelo="${`${coche.marca} ${coche.modelo}`}"
+                      style="background-color: #111827; color: white; padding: 6px 10px; border-radius: 6px; border: none; text-decoration: none; font-size: 12px; cursor: pointer;"
+                    >
+                      Ver Historial
+                    </button>
                   ${isAdmin ? `
-                    <div style="margin-top: 8px;">
                       <a href="/coches/detalle/${coche.matricula}" 
-                         style="background-color: #3b82f6; color: white; padding: 4px 8px; border-radius: 4px; text-decoration: none; font-size: 12px;">
+                         style="background-color: #3b82f6; color: white; padding: 6px 10px; border-radius: 6px; text-decoration: none; font-size: 12px;">
                         Ver detalles
                       </a>
-                    </div>
-                  ` : ''}
+                  ` : ""}
+                  </div>
                 </div>
               </div>
             </div>
@@ -587,6 +601,25 @@ const selectedMatriculaRef = useRef<string>("all")
 
           marker.addListener("click", () => {
             infoWindow.open(map, marker)
+          })
+
+          infoWindow.addListener("domready", () => {
+            const button = document.querySelector<HTMLButtonElement>(
+              `[data-historial-matricula="${coche.matricula}"]`,
+            )
+
+            if (!button || button.dataset.listenerAttached === "true") {
+              return
+            }
+
+            button.dataset.listenerAttached = "true"
+            button.addEventListener("click", () => {
+              setSelectedVehicleForHistory({
+                matricula: coche.matricula,
+                marcaModelo: `${coche.marca} ${coche.modelo}`,
+              })
+              setShowHistorialModal(true)
+            })
           })
 
           // Agregar listeners para reubicación si el marcador es arrastrable
@@ -1913,6 +1946,16 @@ const selectedMatriculaRef = useRef<string>("all")
           onReservaCreada={handleReservaCreada}
         />
       )}
+
+      <HistorialReservasModal
+        isOpen={showHistorialModal}
+        onClose={() => {
+          setShowHistorialModal(false)
+          setSelectedVehicleForHistory(null)
+        }}
+        matricula={selectedVehicleForHistory?.matricula || null}
+        marcaModelo={selectedVehicleForHistory?.marcaModelo || null}
+      />
     </Card>
   )
 }
