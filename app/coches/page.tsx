@@ -7,6 +7,7 @@ import { authOptions } from "@/lib/auth"
 import { obtenerFotosCoche } from "@/lib/storage"
 import { CarThumbnail } from "@/components/car-thumbnail"
 import { DeleteCocheButton } from "@/components/delete-coche-button"
+import { coincideBusquedaLibre } from "@/lib/coches-busqueda"
 
 // Tipo para los parámetros de búsqueda
 interface SearchParams {
@@ -36,46 +37,6 @@ function formatDate(dateString: string): string {
     month: "2-digit",
     year: "numeric",
   })
-}
-
-function normalizarTexto(value: unknown): string {
-  return String(value ?? "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-}
-
-function extraerValoresBuscables(value: unknown, values: string[]) {
-  if (value === null || value === undefined) {
-    return
-  }
-
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-    values.push(String(value))
-    return
-  }
-
-  if (Array.isArray(value)) {
-    value.forEach((item) => extraerValoresBuscables(item, values))
-    return
-  }
-
-  if (typeof value === "object") {
-    Object.values(value as Record<string, unknown>).forEach((item) => extraerValoresBuscables(item, values))
-  }
-}
-
-function coincideBusquedaLibre(coche: Record<string, unknown>, query: string): boolean {
-  const queryNormalizada = normalizarTexto(query)
-  if (!queryNormalizada) {
-    return true
-  }
-
-  const values: string[] = []
-  extraerValoresBuscables(coche, values)
-
-  return values.some((value) => normalizarTexto(value).includes(queryNormalizada))
 }
 
 function buildCochesHref(filter?: string, q?: string): string {
@@ -270,7 +231,7 @@ async function getCoches(userEmail?: string, filter?: string, q?: string) {
       }
     })
 
-    // Búsqueda libre por cualquier valor serializable del coche enriquecido
+    // Búsqueda libre por campos relevantes de la ficha/listado del coche.
     const textoBusqueda = q?.trim()
     const cochesTrasBusqueda = textoBusqueda
       ? cochesConEmpleados.filter((coche) => coincideBusquedaLibre(coche as Record<string, unknown>, textoBusqueda))
