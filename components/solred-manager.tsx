@@ -320,67 +320,70 @@ export function SolredManager({
             </div>
 
             {/* Campos para nueva tarjeta */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
                 <Label htmlFor="numero">Número de Tarjeta (17 dígitos) *</Label>
                 <Input
                   id="numero"
                   name="numero"
                   type="text"
+                  inputMode="numeric"
                   value={nuevaTarjeta.numero}
                   onChange={handleInputChange}
                   placeholder="12345678901234567"
                   maxLength={17}
-                  className="mt-1"
+                  className="w-full font-mono text-sm tracking-normal"
                   required
                 />
               </div>
 
-              <div>
-                <Label htmlFor="pin">PIN (4 dígitos) *</Label>
-                <Input
-                  id="pin"
-                  name="pin"
-                  type="text"
-                  value={nuevaTarjeta.pin}
-                  onChange={handleInputChange}
-                  placeholder="1234"
-                  maxLength={4}
-                  className="mt-1"
-                  required
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-[minmax(110px,0.8fr)_minmax(150px,1fr)] gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="pin">PIN (4 dígitos) *</Label>
+                  <Input
+                    id="pin"
+                    name="pin"
+                    type="text"
+                    inputMode="numeric"
+                    value={nuevaTarjeta.pin}
+                    onChange={handleInputChange}
+                    placeholder="1234"
+                    maxLength={4}
+                    className="font-mono text-sm tracking-normal"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="fechaVencimiento">Fecha de Vencimiento *</Label>
+                  <Input
+                    id="fechaVencimiento"
+                    name="fechaVencimiento"
+                    type="date"
+                    value={nuevaTarjeta.fechaVencimiento}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </div>
               </div>
 
-              <div>
-                <Label htmlFor="fechaVencimiento">Fecha de Vencimiento *</Label>
-                <Input
-                  id="fechaVencimiento"
-                  name="fechaVencimiento"
-                  type="date"
-                  value={nuevaTarjeta.fechaVencimiento}
-                  onChange={handleInputChange}
-                  className="mt-1"
-                  required
-                />
+              <div className="flex justify-end pt-1">
+                <Button
+                  type="button"
+                  onClick={crearNuevaTarjeta}
+                  disabled={
+                    isCreating ||
+                    !nuevaTarjeta.numero ||
+                    nuevaTarjeta.numero.length !== 17 ||
+                    !nuevaTarjeta.pin ||
+                    nuevaTarjeta.pin.length !== 4 ||
+                    !nuevaTarjeta.fechaVencimiento
+                  }
+                  className="w-full sm:w-auto bg-green-600 hover:bg-green-700"
+                >
+                  {isCreating ? "Creando..." : "Añadir Tarjeta"}
+                </Button>
               </div>
-            </div>
-
-            <div className="flex justify-end">
-              <Button
-                type="button"
-                onClick={crearNuevaTarjeta}
-                disabled={
-                  isCreating ||
-                  !nuevaTarjeta.numero ||
-                  nuevaTarjeta.numero.length !== 17 ||
-                  !nuevaTarjeta.pin ||
-                  nuevaTarjeta.pin.length !== 4 ||
-                  !nuevaTarjeta.fechaVencimiento
-                }
-                className="bg-green-600 hover:bg-green-700"
-              >
-                {isCreating ? "Creando..." : "Añadir Tarjeta"}
-              </Button>
             </div>
           </>
         )}
