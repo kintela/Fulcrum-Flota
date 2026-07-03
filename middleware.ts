@@ -1,10 +1,18 @@
 import { withAuth } from "next-auth/middleware"
 import { NextResponse } from "next/server"
 
+function hasNextAuthSessionCookie(req: Parameters<Parameters<typeof withAuth>[0]>[0]) {
+  return req.cookies.getAll().some(({ name }) =>
+    name.startsWith("next-auth.session-token") ||
+    name.startsWith("__Secure-next-auth.session-token")
+  )
+}
+
 export default withAuth(
   function middleware(req) {
     const token = req.nextauth.token
     const { pathname } = req.nextUrl
+    const hasSessionCookie = hasNextAuthSessionCookie(req)
 
     // Si está en una ruta de auth, permitir acceso
     if (pathname.startsWith('/auth')) {
@@ -22,7 +30,7 @@ export default withAuth(
     }
 
     // Si no hay token y no está en una ruta de auth, redirigir al login
-    if (!token) {
+    if (!token && !hasSessionCookie) {
       const signInUrl = new URL('/auth/signin', req.url)
       signInUrl.searchParams.set('callbackUrl', req.url)
       return NextResponse.redirect(signInUrl)
@@ -31,8 +39,13 @@ export default withAuth(
     return NextResponse.next()
   },
   {
+    pages: {
+      signIn: "/auth/signin",
+    },
     callbacks: {
       authorized: ({ token, req }) => {
+        const hasSessionCookie = hasNextAuthSessionCookie(req)
+
         // Permitir acceso a rutas de auth sin token
         if (req.nextUrl.pathname.startsWith('/auth')) {
           return true
@@ -46,7 +59,7 @@ export default withAuth(
           return true
         }
         // Para todas las demás rutas, requerir token
-        return !!token
+        return !!token || hasSessionCookie
       },
     },
   }

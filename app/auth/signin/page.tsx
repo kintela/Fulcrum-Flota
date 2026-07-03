@@ -1,15 +1,40 @@
 "use client"
 
 import { signIn } from "next-auth/react"
+import { useSession } from "next-auth/react"
 import { useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { Car } from "lucide-react"
 
 export default function SignIn() {
+  const router = useRouter()
+  const { status } = useSession()
   const searchParams = useSearchParams()
   const callbackUrl = searchParams.get("callbackUrl") || "/"
   const error = searchParams.get("error")
   const [isLoading, setIsLoading] = useState(false)
+
+  useEffect(() => {
+    if (status === "authenticated") {
+      try {
+        const url = new URL(callbackUrl, window.location.origin)
+        const isSameOrigin = url.origin === window.location.origin
+        const targetPath = `${url.pathname}${url.search}${url.hash}` || "/"
+
+        if (isSameOrigin) {
+          router.replace(targetPath)
+          window.location.replace(targetPath)
+          return
+        }
+      } catch (error) {
+        console.error("Error resolving callback URL:", error)
+      }
+
+      router.replace("/")
+      window.location.replace("/")
+    }
+  }, [callbackUrl, router, status])
 
   const handleSignIn = async () => {
     setIsLoading(true)
@@ -22,6 +47,14 @@ export default function SignIn() {
       console.error("Error during sign in:", error)
       setIsLoading(false)
     }
+  }
+
+  if (status === "authenticated") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="text-sm text-gray-600">Redirigiendo...</div>
+      </div>
+    )
   }
 
   return (
