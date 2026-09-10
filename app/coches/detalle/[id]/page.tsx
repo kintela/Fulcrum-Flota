@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { ArrowLeft, Car, Calendar, CreditCard, MapPin, User, Wrench } from "lucide-react"
+import { Archive, ArrowLeft, Car, Calendar, CreditCard, MapPin, User, Wrench } from "lucide-react"
 import Link from "next/link"
 import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { AlquilerManager } from "@/components/alquiler-manager"
@@ -9,6 +9,7 @@ import { ITVManager } from "@/components/itv-manager"
 import { MantenimientoManager } from "@/components/mantenimiento-manager"
 import { SeguroManager } from "@/components/seguro-manager"
 import { ViatManager } from "@/components/viat-manager"
+import { RestoreCocheButton } from "@/components/restore-coche-button"
 
 async function getCoche(id: string) {
   if (!id || id === "undefined") {
@@ -94,11 +95,11 @@ export default async function CocheDetailPage({ params }: CocheDetailPageProps) 
         <div className="grid grid-cols-1 gap-4 mb-8 md:grid-cols-3 md:items-center">
           <div className="flex justify-start">
             <Link
-              href="/coches"
+              href={coche.eliminado ? "/coches?filter=deleted" : "/coches"}
               className="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 hover:text-gray-900"
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Volver a Coches
+              {coche.eliminado ? "Volver a coches dados de baja" : "Volver a Coches"}
             </Link>
           </div>
           <div className="text-center">
@@ -106,16 +107,45 @@ export default async function CocheDetailPage({ params }: CocheDetailPageProps) 
             <p className="text-gray-600">
               {coche.marca} {coche.modelo}
             </p>
+            {coche.eliminado && (
+              <span className="mt-2 inline-flex items-center rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-800">
+                <Archive className="mr-1.5 h-4 w-4" />
+                Dado de baja
+              </span>
+            )}
           </div>
           <div className="flex justify-start md:justify-end">
-          <Link
-            href={`/coches/editar/${encodeURIComponent(coche.matricula)}`}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md"
-          >
-            Editar Coche
-          </Link>
+            {coche.eliminado ? (
+              <RestoreCocheButton matricula={coche.matricula} />
+            ) : (
+              <Link
+                href={`/coches/editar/${encodeURIComponent(coche.matricula)}`}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md"
+              >
+                Editar Coche
+              </Link>
+            )}
+          </div>
         </div>
-        </div>
+
+        {coche.eliminado && (
+          <Card className="mb-6 border-red-200 bg-red-50">
+            <CardContent className="grid gap-3 p-4 text-sm sm:grid-cols-2">
+              <div>
+                <span className="text-gray-500">Fecha de baja: </span>
+                <span className="font-medium">
+                  {coche.fecha_eliminacion
+                    ? new Date(coche.fecha_eliminacion).toLocaleString("es-ES")
+                    : "Sin datos"}
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-500">Dado de baja por: </span>
+                <span className="font-medium">{coche.eliminado_por || "Sin datos"}</span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Información básica */}

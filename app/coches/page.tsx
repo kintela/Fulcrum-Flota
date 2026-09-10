@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Car, Plus, Filter, Users, Calendar, AlertTriangle, Clock, CreditCard, Truck, Search } from "lucide-react"
+import { Archive, Car, Plus, Filter, Users, Calendar, AlertTriangle, Clock, CreditCard, Truck, Search } from "lucide-react"
 import Link from "next/link"
 import { getServerSession } from "next-auth/next"
 import { supabaseServer as supabase } from "@/lib/supabase-server"
@@ -7,6 +7,7 @@ import { authOptions } from "@/lib/auth"
 import { obtenerFotosCoche } from "@/lib/storage"
 import { CarThumbnail } from "@/components/car-thumbnail"
 import { DeleteCocheButton } from "@/components/delete-coche-button"
+import { RestoreCocheButton } from "@/components/restore-coche-button"
 import { coincideBusquedaLibre } from "@/lib/coches-busqueda"
 
 // Tipo para los parámetros de búsqueda
@@ -65,6 +66,7 @@ function esCochePruebaOculto(matricula: unknown): boolean {
 async function getCoches(userEmail?: string, filter?: string, q?: string) {
   try {
     const puedeVerCochesPrueba = String(userEmail || "").trim().toLowerCase() === "rquintela@fulcrum.es"
+    const verDadosDeBaja = filter === "deleted"
 
     // Primero obtenemos todos los empleados para crear un mapa
     const { data: empleados } = await supabase.from("empleados").select("id, nombre, apellidos")
@@ -76,11 +78,11 @@ async function getCoches(userEmail?: string, filter?: string, q?: string) {
       })
     }
 
-    // Obtenemos solo coches no eliminados (borrado lógico)
+    // La vista normal muestra la flota activa; el filtro "deleted" muestra las bajas lógicas.
     const { data: coches, error } = await supabase
       .from("coches")
       .select("*")
-      .eq("eliminado", false)
+      .eq("eliminado", verDadosDeBaja)
       .order("matricula", { ascending: true })
 
     if (error) {
@@ -290,6 +292,9 @@ export default async function CochesPage({ searchParams }: { searchParams: Searc
   } else if (filter === "donor") {
     title = "Coches Donantes"
     subtitle = `Vehículos donantes para piezas (${coches.length} vehículos)`
+  } else if (filter === "deleted") {
+    title = "Coches dados de baja"
+    subtitle = `Vehículos retirados de la flota activa (${coches.length} vehículos)`
   }
 
   if (hasSearch) {
@@ -356,6 +361,13 @@ export default async function CochesPage({ searchParams }: { searchParams: Searc
                 <Car className="h-4 w-4 mr-1.5" />
                 Ver donantes
               </Link>
+              <Link
+                href={buildCochesHref("deleted", q)}
+                className="bg-red-100 hover:bg-red-200 text-red-800 px-3 py-1.5 rounded-md text-sm flex items-center"
+              >
+                <Archive className="h-4 w-4 mr-1.5" />
+                Ver dados de baja
+              </Link>
             </div>
           )}
 
@@ -393,12 +405,18 @@ export default async function CochesPage({ searchParams }: { searchParams: Searc
             <CardContent className="p-8 text-center">
               <Car className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                {filter || hasSearch ? "No hay vehículos que coincidan con el filtro" : "No hay vehículos registrados"}
+                {filter === "deleted"
+                  ? "No hay vehículos dados de baja"
+                  : filter || hasSearch
+                    ? "No hay vehículos que coincidan con el filtro"
+                    : "No hay vehículos registrados"}
               </h3>
               <p className="text-gray-600 mb-4">
-                {filter || hasSearch
-                  ? "Prueba con otro filtro o agrega nuevos vehículos a la flota."
-                  : "Comienza agregando tu primer vehículo a la flota."}
+                {filter === "deleted"
+                  ? "Todos los vehículos registrados forman parte de la flota activa."
+                  : filter || hasSearch
+                    ? "Prueba con otro filtro o agrega nuevos vehículos a la flota."
+                    : "Comienza agregando tu primer vehículo a la flota."}
               </p>
               <div className="flex justify-center gap-4">
                 {(filter || hasSearch) && (
@@ -410,13 +428,15 @@ export default async function CochesPage({ searchParams }: { searchParams: Searc
                     Ver todos los coches
                   </Link>
                 )}
-                <Link
-                  href="/coches/nuevo"
-                  className="inline-flex items-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md"
-                >
-                  <Plus className="h-5 w-5 mr-2" />
-                  {filter || hasSearch ? "Agregar Vehículo" : "Agregar Primer Coche"}
-                </Link>
+                {filter !== "deleted" && (
+                  <Link
+                    href="/coches/nuevo"
+                    className="inline-flex items-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md"
+                  >
+                    <Plus className="h-5 w-5 mr-2" />
+                    {filter || hasSearch ? "Agregar Vehículo" : "Agregar Primer Coche"}
+                  </Link>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -429,7 +449,10 @@ export default async function CochesPage({ searchParams }: { searchParams: Searc
               const itvStatus = coche.proximaRevisionITV ? getITVStatus(coche.proximaRevisionITV) : null
 
               return (
-                <Card key={coche.matricula} className="hover:shadow-lg transition-shadow">
+                <Card
+                  key={coche.matricula}
+                  className={`hover:shadow-lg transition-shadow ${coche.eliminado ? "border-red-200 bg-red-50/30" : ""}`}
+                >
                   <CardHeader className="pb-3">
                     <div className="flex justify-between items-start">
                       <div>
@@ -560,6 +583,9 @@ export default async function CochesPage({ searchParams }: { searchParams: Searc
                       {coche.alquiler && (
                         <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded text-sm">Alquiler</span>
                       )}
+                      {coche.eliminado && (
+                        <span className="bg-red-100 text-red-800 px-2 py-1 rounded text-sm">Dado de baja</span>
+                      )}
                       {/* Badges de estado ITV */}
                       {itvStatus?.isOverdue && (
                         <span className="bg-red-100 text-red-800 px-2 py-1 rounded text-sm flex items-center">
@@ -575,8 +601,29 @@ export default async function CochesPage({ searchParams }: { searchParams: Searc
                       )}
                     </div>
 
+                    {coche.eliminado && (
+                      <div className="mb-4 rounded-md border border-red-200 bg-white p-3 text-sm">
+                        <div className="flex justify-between gap-4">
+                          <span className="text-gray-500">Fecha de baja:</span>
+                          <span className="text-right font-medium">
+                            {coche.fecha_eliminacion
+                              ? new Date(coche.fecha_eliminacion).toLocaleString("es-ES")
+                              : "Sin datos"}
+                          </span>
+                        </div>
+                        <div className="mt-1 flex justify-between gap-4">
+                          <span className="text-gray-500">Dado de baja por:</span>
+                          <span className="break-all text-right">{coche.eliminado_por || "Sin datos"}</span>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="flex items-center justify-between">
-                      <DeleteCocheButton matricula={coche.matricula} />
+                      {coche.eliminado ? (
+                        <RestoreCocheButton matricula={coche.matricula} />
+                      ) : (
+                        <DeleteCocheButton matricula={coche.matricula} />
+                      )}
                       <div className="flex space-x-2">
                         <Link
                           href={`/coches/detalle/${encodeURIComponent(coche.matricula)}`}
@@ -584,12 +631,14 @@ export default async function CochesPage({ searchParams }: { searchParams: Searc
                         >
                           Ver detalles
                         </Link>
-                        <Link
-                          href={`/coches/editar/${encodeURIComponent(coche.matricula)}`}
-                          className="bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1 rounded text-sm"
-                        >
-                          Editar
-                        </Link>
+                        {!coche.eliminado && (
+                          <Link
+                            href={`/coches/editar/${encodeURIComponent(coche.matricula)}`}
+                            className="bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1 rounded text-sm"
+                          >
+                            Editar
+                          </Link>
+                        )}
                       </div>
                     </div>
                   </CardContent>

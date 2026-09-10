@@ -54,8 +54,8 @@ export function DeleteCocheButton({ matricula }: DeleteCocheButtonProps) {
       <AlertDialogTrigger asChild>
         <button
           type="button"
-          title="Eliminar coche"
-          aria-label={`Eliminar coche ${matricula}`}
+          title="Dar de baja el coche"
+          aria-label={`Dar de baja el coche ${matricula}`}
           disabled={isPending}
           className="text-red-600 hover:text-red-700 disabled:opacity-50 cursor-pointer"
         >
@@ -65,10 +65,10 @@ export function DeleteCocheButton({ matricula }: DeleteCocheButtonProps) {
 
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Confirmar eliminación</AlertDialogTitle>
+          <AlertDialogTitle>Confirmar baja</AlertDialogTitle>
           <AlertDialogDescription>
-            ¿Seguro que quieres eliminar el coche <strong>{matricula}</strong>? Esta acción lo ocultará del listado de
-            coches y mantendrá todo su histórico relacionado.
+            ¿Seguro que quieres dar de baja el coche <strong>{matricula}</strong>? Dejará de aparecer en la flota activa,
+            pero se conservarán sus datos y todo su histórico.
           </AlertDialogDescription>
           {error && <p className="text-sm text-red-600">{error}</p>}
         </AlertDialogHeader>
@@ -83,7 +83,7 @@ export function DeleteCocheButton({ matricula }: DeleteCocheButtonProps) {
             disabled={isPending}
             className="bg-red-600 hover:bg-red-700"
           >
-            {isPending ? "Eliminando..." : "Eliminar coche"}
+            {isPending ? "Dando de baja..." : "Dar de baja"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

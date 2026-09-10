@@ -228,3 +228,74 @@ export async function eliminarCoche(matricula: string) {
     return { success: false, error: "Error inesperado al eliminar el coche" as const }
   }
 }
+
+export async function restaurarCoche(matricula: string) {
+  try {
+    const session = await getServerSession(authOptions)
+
+    if (!session?.user?.email) {
+      return { success: false, error: "Usuario no autenticado" as const }
+    }
+
+    const { data: empleado, error: empleadoError } = await supabase
+      .from("empleados")
+      .select("role")
+      .eq("email", session.user.email)
+      .single()
+
+    const roleValue = String(empleado?.role || "").toLowerCase()
+    const isAdmin = roleValue === "admin" || roleValue === "administrador"
+
+    if (empleadoError || !empleado || !isAdmin) {
+      return {
+        success: false,
+        error: "Acceso no autorizado - Solo administradores pueden dar de alta coches" as const,
+      }
+    }
+
+    const matriculaNormalizada = (matricula || "").trim().toUpperCase()
+    if (!matriculaNormalizada) {
+      return { success: false, error: "Matrícula no válida" as const }
+    }
+
+    const { data: cocheExistente, error: cocheError } = await supabase
+      .from("coches")
+      .select("matricula, eliminado")
+      .eq("matricula", matriculaNormalizada)
+      .maybeSingle()
+
+    if (cocheError || !cocheExistente) {
+      return { success: false, error: "El coche no existe" as const }
+    }
+
+    if (cocheExistente.eliminado !== true) {
+      return { success: true as const }
+    }
+
+    const { error: restoreError } = await supabase
+      .from("coches")
+      .update({
+        eliminado: false,
+        fecha_eliminacion: null,
+        eliminado_por: null,
+      })
+      .eq("matricula", matriculaNormalizada)
+      .eq("eliminado", true)
+
+    if (restoreError) {
+      return {
+        success: false,
+        error: `Error al dar de alta el coche: ${restoreError.message}` as const,
+      }
+    }
+
+    revalidatePath("/coches")
+    revalidatePath(`/coches/detalle/${encodeURIComponent(matriculaNormalizada)}`)
+    revalidatePath("/")
+
+    return { success: true as const }
+  } catch (error) {
+    console.error("Error en restaurarCoche:", error)
+    return { success: false, error: "Error inesperado al dar de alta el coche" as const }
+  }
+}
