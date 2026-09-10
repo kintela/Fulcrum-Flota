@@ -14,10 +14,8 @@ const mockSupabase = supabase as jest.Mocked<typeof supabase>
 function calculateStats(cochesArray: any[]) {
   return {
     totalCoches: cochesArray.length,
-    cochesDisponibles: cochesArray.filter(
-      (c) => !c.alquiler && !c.empleado_id && (!c.asignadoa || c.asignadoa.trim() === ""),
-    ).length,
-    cochesAsignados: cochesArray.filter((c) => c.empleado_id || (c.asignadoa && c.asignadoa.trim() !== "")).length,
+    cochesDisponibles: cochesArray.filter((c) => !c.alquiler && !c.asignadoa).length,
+    cochesAsignados: cochesArray.filter((c) => Boolean(c.asignadoa)).length,
   }
 }
 
@@ -26,11 +24,11 @@ describe("Dashboard Statistics Calculation", () => {
     jest.clearAllMocks()
   })
 
-  it("correctly counts cars assigned via empleado_id", () => {
+  it("correctly counts cars assigned via asignadoa", () => {
     const coches = [
-      { matricula: "1234ABC", alquiler: false, empleado_id: 1, asignadoa: null },
-      { matricula: "5678DEF", alquiler: false, empleado_id: 2, asignadoa: null },
-      { matricula: "9012GHI", alquiler: false, empleado_id: null, asignadoa: null },
+      { matricula: "1234ABC", alquiler: false, asignadoa: 1 },
+      { matricula: "5678DEF", alquiler: false, asignadoa: 2 },
+      { matricula: "9012GHI", alquiler: false, asignadoa: null },
     ]
 
     const stats = calculateStats(coches)
@@ -42,9 +40,9 @@ describe("Dashboard Statistics Calculation", () => {
 
   it("correctly counts cars assigned via asignadoa field", () => {
     const coches = [
-      { matricula: "1234ABC", alquiler: false, empleado_id: null, asignadoa: "Paula Ezcurra" },
-      { matricula: "5678DEF", alquiler: false, empleado_id: null, asignadoa: "Juan Pérez" },
-      { matricula: "9012GHI", alquiler: false, empleado_id: null, asignadoa: null },
+      { matricula: "1234ABC", alquiler: false, asignadoa: 1 },
+      { matricula: "5678DEF", alquiler: false, asignadoa: 2 },
+      { matricula: "9012GHI", alquiler: false, asignadoa: null },
     ]
 
     const stats = calculateStats(coches)
@@ -54,64 +52,45 @@ describe("Dashboard Statistics Calculation", () => {
     expect(stats.cochesDisponibles).toBe(1) // 9012GHI
   })
 
-  it("correctly counts cars with both empleado_id and asignadoa", () => {
+  it("ignores empty asignadoa values", () => {
     const coches = [
-      { matricula: "1234ABC", alquiler: false, empleado_id: 1, asignadoa: "Texto Legacy" },
-      { matricula: "5678DEF", alquiler: false, empleado_id: null, asignadoa: "Paula Ezcurra" },
-      { matricula: "9012GHI", alquiler: false, empleado_id: 2, asignadoa: null },
+      { matricula: "1234ABC", alquiler: false, asignadoa: null },
+      { matricula: "9012GHI", alquiler: false, asignadoa: 1 },
+      { matricula: "3456JKL", alquiler: false, asignadoa: null },
     ]
 
     const stats = calculateStats(coches)
 
     expect(stats.totalCoches).toBe(3)
-    expect(stats.cochesAsignados).toBe(3) // Todos están asignados
-    expect(stats.cochesDisponibles).toBe(0)
-  })
-
-  it("ignores empty or whitespace-only asignadoa values", () => {
-    const coches = [
-      { matricula: "1234ABC", alquiler: false, empleado_id: null, asignadoa: "" },
-      { matricula: "5678DEF", alquiler: false, empleado_id: null, asignadoa: "   " },
-      { matricula: "9012GHI", alquiler: false, empleado_id: null, asignadoa: "Paula Ezcurra" },
-      { matricula: "3456JKL", alquiler: false, empleado_id: null, asignadoa: null },
-    ]
-
-    const stats = calculateStats(coches)
-
-    expect(stats.totalCoches).toBe(4)
     expect(stats.cochesAsignados).toBe(1) // Solo 9012GHI
-    expect(stats.cochesDisponibles).toBe(3) // 1234ABC, 5678DEF, 3456JKL
+    expect(stats.cochesDisponibles).toBe(2) // 1234ABC, 3456JKL
   })
 
   it("excludes rental cars from available count", () => {
     const coches = [
-      { matricula: "1234ABC", alquiler: true, empleado_id: null, asignadoa: null },
-      { matricula: "5678DEF", alquiler: true, empleado_id: 1, asignadoa: null },
-      { matricula: "9012GHI", alquiler: false, empleado_id: null, asignadoa: null },
-      { matricula: "3456JKL", alquiler: false, empleado_id: 2, asignadoa: null },
+      { matricula: "1234ABC", alquiler: true, asignadoa: null },
+      { matricula: "5678DEF", alquiler: true, asignadoa: 1 },
+      { matricula: "9012GHI", alquiler: false, asignadoa: null },
+      { matricula: "3456JKL", alquiler: false, asignadoa: 2 },
     ]
 
     const stats = calculateStats(coches)
 
     expect(stats.totalCoches).toBe(4)
-    expect(stats.cochesAsignados).toBe(2) // 5678DEF y 3456JKL (empleado_id)
+    expect(stats.cochesAsignados).toBe(2) // 5678DEF y 3456JKL
     expect(stats.cochesDisponibles).toBe(1) // Solo 9012GHI (no alquiler, no asignado)
   })
 
   it("handles mixed scenarios correctly", () => {
     const coches = [
-      // Asignado por empleado_id
-      { matricula: "1234ABC", alquiler: false, empleado_id: 1, asignadoa: null },
-      // Asignado por asignadoa
-      { matricula: "5678DEF", alquiler: false, empleado_id: null, asignadoa: "Paula Ezcurra" },
+      { matricula: "1234ABC", alquiler: false, asignadoa: 1 },
+      { matricula: "5678DEF", alquiler: false, asignadoa: 2 },
       // Alquiler (no cuenta como disponible)
-      { matricula: "9012GHI", alquiler: true, empleado_id: null, asignadoa: null },
+      { matricula: "9012GHI", alquiler: true, asignadoa: null },
       // Disponible
-      { matricula: "3456JKL", alquiler: false, empleado_id: null, asignadoa: null },
-      // Asignado por ambos campos
-      { matricula: "7890MNO", alquiler: false, empleado_id: 2, asignadoa: "Texto Legacy" },
-      // Asignadoa vacío (disponible)
-      { matricula: "1111PQR", alquiler: false, empleado_id: null, asignadoa: "" },
+      { matricula: "3456JKL", alquiler: false, asignadoa: null },
+      { matricula: "7890MNO", alquiler: false, asignadoa: 3 },
+      { matricula: "1111PQR", alquiler: false, asignadoa: null },
     ]
 
     const stats = calculateStats(coches)
@@ -123,9 +102,9 @@ describe("Dashboard Statistics Calculation", () => {
 
   it("handles null and undefined values gracefully", () => {
     const coches = [
-      { matricula: "1234ABC", alquiler: false, empleado_id: null, asignadoa: undefined },
-      { matricula: "5678DEF", alquiler: false, empleado_id: undefined, asignadoa: null },
-      { matricula: "9012GHI", alquiler: null, empleado_id: null, asignadoa: null },
+      { matricula: "1234ABC", alquiler: false, asignadoa: undefined },
+      { matricula: "5678DEF", alquiler: false, asignadoa: null },
+      { matricula: "9012GHI", alquiler: null, asignadoa: null },
     ]
 
     const stats = calculateStats(coches)

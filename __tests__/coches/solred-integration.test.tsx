@@ -60,7 +60,6 @@ describe("Integración de SolredManager en Editar Coche", () => {
       kilometros: 50000,
       combustible: "Gasolina",
       estado: "Activo",
-      empleado_id: null,
     })
 
     mockObtenerEmpleados.mockResolvedValue([

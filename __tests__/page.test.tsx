@@ -41,8 +41,7 @@ describe("Home Page Dashboard", () => {
         marca: "Toyota",
         modelo: "Corolla",
         alquiler: false,
-        empleado_id: 1, // Asignado por relación
-        asignadoa: null,
+        asignadoa: 1,
         created_at: "2024-01-01T00:00:00Z",
       },
       {
@@ -50,7 +49,6 @@ describe("Home Page Dashboard", () => {
         marca: "Ford",
         modelo: "Focus",
         alquiler: false,
-        empleado_id: null,
         asignadoa: "Paula Ezcurra", // Asignado por texto
         created_at: "2024-01-02T00:00:00Z",
       },
@@ -59,7 +57,6 @@ describe("Home Page Dashboard", () => {
         marca: "Volkswagen",
         modelo: "Golf",
         alquiler: false,
-        empleado_id: null,
         asignadoa: null, // No asignado
         created_at: "2024-01-03T00:00:00Z",
       },
@@ -68,7 +65,6 @@ describe("Home Page Dashboard", () => {
         marca: "Seat",
         modelo: "Ibiza",
         alquiler: true, // Alquiler
-        empleado_id: null,
         asignadoa: null,
         created_at: "2024-01-04T00:00:00Z",
       },
@@ -77,8 +73,7 @@ describe("Home Page Dashboard", () => {
         marca: "Renault",
         modelo: "Megane",
         alquiler: false,
-        empleado_id: 2,
-        asignadoa: "Texto Legacy", // Ambos campos (prioridad a empleado_id)
+        asignadoa: 2,
         created_at: "2024-01-05T00:00:00Z",
       },
     ]
@@ -147,7 +142,6 @@ describe("Home Page Dashboard", () => {
         marca: "Toyota",
         modelo: "Corolla",
         alquiler: false,
-        empleado_id: null,
         asignadoa: "", // Campo vacío
         created_at: "2024-01-01T00:00:00Z",
       },
@@ -156,7 +150,6 @@ describe("Home Page Dashboard", () => {
         marca: "Ford",
         modelo: "Focus",
         alquiler: false,
-        empleado_id: null,
         asignadoa: "   ", // Solo espacios
         created_at: "2024-01-02T00:00:00Z",
       },
@@ -165,7 +158,6 @@ describe("Home Page Dashboard", () => {
         marca: "Volkswagen",
         modelo: "Golf",
         alquiler: false,
-        empleado_id: null,
         asignadoa: "Juan Pérez", // Texto válido
         created_at: "2024-01-03T00:00:00Z",
       },
@@ -207,7 +199,6 @@ describe("Home Page Dashboard", () => {
         marca: "Toyota",
         modelo: "Corolla",
         alquiler: true, // Alquiler
-        empleado_id: null,
         asignadoa: null,
         created_at: "2024-01-01T00:00:00Z",
       },
@@ -216,7 +207,6 @@ describe("Home Page Dashboard", () => {
         marca: "Ford",
         modelo: "Focus",
         alquiler: false,
-        empleado_id: null,
         asignadoa: null, // Disponible
         created_at: "2024-01-02T00:00:00Z",
       },
@@ -257,7 +247,6 @@ describe("Home Page Dashboard", () => {
         marca: "Toyota",
         modelo: "Corolla",
         alquiler: false,
-        empleado_id: null,
         asignadoa: "Paula Ezcurra",
         empleados: null,
         created_at: "2024-01-01T00:00:00Z",
@@ -267,7 +256,6 @@ describe("Home Page Dashboard", () => {
         marca: "Ford",
         modelo: "Focus",
         alquiler: false,
-        empleado_id: null,
         asignadoa: null,
         empleados: null,
         created_at: "2024-01-02T00:00:00Z",
@@ -277,7 +265,6 @@ describe("Home Page Dashboard", () => {
         marca: "Volkswagen",
         modelo: "Golf",
         alquiler: true,
-        empleado_id: null,
         asignadoa: null,
         empleados: null,
         created_at: "2024-01-03T00:00:00Z",
@@ -347,7 +334,6 @@ describe("Home Page Dashboard", () => {
         marca: "Toyota",
         modelo: "Corolla",
         alquiler: false,
-        empleado_id: null,
         asignadoa: "Texto Legacy",
         empleados: {
           id: 1,

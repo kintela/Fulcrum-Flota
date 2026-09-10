@@ -42,7 +42,6 @@ const mockCoche = {
   asignadoa: "Juan Pérez",
   donante: false,
   alquiler: false,
-  empleado_id: 1,
   fecha_asignacion: "2023-01-01",
   observaciones_asignacion: "Asignación inicial",
   extras: "Aire acondicionado, navegador GPS, sensores de aparcamiento",

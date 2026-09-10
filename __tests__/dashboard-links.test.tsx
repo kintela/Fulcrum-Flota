@@ -25,8 +25,7 @@ describe("Dashboard Clickable Stats", () => {
         marca: "Toyota",
         modelo: "Corolla",
         alquiler: false,
-        empleado_id: 1,
-        asignadoa: null,
+        asignadoa: 1,
         created_at: "2024-01-01T00:00:00Z",
       },
       {
@@ -34,7 +33,6 @@ describe("Dashboard Clickable Stats", () => {
         marca: "Ford",
         modelo: "Focus",
         alquiler: false,
-        empleado_id: null,
         asignadoa: null,
         created_at: "2024-01-02T00:00:00Z",
       },
@@ -102,7 +100,7 @@ describe("Dashboard Clickable Stats", () => {
 
   it("applies hover styles to clickable stats", async () => {
     // Mock data
-    const mockCoches = [{ matricula: "1234ABC", alquiler: false, empleado_id: null, asignadoa: null }]
+    const mockCoches = [{ matricula: "1234ABC", alquiler: false, asignadoa: null }]
     const mockEmpleados = [{ id: 1, nombre: "Juan", apellidos: "Pérez" }]
 
     mockSupabase.from.mockImplementation((table) => {

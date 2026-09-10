@@ -41,7 +41,6 @@ describe("Asignación de empleados a coches", () => {
         marca: "Toyota",
         modelo: "Corolla",
         asignadoa: "1",
-        empleado_id: 1,
       },
     })
 
@@ -70,7 +69,7 @@ describe("Asignación de empleados a coches", () => {
     formData.append("matricula", "1234ABC")
     formData.append("marca", "Toyota")
     formData.append("modelo", "Corolla")
-    formData.append("empleado_id", "1") // ID del empleado seleccionado
+    formData.append("asignadoa", "1") // ID del empleado seleccionado
     formData.append("alquiler", "off")
 
     // Llamar directamente a la función de edición
@@ -87,7 +86,6 @@ describe("Asignación de empleados a coches", () => {
       expect.objectContaining({
         matricula: "1234ABC",
         asignadoa: "1",
-        empleado_id: 1,
       }),
     )
   })
@@ -102,7 +100,6 @@ describe("Asignación de empleados a coches", () => {
         marca: "Toyota",
         modelo: "Corolla",
         asignadoa: null,
-        empleado_id: null,
         alquiler: true,
       },
     })
@@ -112,7 +109,7 @@ describe("Asignación de empleados a coches", () => {
     formData.append("matricula", "1234ABC")
     formData.append("marca", "Toyota")
     formData.append("modelo", "Corolla")
-    formData.append("empleado_id", "1") // Este valor debería ser ignorado
+    formData.append("asignadoa", "1") // Este valor debería ser ignorado
     formData.append("alquiler", "on") // Marcar como alquiler
 
     // Llamar directamente a la función de edición
@@ -129,7 +126,6 @@ describe("Asignación de empleados a coches", () => {
       expect.objectContaining({
         matricula: "1234ABC",
         asignadoa: null,
-        empleado_id: null,
         alquiler: true,
       }),
     )

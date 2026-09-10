@@ -18,7 +18,7 @@ interface CocheData {
   donante: boolean
   alquiler: boolean
   preciocompra?: number
-  empleado_id?: number
+  asignadoa?: number
   fecha_asignacion?: string
   observaciones_asignacion?: string
   fecha_inicio?: string
@@ -41,7 +41,7 @@ export async function crearCoche(formData: FormData) {
     const donante = formData.get("donante") === "on"
     const alquiler = formData.get("alquiler") === "on"
     const preciocompra = formData.get("preciocompra") as string
-    const empleadoId = formData.get("empleado_id") as string
+    const empleadoId = formData.get("asignadoa") as string
     const fechaAsignacion = formData.get("fecha_asignacion") as string
     const observacionesAsignacion = formData.get("observaciones_asignacion") as string
 

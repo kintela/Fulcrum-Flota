@@ -37,7 +37,7 @@ export default function NuevoCochePage() {
     fecha_matriculacion: "",
     kilometros: "",
     combustible: "Gasolina",
-    empleado_id: "",
+    asignadoa: "",
     fecha_compra: "",
     precio_compra: "",
     observaciones: "",
@@ -112,7 +112,7 @@ export default function NuevoCochePage() {
       formDataToSend.append("donante", formData.donante ? "on" : "")
       formDataToSend.append("alquiler", formData.alquiler ? "on" : "")
       formDataToSend.append("preciocompra", formData.precio_compra)
-      formDataToSend.append("empleado_id", formData.empleado_id)
+      formDataToSend.append("asignadoa", formData.asignadoa)
       formDataToSend.append("fecha_asignacion", formData.fecha_compra)
       formDataToSend.append("observaciones_asignacion", formData.observaciones)
       
@@ -140,7 +140,7 @@ export default function NuevoCochePage() {
     }
   }
 
-  const empleadoSeleccionado = formData.empleado_id ? Number.parseInt(formData.empleado_id) : null
+  const empleadoSeleccionado = formData.asignadoa ? Number.parseInt(formData.asignadoa) : null
 
   return (
     <div className="container mx-auto p-6 max-w-4xl">
@@ -271,11 +271,11 @@ export default function NuevoCochePage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label htmlFor="empleado_id">Empleado Asignado</Label>
+                <Label htmlFor="asignadoa">Empleado Asignado</Label>
                 <select
-                  id="empleado_id"
-                  name="empleado_id"
-                  value={formData.empleado_id}
+                  id="asignadoa"
+                  name="asignadoa"
+                  value={formData.asignadoa}
                   onChange={handleInputChange}
                   className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >

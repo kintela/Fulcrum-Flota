@@ -102,7 +102,6 @@ describe("crearCoche Server Action", () => {
             marca: "Toyota",
             modelo: "Corolla",
             asignadoa: "42",
-            empleado_id: 42,
           },
         ],
         error: null,
@@ -127,7 +126,7 @@ describe("crearCoche Server Action", () => {
     formData.append("matricula", "1234ABC")
     formData.append("marca", "Toyota")
     formData.append("modelo", "Corolla")
-    formData.append("empleado_id", "42") // ID del empleado
+    formData.append("asignadoa", "42") // ID del empleado
     formData.append("fecha_asignacion", "2023-01-01")
     formData.append("observaciones_asignacion", "Asignación de prueba")
     formData.append("alquiler", "off") // No es alquiler
@@ -143,7 +142,6 @@ describe("crearCoche Server Action", () => {
         marca: "Toyota",
         modelo: "Corolla",
         asignadoa: "42", // Verificar que asignadoa recibe el ID del empleado
-        empleado_id: 42, // Verificar que empleado_id recibe el ID del empleado como número
         fecha_asignacion: "2023-01-01",
         observaciones_asignacion: "Asignación de prueba",
       }),
@@ -182,7 +180,7 @@ describe("crearCoche Server Action", () => {
     formData.append("matricula", "1234ABC")
     formData.append("marca", "Toyota")
     formData.append("modelo", "Corolla")
-    formData.append("empleado_id", "42") // ID del empleado que debería ser ignorado
+    formData.append("asignadoa", "42") // ID del empleado que debería ser ignorado
     formData.append("alquiler", "on") // Es alquiler
 
     const result = await crearCoche(formData)
@@ -196,7 +194,6 @@ describe("crearCoche Server Action", () => {
         marca: "Toyota",
         modelo: "Corolla",
         asignadoa: null, // Debe ser null cuando es alquiler
-        empleado_id: null, // Debe ser null cuando es alquiler
         fecha_asignacion: null,
         observaciones_asignacion: null,
       }),

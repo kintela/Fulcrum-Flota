@@ -24,8 +24,7 @@ async function getCoche(id: string) {
       return null
     }
 
-    // Verificamos si hay un empleado asignado (ya sea por empleado_id o asignadoa)
-    const empleadoId = data.empleado_id || data.asignadoa
+    const empleadoId = data.asignadoa
 
     if (empleadoId) {
       const { data: empleadoData, error: empleadoError } = await supabase
