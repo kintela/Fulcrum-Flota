@@ -1,38 +1,172 @@
-import nodemailer from 'nodemailer';
-
-export interface EmailConfig {
-  host: string;
-  port: number;
-  secure: boolean;
-  auth: {
-    user: string;
-    pass: string;
-  };
+interface GraphEmailOptions {
+  from?: { name?: string; address?: string }
+  to: string | string[]
+  subject: string
+  text?: string
+  html?: string
 }
 
-// Configuración para Office 365
-const emailConfig: EmailConfig = {
-  host: 'smtp.office365.com',
-  port: 587,
-  secure: false, // true para 465, false para otros puertos
-  auth: {
-    // Autenticamos con la cuenta que tiene la contraseña de aplicación (delegada)
-    user: process.env.EMAIL_USER || '',
-    pass: process.env.EMAIL_PASSWORD || '',
-  },
-};
+interface GraphEmailResult {
+  messageId: string
+  accepted: string[]
+  rejected: string[]
+  response: string
+}
 
-// Remitente visible: puede ser distinto al usuario de autenticación (Send As en O365)
-const fromEmail = process.env.FROM_EMAIL || process.env.EMAIL_USER || ''
+interface GraphTokenResponse {
+  access_token?: string
+  expires_in?: number
+  error?: string
+  error_description?: string
+}
+
+let tokenCache: { accessToken: string; expiresAt: number } | null = null
+
+const getGraphConfig = () => ({
+  tenantId: process.env.GRAPH_TENANT_ID || "",
+  clientId: process.env.GRAPH_CLIENT_ID || "",
+  clientSecret: process.env.GRAPH_CLIENT_SECRET || "",
+  fromEmail: process.env.GRAPH_FROM_EMAIL || process.env.FROM_EMAIL || "",
+})
+
+const requireGraphConfig = () => {
+  const config = getGraphConfig()
+  const missing = [
+    ["GRAPH_TENANT_ID", config.tenantId],
+    ["GRAPH_CLIENT_ID", config.clientId],
+    ["GRAPH_CLIENT_SECRET", config.clientSecret],
+    ["GRAPH_FROM_EMAIL", config.fromEmail],
+  ]
+    .filter(([, value]) => !value)
+    .map(([key]) => key)
+
+  if (missing.length > 0) {
+    throw new Error(`Faltan variables de Microsoft Graph: ${missing.join(", ")}`)
+  }
+
+  return config
+}
+
+const getGraphAccessToken = async () => {
+  if (tokenCache && tokenCache.expiresAt > Date.now() + 60_000) {
+    return tokenCache.accessToken
+  }
+
+  const { tenantId, clientId, clientSecret } = requireGraphConfig()
+  const body = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    scope: "https://graph.microsoft.com/.default",
+    grant_type: "client_credentials",
+  })
+
+  const response = await fetch(
+    `https://login.microsoftonline.com/${encodeURIComponent(tenantId)}/oauth2/v2.0/token`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+      cache: "no-store",
+    }
+  )
+  const payload = (await response.json()) as GraphTokenResponse
+
+  if (!response.ok || !payload.access_token) {
+    throw new Error(
+      `No se pudo obtener el token de Microsoft Graph (${response.status}): ${payload.error_description || payload.error || "respuesta no válida"}`
+    )
+  }
+
+  tokenCache = {
+    accessToken: payload.access_token,
+    expiresAt: Date.now() + (payload.expires_in || 3600) * 1000,
+  }
+
+  return tokenCache.accessToken
+}
+
+const normalizeRecipients = (recipients: string | string[]) =>
+  (Array.isArray(recipients) ? recipients : [recipients])
+    .flatMap((recipient) => recipient.split(/[;,]/))
+    .map((recipient) => recipient.trim())
+    .filter(Boolean)
+
+const getGraphError = async (response: Response) => {
+  const body = await response.text()
+
+  if (!body) return response.statusText || "Error desconocido"
+
+  try {
+    const payload = JSON.parse(body) as { error?: { code?: string; message?: string } }
+    return [payload.error?.code, payload.error?.message].filter(Boolean).join(": ") || body
+  } catch {
+    return body
+  }
+}
+
+const sendGraphEmail = async (options: GraphEmailOptions): Promise<GraphEmailResult> => {
+  const { fromEmail } = requireGraphConfig()
+  const recipients = normalizeRecipients(options.to)
+
+  if (recipients.length === 0) {
+    throw new Error("El email no tiene destinatarios")
+  }
+
+  const accessToken = await getGraphAccessToken()
+  const response = await fetch(
+    `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(fromEmail)}/sendMail`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message: {
+          subject: options.subject,
+          body: {
+            contentType: options.html ? "HTML" : "Text",
+            content: options.html || options.text || "",
+          },
+          toRecipients: recipients.map((address) => ({ emailAddress: { address } })),
+        },
+        saveToSentItems: true,
+      }),
+      cache: "no-store",
+    }
+  )
+
+  if (!response.ok) {
+    throw new Error(
+      `Microsoft Graph rechazó el email (${response.status}): ${await getGraphError(response)}`
+    )
+  }
+
+  return {
+    messageId: response.headers.get("request-id") || response.headers.get("client-request-id") || "graph-accepted",
+    accepted: recipients,
+    rejected: [],
+    response: "202 Accepted by Microsoft Graph",
+  }
+}
+
+const fromEmail = process.env.GRAPH_FROM_EMAIL || process.env.FROM_EMAIL || ''
 const fromName = process.env.FROM_NAME || 'Fulcrum Flota'
 const avisoFooterUrl = "https://flota.fulcrum.es"
 const avisoFooterLabel = "Fulcrum Flota"
 const avisoFooterHtml = `<a href="${avisoFooterUrl}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;">${avisoFooterLabel}</a> · Aviso automático`
 const avisoFooterText = `${avisoFooterLabel} · Aviso automático\n${avisoFooterUrl}`
 
-// Crear el transportador de email
+// Adaptador común para conservar las plantillas y llamadas existentes.
 export const createEmailTransporter = () => {
-  return nodemailer.createTransport(emailConfig);
+  return {
+    sendMail: sendGraphEmail,
+    verify: async () => {
+      requireGraphConfig()
+      await getGraphAccessToken()
+      return true
+    },
+  }
 };
 
 // Función para enviar email de reserva vencida
@@ -287,7 +421,7 @@ export async function probarConfiguracionEmail() {
 export async function enviarEmailPrueba(destinatario?: string, nombreDestinatario?: string) {
   try {
     const transporter = createEmailTransporter();
-    const emailDestino = destinatario || emailConfig.auth.user
+    const emailDestino = destinatario || process.env.EMAIL_TEST_RECIPIENT || fromEmail
     const nombre = nombreDestinatario || emailDestino
     const fechaPrueba = new Date()
     const subject = `🧪 Prueba del Sistema de Notificaciones - Fulcrum Flota`
@@ -308,13 +442,13 @@ Hola ${nombre},
 Este es un email de prueba del sistema de notificaciones automáticas de Fulcrum Flota.
 
 Si recibe este mensaje, significa que:
-✅ La configuración de Office 365 SMTP está correcta
+✅ La configuración de Microsoft Graph está correcta
 ✅ El sistema de email está funcionando correctamente
 ✅ Los cron jobs podrán enviar notificaciones automáticas
 
 Detalles técnicos:
-- Servidor SMTP: ${emailConfig.host}:${emailConfig.port}
-- Usuario: ${emailConfig.auth.user}
+- Servicio: Microsoft Graph
+- Buzón remitente: ${fromEmail}
 - Fecha de prueba: ${fechaPrueba.toLocaleString('es-ES')}
 
 ---
@@ -354,7 +488,7 @@ Sistema de Notificaciones Automáticas
         
         <h3>✅ Verificaciones Completadas:</h3>
         <ul>
-            <li>Configuración de Office 365 SMTP correcta</li>
+            <li>Configuración de Microsoft Graph correcta</li>
             <li>Sistema de email funcionando</li>
             <li>Cron jobs listos para notificaciones automáticas</li>
         </ul>
@@ -362,8 +496,8 @@ Sistema de Notificaciones Automáticas
         <div class="details">
             <h3>Detalles Técnicos:</h3>
             <ul>
-                <li><strong>Servidor SMTP:</strong> ${emailConfig.host}:${emailConfig.port}</li>
-                <li><strong>Usuario:</strong> ${emailConfig.auth.user}</li>
+                <li><strong>Servicio:</strong> Microsoft Graph</li>
+                <li><strong>Buzón remitente:</strong> ${fromEmail}</li>
                 <li><strong>Fecha de prueba:</strong> ${fechaPrueba.toLocaleString('es-ES')}</li>
             </ul>
         </div>

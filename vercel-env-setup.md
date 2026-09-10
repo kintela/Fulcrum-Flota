@@ -1,9 +1,14 @@
 # Variables de entorno necesarias en Vercel
 # Ve a tu proyecto en Vercel Dashboard > Settings > Environment Variables
 
-# Email corporativo Office 365
-EMAIL_USER=tu_email@fulcrum.es
-EMAIL_PASSWORD=tu_contraseña_de_aplicacion
+# Envío de correo con Microsoft Graph (aplicación de Entra ID)
+GRAPH_TENANT_ID=identificador_del_directorio
+GRAPH_CLIENT_ID=identificador_de_la_aplicacion
+GRAPH_CLIENT_SECRET=secreto_de_la_aplicacion
+GRAPH_FROM_EMAIL=flota@fulcrum.es
+
+# Destinatario usado solo por la prueba sin usuario autenticado (opcional)
+EMAIL_TEST_RECIPIENT=rquintela@fulcrum.es
 
 # Token de seguridad para cron jobs (opcional en producción con Vercel Cron)
 CRON_SECRET_TOKEN=tu_token_secreto

@@ -101,11 +101,11 @@ export default function AdminPage() {
               <div className="space-y-4">
                 <div className="grid gap-4">
                   <div>
-                    <h3 className="text-lg font-semibold">Office 365 SMTP</h3>
+                    <h3 className="text-lg font-semibold">Microsoft Graph</h3>
                     <div className="space-y-2 text-sm text-muted-foreground">
-                      <div>Servidor: smtp.office365.com</div>
-                      <div>Puerto: 587</div>
-                      <div>Seguridad: STARTTLS</div>
+                      <div>Autenticación: aplicación de Entra ID</div>
+                      <div>Permiso: Exchange RBAC Application Mail.Send</div>
+                      <div>Buzón remitente: flota@fulcrum.es</div>
                       <div>Dominio: fulcrum.es</div>
                     </div>
                   </div>
@@ -113,8 +113,10 @@ export default function AdminPage() {
                   <div>
                     <h3 className="text-lg font-semibold">Variables de Entorno</h3>
                     <div className="space-y-1 text-sm text-muted-foreground">
-                      <div><code>EMAIL_USER</code>: Usuario de email corporativo</div>
-                      <div><code>EMAIL_PASSWORD</code>: Contraseña de aplicación</div>
+                      <div><code>GRAPH_TENANT_ID</code>: ID del directorio de Entra</div>
+                      <div><code>GRAPH_CLIENT_ID</code>: ID de la aplicación</div>
+                      <div><code>GRAPH_CLIENT_SECRET</code>: Secreto de la aplicación</div>
+                      <div><code>GRAPH_FROM_EMAIL</code>: Buzón remitente</div>
                     </div>
                   </div>
 
@@ -126,7 +128,7 @@ export default function AdminPage() {
                           Envía un correo de prueba al email del empleado autenticado.
                         </p>
                       </div>
-                      <Badge variant="outline">SMTP</Badge>
+                      <Badge variant="outline">Graph</Badge>
                     </div>
 
                     <Button onClick={enviarPruebaEmailEmpleado} disabled={probandoEmail}>
@@ -246,8 +248,10 @@ export default function AdminPage() {
                     <div className="grid gap-2">
                       <div><code>SUPABASE_URL</code>: URL del proyecto Supabase</div>
                       <div><code>SUPABASE_ANON_KEY</code>: Clave anónima de Supabase</div>
-                      <div><code>EMAIL_USER</code>: Usuario de email corporativo</div>
-                      <div><code>EMAIL_PASSWORD</code>: Contraseña de aplicación Office 365</div>
+                      <div><code>GRAPH_TENANT_ID</code>: ID del directorio de Entra</div>
+                      <div><code>GRAPH_CLIENT_ID</code>: ID de la aplicación</div>
+                      <div><code>GRAPH_CLIENT_SECRET</code>: Secreto de la aplicación</div>
+                      <div><code>GRAPH_FROM_EMAIL</code>: Buzón remitente</div>
                       <div><code>CRON_SECRET_TOKEN</code>: Token de seguridad para cron jobs</div>
                     </div>
                   </div>

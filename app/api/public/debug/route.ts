@@ -13,16 +13,16 @@ export async function GET() {
       vercelEnv: process.env.VERCEL_ENV,
       
       // Verificar variables críticas
-      EMAIL_USER_EXISTS: !!process.env.EMAIL_USER,
-      EMAIL_PASSWORD_EXISTS: !!process.env.EMAIL_PASSWORD,
+      GRAPH_TENANT_ID_EXISTS: !!process.env.GRAPH_TENANT_ID,
+      GRAPH_CLIENT_ID_EXISTS: !!process.env.GRAPH_CLIENT_ID,
+      GRAPH_CLIENT_SECRET_EXISTS: !!process.env.GRAPH_CLIENT_SECRET,
+      GRAPH_FROM_EMAIL_EXISTS: !!(process.env.GRAPH_FROM_EMAIL || process.env.FROM_EMAIL),
       TWILIO_ACCOUNT_SID_EXISTS: !!process.env.TWILIO_ACCOUNT_SID,
       TWILIO_AUTH_TOKEN_EXISTS: !!process.env.TWILIO_AUTH_TOKEN,
       TWILIO_WHATSAPP_FROM_EXISTS: !!process.env.TWILIO_WHATSAPP_FROM,
       
       // Valores parciales para debug (seguros)
-      EMAIL_USER_PARTIAL: process.env.EMAIL_USER ? 
-        `${process.env.EMAIL_USER.substring(0, 3)}...${process.env.EMAIL_USER.slice(-3)}` : 
-        'NOT_SET',
+      GRAPH_FROM_EMAIL: process.env.GRAPH_FROM_EMAIL || process.env.FROM_EMAIL || 'NOT_SET',
       TWILIO_WHATSAPP_FROM_VALUE: process.env.TWILIO_WHATSAPP_FROM || 'NOT_SET',
       
       // Variables de Supabase (públicas)

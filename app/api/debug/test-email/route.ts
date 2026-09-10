@@ -6,19 +6,25 @@ export async function POST(request: NextRequest) {
     console.log('🧪 Probando configuración de email en producción')
     
     // Verificar variables
-    const emailUser = process.env.EMAIL_USER
-    const emailPassword = process.env.EMAIL_PASSWORD
+    const graphTenantId = process.env.GRAPH_TENANT_ID
+    const graphClientId = process.env.GRAPH_CLIENT_ID
+    const graphClientSecret = process.env.GRAPH_CLIENT_SECRET
+    const graphFromEmail = process.env.GRAPH_FROM_EMAIL || process.env.FROM_EMAIL
     
-    console.log('EMAIL_USER:', emailUser ? '✅ Definida' : '❌ No definida')
-    console.log('EMAIL_PASSWORD:', emailPassword ? '✅ Definida' : '❌ No definida')
+    console.log('GRAPH_TENANT_ID:', graphTenantId ? '✅ Definida' : '❌ No definida')
+    console.log('GRAPH_CLIENT_ID:', graphClientId ? '✅ Definida' : '❌ No definida')
+    console.log('GRAPH_CLIENT_SECRET:', graphClientSecret ? '✅ Definida' : '❌ No definida')
+    console.log('GRAPH_FROM_EMAIL:', graphFromEmail ? '✅ Definida' : '❌ No definida')
     
-    if (!emailUser || !emailPassword) {
+    if (!graphTenantId || !graphClientId || !graphClientSecret || !graphFromEmail) {
       return NextResponse.json({
         success: false,
-        error: 'Variables de email no definidas',
+        error: 'Variables de Microsoft Graph no definidas',
         variables: {
-          EMAIL_USER: emailUser ? 'definida' : 'undefined',
-          EMAIL_PASSWORD: emailPassword ? 'definida' : 'undefined'
+          GRAPH_TENANT_ID: graphTenantId ? 'definida' : 'undefined',
+          GRAPH_CLIENT_ID: graphClientId ? 'definida' : 'undefined',
+          GRAPH_CLIENT_SECRET: graphClientSecret ? 'definida' : 'undefined',
+          GRAPH_FROM_EMAIL: graphFromEmail ? 'definida' : 'undefined'
         }
       }, { status: 400 })
     }
@@ -34,7 +40,8 @@ export async function POST(request: NextRequest) {
         modelo: 'Test'
       },
       fechaPrueba,
-      2
+      new Date(fechaPrueba.getTime() + 2 * 60 * 60 * 1000),
+      '2 horas'
     )
     
     return NextResponse.json({
@@ -83,7 +90,7 @@ export async function GET() {
       
       <p>Este test verificará:</p>
       <ul>
-        <li>✅ Variables de entorno EMAIL_USER y EMAIL_PASSWORD</li>
+        <li>✅ Variables de entorno de Microsoft Graph</li>
         <li>📧 Funcionamiento del sistema de email</li>
         <li>🔍 Logs detallados del proceso</li>
       </ul>

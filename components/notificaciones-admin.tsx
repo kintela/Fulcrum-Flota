@@ -528,8 +528,10 @@ export default function NotificacionesAdmin() {
         </CardHeader>
         <CardContent>
           <div className="space-y-2 text-sm">
-            <div><code>EMAIL_USER</code>: Email corporativo (@fulcrum.es)</div>
-            <div><code>EMAIL_PASSWORD</code>: Contraseña de aplicación de Office 365</div>
+            <div><code>GRAPH_TENANT_ID</code>: ID del directorio de Entra</div>
+            <div><code>GRAPH_CLIENT_ID</code>: ID de la aplicación</div>
+            <div><code>GRAPH_CLIENT_SECRET</code>: Secreto de la aplicación</div>
+            <div><code>GRAPH_FROM_EMAIL</code>: Buzón remitente (flota@fulcrum.es)</div>
             <div><code>CRON_SECRET_TOKEN</code>: Token de seguridad para cron jobs</div>
           </div>
           <div className="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">

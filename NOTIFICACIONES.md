@@ -7,7 +7,7 @@ Sistema automatizado para notificar a los usuarios cuando una reserva vence y pa
 ## Características
 
 - ✅ **Detección automática** de reservas vencidas
-- ✅ **Notificaciones por email** usando Office 365 SMTP
+- ✅ **Notificaciones por email** usando Microsoft Graph
 - ✅ **Sin cambio automático de estado** (solo notificación)
 - ✅ **Plantillas HTML profesionales** para los emails
 - ✅ **Programación automática** con cron jobs
@@ -22,27 +22,28 @@ Sistema automatizado para notificar a los usuarios cuando una reserva vence y pa
 Copia `.env.example` a `.env.local` y configura las siguientes variables:
 
 ```bash
-# Email corporativo Office 365
-EMAIL_USER=tu_email@fulcrum.es
-EMAIL_PASSWORD=tu_contraseña_de_aplicacion
+# Aplicación de Entra ID para Microsoft Graph
+GRAPH_TENANT_ID=identificador_del_directorio
+GRAPH_CLIENT_ID=identificador_de_la_aplicacion
+GRAPH_CLIENT_SECRET=secreto_de_la_aplicacion
+GRAPH_FROM_EMAIL=flota@fulcrum.es
+
+# Destinatario de la prueba automática (opcional)
+EMAIL_TEST_RECIPIENT=rquintela@fulcrum.es
 
 # Token de seguridad para cron jobs
 CRON_SECRET_TOKEN=genera_un_token_muy_seguro_aqui
 ```
 
-### 2. Configuración de Office 365
+### 2. Configuración de Microsoft Graph
 
-1. **Generar contraseña de aplicación:**
-   - Ve a https://account.microsoft.com/security
-   - Selecciona "Opciones de seguridad adicionales"
-   - En "Contraseñas de aplicación", crea una nueva
-   - Usa esta contraseña en `EMAIL_PASSWORD`
+1. Registra una aplicación independiente para Flota en Microsoft Entra ID.
+2. Crea un secreto de cliente y guarda su **valor** en `GRAPH_CLIENT_SECRET`.
+3. Asigna `Application Mail.Send` únicamente sobre `flota@fulcrum.es` mediante RBAC para aplicaciones de Exchange Online. Consulta `GRAPH-EMAIL.md` para los comandos.
+4. No concedas además `Mail.Send` globalmente en Entra: ambos permisos son acumulativos y el global anularía en la práctica la limitación por buzón.
+5. Configura en Vercel las cuatro variables `GRAPH_*` para Production y vuelve a desplegar.
 
-2. **Configuración SMTP:**
-   - Servidor: `smtp.office365.com`
-   - Puerto: `587`
-   - Seguridad: `STARTTLS`
-   - Autenticación: `LOGIN`
+La aplicación envía mediante `POST /users/flota@fulcrum.es/sendMail`. No utiliza la cuenta ni la contraseña personal de ningún empleado y guarda la copia en los elementos enviados del buzón de Flota.
 
 ### 3. Base de Datos
 
@@ -76,7 +77,7 @@ ON reservas(fecha_notificacion_inicio_reserva);
 ### 4. Instalación de Dependencias
 
 ```bash
-npm install nodemailer @types/nodemailer node-cron @types/node-cron
+npm install node-cron @types/node-cron
 ```
 
 ## Uso
@@ -227,4 +228,4 @@ Para problemas o preguntas sobre el sistema de notificaciones:
 1. Revisa los logs del sistema
 2. Usa el panel de administración para diagnosticar
 3. Verifica la configuración de variables de entorno
-4. Consulta la documentación de Office 365 SMTP si es necesario
+4. Consulta `GRAPH-EMAIL.md` y los registros de Vercel si el envío mediante Graph falla
