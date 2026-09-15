@@ -27,6 +27,8 @@ interface TarjetaViat {
   id: string
   fechacaducidad: string
   activo: boolean
+  matricula_asignada?: string | null
+  disponible?: boolean
   created_at?: string
   updated_at?: string
 }
@@ -288,12 +290,21 @@ export function ViatManager({ matricula, isEditing = false }: ViatManagerProps) 
               >
                 <option value="">Seleccionar tarjeta...</option>
                 {tarjetasViat.map((tarjeta) => (
-                  <option key={tarjeta.id} value={tarjeta.id}>
+                  <option key={tarjeta.id} value={tarjeta.id} disabled={tarjeta.disponible === false}>
                     {formatearNumeroTarjeta(tarjeta.id)} - Caduca: {formatearFecha(tarjeta.fechacaducidad)}
                     {estaVencida(tarjeta.fechacaducidad) ? " (VENCIDA)" : ""}
+                    {tarjeta.matricula_asignada ? ` - Asignada a ${tarjeta.matricula_asignada}` : " - Disponible"}
                   </option>
                 ))}
               </select>
+              {!error && tarjetasViat.length === 0 && (
+                <p className="mt-2 text-sm text-gray-600">No hay tarjetas ViaT activas.</p>
+              )}
+              {tarjetasViat.length > 0 && tarjetasViat.every((tarjeta) => tarjeta.disponible === false) && (
+                <p className="mt-2 text-sm text-gray-600">
+                  Todas las tarjetas ViaT están asignadas a otros coches. Desasigna una de su coche actual para poder asignarla aquí.
+                </p>
+              )}
             </div>
 
             <div>

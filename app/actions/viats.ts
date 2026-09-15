@@ -14,7 +14,7 @@ export async function obtenerTarjetasViat(matricula?: string | null) {
 
     if (error) {
       console.error("Error al obtener tarjetas ViaT:", error)
-      return []
+      throw error
     }
 
     const tarjetas = data || []
@@ -27,7 +27,7 @@ export async function obtenerTarjetasViat(matricula?: string | null) {
 
     if (asignacionesError) {
       console.error("Error al obtener asignaciones activas ViaT:", asignacionesError)
-      return tarjetas
+      throw asignacionesError
     }
 
     const matriculaPorViat = new Map(
@@ -37,17 +37,18 @@ export async function obtenerTarjetasViat(matricula?: string | null) {
       ]),
     )
 
-    return tarjetas.filter((tarjeta) => {
-      const matriculaAsignada = matriculaPorViat.get(String(tarjeta.id || "").trim())
+    return tarjetas.map((tarjeta) => {
+      const matriculaAsignada = matriculaPorViat.get(String(tarjeta.id || "").trim()) || null
 
-      if (!matriculaAsignada) return true
-      if (!matriculaNormalizada) return false
-
-      return matriculaAsignada === matriculaNormalizada
+      return {
+        ...tarjeta,
+        matricula_asignada: matriculaAsignada,
+        disponible: !matriculaAsignada || matriculaAsignada === matriculaNormalizada,
+      }
     })
   } catch (error) {
     console.error("Error en obtenerTarjetasViat:", error)
-    return []
+    throw error
   }
 }
 
