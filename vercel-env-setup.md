@@ -20,3 +20,6 @@ SUPABASE_SERVICE_ROLE_KEY=tu_clave_de_servicio_de_supabase
 
 # Google Maps (si aplica)
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=tu_api_key_de_google_maps
+# Opcional: clave exclusiva de servidor para la imagen del mapa en los emails.
+# Si no se define, se usa NEXT_PUBLIC_GOOGLE_MAPS_API_KEY.
+GOOGLE_MAPS_STATIC_API_KEY=tu_api_key_de_google_static_maps

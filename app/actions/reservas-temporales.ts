@@ -880,7 +880,7 @@ export async function activarReservasPendientes(opciones?: { manual?: boolean })
     // Nota: reducimos el SELECT para evitar fallar si ciertos campos no existen todavía (ej: whatsapp)
     const { data: pendientes, error } = await supabase
       .from('reservas')
-      .select('id, fecha_inicio, fecha_fin, matricula, empleado_id, notificacion_inicio_reserva_enviada, fecha_notificacion_inicio_reserva, coches(marca,modelo), empleados(email,nombre,apellidos,movil)')
+      .select('id, fecha_inicio, fecha_fin, matricula, empleado_id, notificacion_inicio_reserva_enviada, fecha_notificacion_inicio_reserva, coches(marca,modelo,latitud,longitud,direccion_actual), empleados(email,nombre,apellidos,movil)')
       .eq('estado', 'pendiente')
       .lte('fecha_inicio', ahora.toISOString())
 
@@ -929,7 +929,14 @@ export async function activarReservasPendientes(opciones?: { manual?: boolean })
           const resEmail = await enviarEmailInicioReserva(
             email,
             nombre,
-            { matricula: r.matricula, marca: coche.marca, modelo: coche.modelo },
+            {
+              matricula: r.matricula,
+              marca: coche.marca,
+              modelo: coche.modelo,
+              latitud: coche.latitud,
+              longitud: coche.longitud,
+              direccion_actual: coche.direccion_actual,
+            },
             fechaInicio,
             fechaFin
           )

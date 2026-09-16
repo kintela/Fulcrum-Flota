@@ -548,26 +548,61 @@ Sistema de Notificaciones Automáticas
   }
 }
 
-// Email al inicio (activación) de una reserva pendiente
-export async function enviarEmailInicioReserva(
-  emailDestino: string,
+interface VehiculoInicioReserva {
+  matricula: string
+  marca: string
+  modelo: string
+  latitud?: number | string | null
+  longitud?: number | string | null
+  direccion_actual?: string | null
+}
+
+const escaparHtml = (valor: unknown) =>
+  String(valor ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;")
+
+const coordenadaValida = (valor: unknown, minimo: number, maximo: number) => {
+  if (valor === null || valor === undefined || valor === "") return null
+  const numero = Number(valor)
+  return Number.isFinite(numero) && numero >= minimo && numero <= maximo ? numero : null
+}
+
+export function crearContenidoEmailInicioReserva(
   nombreEmpleado: string,
-  vehiculo: { matricula: string; marca: string; modelo: string },
+  vehiculo: VehiculoInicioReserva,
   fechaInicio: Date,
   fechaFin: Date
 ) {
-  try {
-    const transporter = createEmailTransporter()
+  const inicioFmt = fechaInicio.toLocaleDateString('es-ES', {
+    timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+  })
+  const finFmt = fechaFin.toLocaleDateString('es-ES', {
+    timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+  })
 
-    const inicioFmt = fechaInicio.toLocaleDateString('es-ES', {
-      timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
-    })
-    const finFmt = fechaFin.toLocaleDateString('es-ES', {
-      timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
-    })
+  const latitud = coordenadaValida(vehiculo.latitud, -90, 90)
+  const longitud = coordenadaValida(vehiculo.longitud, -180, 180)
+  const tieneCoordenadas = latitud !== null && longitud !== null
+  const coordenadas = tieneCoordenadas ? `${latitud},${longitud}` : null
+  const direccion = String(vehiculo.direccion_actual || "").trim()
+  const consultaMapa = coordenadas || direccion || null
+  const urlMapa = consultaMapa
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(consultaMapa)}`
+    : null
+  const apiKey = process.env.GOOGLE_MAPS_STATIC_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+  const urlImagenMapa = consultaMapa && apiKey
+    ? `https://maps.googleapis.com/maps/api/staticmap?center=${encodeURIComponent(consultaMapa)}&zoom=16&size=600x300&scale=2&maptype=roadmap&markers=${encodeURIComponent(`color:green|${consultaMapa}`)}&key=${encodeURIComponent(apiKey)}`
+    : null
+  const ubicacionTexto = direccion || (coordenadas ? `Coordenadas: ${coordenadas}` : "No hay una ubicación registrada para este vehículo")
+  const coordenadasTexto = direccion && coordenadas ? `\nCoordenadas: ${coordenadas}` : ""
+  const enlaceTexto = urlMapa ? `\nAbrir en Google Maps: ${urlMapa}` : ""
 
-    const asunto = `✅ Comienza tu reserva - ${vehiculo.matricula}`
-    const texto = `
+  const asunto = `✅ Comienza tu reserva - ${vehiculo.matricula}`
+  const texto = `
 INICIO DE RESERVA
 
 Hola ${nombreEmpleado},
@@ -577,13 +612,35 @@ Tu reserva del vehículo ${vehiculo.marca} ${vehiculo.modelo} (${vehiculo.matric
 Inicio: ${inicioFmt}
 Fin previsto: ${finFmt}
 
+DÓNDE ESTÁ APARCADO
+${ubicacionTexto}${coordenadasTexto}${enlaceTexto}
+
 Recuerda marcarla como completada cuando devuelvas el vehículo
 
 ---
 ${avisoFooterText}
     `
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /><title>Inicio de Reserva</title><style>body{font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#333;max-width:620px;margin:0 auto;padding:24px;background:#f5f7fa} .card{background:#fff;border-radius:10px;padding:28px;box-shadow:0 2px 8px rgba(0,0,0,0.06)} h1{margin:0 0 12px;font-size:22px;color:#16a34a} .veh{background:#f0fdf4;border:1px solid #bbf7d0;padding:16px;border-radius:8px;margin:16px 0} .footer{margin-top:32px;font-size:12px;color:#666;text-align:center} .pill{display:inline-block;background:#16a34a;color:#fff;padding:4px 10px;border-radius:999px;font-size:12px;margin-bottom:8px}</style></head><body><div class="card"><span class="pill">Reserva activada</span><h1>Comienza tu reserva</h1><p>Hola <strong>${nombreEmpleado}</strong>,</p><p>Tu reserva ha pasado automáticamente de <strong>pendiente</strong> a <strong>activa</strong>.</p><div class="veh"><strong>Vehículo:</strong> ${vehiculo.marca} ${vehiculo.modelo} (${vehiculo.matricula})<br/><strong>Inicio:</strong> ${inicioFmt}<br/><strong>Fin previsto:</strong> ${finFmt}</div><p>Recuerda marcarla como <em>completada</em> cuando devuelvas el vehículo.</p><div class="footer">${avisoFooterHtml}</div></div></body></html>`
+  const ubicacionHtml = urlMapa
+    ? `<div class="location"><div class="location-title">📍 Dónde está aparcado</div><div>${escaparHtml(ubicacionTexto)}</div>${direccion && coordenadas ? `<div class="coordinates">Coordenadas: ${escaparHtml(coordenadas)}</div>` : ""}<a class="map-link" href="${escaparHtml(urlMapa)}" target="_blank" rel="noopener noreferrer">Abrir ubicación en Google Maps</a>${urlImagenMapa ? `<a href="${escaparHtml(urlMapa)}" target="_blank" rel="noopener noreferrer"><img class="map" src="${escaparHtml(urlImagenMapa)}" width="600" alt="Mapa de la ubicación del vehículo ${escaparHtml(vehiculo.matricula)}" /></a>` : ""}</div>`
+    : `<div class="location"><div class="location-title">📍 Dónde está aparcado</div><div>No hay una ubicación registrada para este vehículo.</div></div>`
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>Inicio de Reserva</title><style>body{font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#333;max-width:620px;margin:0 auto;padding:24px;background:#f5f7fa} .card{background:#fff;border-radius:10px;padding:28px;box-shadow:0 2px 8px rgba(0,0,0,0.06)} h1{margin:0 0 12px;font-size:22px;color:#16a34a} .veh{background:#f0fdf4;border:1px solid #bbf7d0;padding:16px;border-radius:8px;margin:16px 0} .location{border:1px solid #dbeafe;background:#eff6ff;padding:16px;border-radius:8px;margin:16px 0} .location-title{font-weight:700;color:#1d4ed8;margin-bottom:6px} .coordinates{font-size:12px;color:#64748b;margin-top:3px} .map-link{display:inline-block;margin:10px 0;color:#1d4ed8;font-weight:600} .map{display:block;width:100%;height:auto;border:0;border-radius:6px;margin-top:4px} .footer{margin-top:32px;font-size:12px;color:#666;text-align:center} .pill{display:inline-block;background:#16a34a;color:#fff;padding:4px 10px;border-radius:999px;font-size:12px;margin-bottom:8px}</style></head><body><div class="card"><span class="pill">Reserva activada</span><h1>Comienza tu reserva</h1><p>Hola <strong>${escaparHtml(nombreEmpleado)}</strong>,</p><p>Tu reserva ha pasado automáticamente de <strong>pendiente</strong> a <strong>activa</strong>.</p><div class="veh"><strong>Vehículo:</strong> ${escaparHtml(vehiculo.marca)} ${escaparHtml(vehiculo.modelo)} (${escaparHtml(vehiculo.matricula)})<br/><strong>Inicio:</strong> ${escaparHtml(inicioFmt)}<br/><strong>Fin previsto:</strong> ${escaparHtml(finFmt)}</div>${ubicacionHtml}<p>Recuerda marcarla como <em>completada</em> cuando devuelvas el vehículo.</p><div class="footer">${avisoFooterHtml}</div></div></body></html>`
+
+  return { asunto, texto, html }
+}
+
+// Email al inicio (activación) de una reserva pendiente
+export async function enviarEmailInicioReserva(
+  emailDestino: string,
+  nombreEmpleado: string,
+  vehiculo: VehiculoInicioReserva,
+  fechaInicio: Date,
+  fechaFin: Date
+) {
+  try {
+    const transporter = createEmailTransporter()
+    const { asunto, texto, html } = crearContenidoEmailInicioReserva(nombreEmpleado, vehiculo, fechaInicio, fechaFin)
 
     const mailOptions = {
       from: { name: fromName, address: fromEmail },
