@@ -178,16 +178,20 @@ export default async function EditarCochePage({ params }: { params: { id: string
             <AlquilerManager matricula={coche.matricula} isEditing />
 
             {/* Gestión de ITVs */}
-            <ITVManager matricula={coche.matricula} isEditing />
+            <div className="lg:col-span-2">
+              <ITVManager matricula={coche.matricula} isEditing />
+            </div>
 
             {/* Gestión de Mantenimientos */}
-            <MantenimientoManager matricula={coche.matricula} isEditing />
-
-            {/* Gestión de SOLRED */}
-            <SolredManager matricula={coche.matricula} isEditing />
+            <div className="lg:col-span-2">
+              <MantenimientoManager matricula={coche.matricula} isEditing />
+            </div>
 
             {/* Gestión de VIAT */}
             <ViatManager matricula={coche.matricula} isEditing />
+
+            {/* Gestión de SOLRED */}
+            <SolredManager matricula={coche.matricula} isEditing />
           </div>
 
           {/* Editor de ubicación - Al final */}

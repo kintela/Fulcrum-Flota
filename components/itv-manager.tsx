@@ -10,8 +10,10 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
-import { Plus, Edit2, Trash2, Calendar, CheckCircle, XCircle, AlertCircle, Info } from "lucide-react"
+import { Plus, Edit2, Trash2, Calendar, CheckCircle, XCircle, AlertCircle, Info, Upload, FileText, X } from "lucide-react"
 import { obtenerITVsPorMatricula, crearITV, actualizarITV, eliminarITV } from "@/app/actions/itvs"
+import { ITVDocumentosList } from "@/components/itv-documentos-list"
+import { eliminarDocumentosITV, subirDocumentosITV, validarDocumentoITV } from "@/lib/itv-documentos"
 
 // Valores exactos permitidos por el constraint actualizado
 const RESULTADOS_VALIDOS = ["Apto", "No Apto", "Apto Con Observaciones"] as const
@@ -22,7 +24,7 @@ interface ITV {
   matricula: string
   fecharevision?: string
   fechaproximarevision: string
-  resultado?: ResultadoITV
+  resultado?: ResultadoITV | ""
   observaciones?: string
   coste?: number
   estacion_itv?: string
@@ -41,7 +43,11 @@ export function ITVManager({ matricula, isEditing = false }: ITVManagerProps) {
   const [editingITV, setEditingITV] = useState<ITV | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
   const [tipoRegistro, setTipoRegistro] = useState<"realizada" | "programada">("realizada")
+  const [archivosPendientes, setArchivosPendientes] = useState<File[]>([])
+  const [isDragging, setIsDragging] = useState(false)
+  const [documentosRefreshKey, setDocumentosRefreshKey] = useState(0)
 
   // Campos del formulario
   const [formData, setFormData] = useState<Partial<ITV & { periodoAnios: string }>>({
@@ -115,7 +121,7 @@ export function ITVManager({ matricula, isEditing = false }: ITVManagerProps) {
       const response = await obtenerITVsPorMatricula(matricula)
 
       if (response.success) {
-        setItvs(response.data)
+        setItvs(response.data || [])
       } else {
         setError(response.error || "Error al cargar las ITVs")
         setItvs([])
@@ -167,10 +173,41 @@ export function ITVManager({ matricula, isEditing = false }: ITVManagerProps) {
     setFormData(newFormData)
   }
 
+  function agregarArchivos(archivos: File[]) {
+    const validos: File[] = []
+    const errores: string[] = []
+
+    archivos.forEach((archivo) => {
+      const validacion = validarDocumentoITV(archivo)
+      if (validacion.valido) {
+        validos.push(archivo)
+      } else {
+        errores.push(`${archivo.name}: ${validacion.error}`)
+      }
+    })
+
+    if (validos.length > 0) {
+      setArchivosPendientes((actuales) => {
+        const existentes = new Set(actuales.map((archivo) => `${archivo.name}-${archivo.size}-${archivo.lastModified}`))
+        return [...actuales, ...validos.filter((archivo) => !existentes.has(`${archivo.name}-${archivo.size}-${archivo.lastModified}`))]
+      })
+    }
+
+    setError(errores.length > 0 ? errores.join("\n") : null)
+  }
+
+  function limpiarFormulario() {
+    setShowForm(false)
+    setEditingITV(null)
+    setArchivosPendientes([])
+    setIsDragging(false)
+  }
+
   async function handleSubmitITV(e: React.FormEvent) {
     e.preventDefault()
     setIsSubmitting(true)
     setError(null)
+    setSuccess(null)
 
     // Validaciones según el tipo
     if (tipoRegistro === "realizada") {
@@ -207,7 +244,7 @@ export function ITVManager({ matricula, isEditing = false }: ITVManagerProps) {
       formDataObj.append("observaciones", formData.observaciones)
     }
 
-    if (formData.coste !== undefined && formData.coste !== null && formData.coste !== "") {
+    if (formData.coste !== undefined && formData.coste !== null) {
       formDataObj.append("coste", formData.coste.toString())
     }
 
@@ -228,9 +265,26 @@ export function ITVManager({ matricula, isEditing = false }: ITVManagerProps) {
       }
 
       if (result.success) {
+        const itvId = result.data?.id as number | undefined
+        const fallos: string[] = []
+
+        if (archivosPendientes.length > 0 && !itvId) {
+          fallos.push("No se ha recibido el identificador de la ITV para asociar los documentos")
+        } else if (archivosPendientes.length > 0 && itvId) {
+          const subida = await subirDocumentosITV(matricula, itvId, archivosPendientes)
+          fallos.push(...subida.errores)
+        }
+
         await cargarITVs()
-        setShowForm(false)
-        setEditingITV(null)
+        setDocumentosRefreshKey((valor) => valor + 1)
+
+        if (fallos.length > 0) {
+          setError(`La ITV se guardó, pero algunos documentos no se pudieron subir:\n${fallos.join("\n")}`)
+          setArchivosPendientes([])
+        } else {
+          setSuccess(archivosPendientes.length > 0 ? "ITV y documentos guardados correctamente" : "ITV guardada correctamente")
+          limpiarFormulario()
+        }
       } else {
         setError(result.error || "Error al guardar la ITV")
       }
@@ -250,6 +304,10 @@ export function ITVManager({ matricula, isEditing = false }: ITVManagerProps) {
     try {
       const result = await eliminarITV(id)
       if (result.success) {
+        const documentos = await eliminarDocumentosITV(matricula, id)
+        if (!documentos.success) {
+          setError(documentos.error || "La ITV se eliminó, pero no se pudieron limpiar sus documentos")
+        }
         await cargarITVs()
       } else {
         setError(result.error || "Error al eliminar la ITV")
@@ -334,7 +392,13 @@ export function ITVManager({ matricula, isEditing = false }: ITVManagerProps) {
           <div className="space-y-4">
             {error && (
               <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-                <p className="text-red-800">{error}</p>
+                <p className="whitespace-pre-line text-red-800">{error}</p>
+              </div>
+            )}
+
+            {success && (
+              <div className="p-4 bg-green-50 border border-green-200 rounded-md">
+                <p className="text-green-800">{success}</p>
               </div>
             )}
 
@@ -344,6 +408,9 @@ export function ITVManager({ matricula, isEditing = false }: ITVManagerProps) {
                   onClick={() => {
                     setShowForm(true)
                     setEditingITV(null)
+                    setArchivosPendientes([])
+                    setError(null)
+                    setSuccess(null)
                   }}
                   className="flex items-center"
                 >
@@ -523,6 +590,75 @@ export function ITVManager({ matricula, isEditing = false }: ITVManagerProps) {
                     </div>
 
                     <div>
+                      <Label htmlFor="documentos-itv">Documentos de la ITV</Label>
+                      <div
+                        className={`mt-1 rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
+                          isDragging ? "border-blue-500 bg-blue-50" : "border-gray-300 hover:border-gray-400"
+                        }`}
+                        onDragEnter={(event) => {
+                          event.preventDefault()
+                          setIsDragging(true)
+                        }}
+                        onDragOver={(event) => event.preventDefault()}
+                        onDragLeave={(event) => {
+                          event.preventDefault()
+                          if (!event.currentTarget.contains(event.relatedTarget as Node)) setIsDragging(false)
+                        }}
+                        onDrop={(event) => {
+                          event.preventDefault()
+                          setIsDragging(false)
+                          agregarArchivos(Array.from(event.dataTransfer.files))
+                        }}
+                      >
+                        <Upload className="mx-auto mb-2 h-7 w-7 text-gray-500" />
+                        <Label htmlFor="documentos-itv" className="cursor-pointer text-sm font-medium text-blue-700 hover:underline">
+                          Selecciona los archivos
+                        </Label>
+                        <span className="text-sm text-gray-600"> o arrástralos aquí</span>
+                        <p className="mt-1 text-xs text-gray-500">
+                          Puedes añadir varios archivos · PDF, Word, JPEG, PNG o WebP · máximo 20 MB por archivo
+                        </p>
+                        <Input
+                          id="documentos-itv"
+                          type="file"
+                          multiple
+                          accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,image/webp"
+                          className="sr-only"
+                          onChange={(event) => {
+                            agregarArchivos(Array.from(event.target.files || []))
+                            event.target.value = ""
+                          }}
+                        />
+                      </div>
+
+                      {archivosPendientes.length > 0 && (
+                        <div className="mt-3 space-y-2">
+                          <p className="text-xs font-medium text-gray-600">
+                            {archivosPendientes.length} {archivosPendientes.length === 1 ? "archivo pendiente" : "archivos pendientes"}
+                          </p>
+                          {archivosPendientes.map((archivo, index) => (
+                            <div key={`${archivo.name}-${archivo.lastModified}`} className="flex items-center justify-between rounded-md bg-gray-50 px-3 py-2">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <FileText className="h-4 w-4 shrink-0 text-blue-600" />
+                                <span className="truncate text-sm">{archivo.name}</span>
+                              </div>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                title="Quitar archivo"
+                                onClick={() => setArchivosPendientes((actuales) => actuales.filter((_, posicion) => posicion !== index))}
+                              >
+                                <X className="h-4 w-4" />
+                                <span className="sr-only">Quitar {archivo.name}</span>
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
                       <Label htmlFor="observaciones">Observaciones</Label>
                       <Textarea
                         id="observaciones"
@@ -540,8 +676,7 @@ export function ITVManager({ matricula, isEditing = false }: ITVManagerProps) {
                         type="button"
                         variant="outline"
                         onClick={() => {
-                          setShowForm(false)
-                          setEditingITV(null)
+                          limpiarFormulario()
                           setError(null)
                         }}
                       >
@@ -564,8 +699,8 @@ export function ITVManager({ matricula, isEditing = false }: ITVManagerProps) {
               <div className="space-y-3">
                 {itvs.map((itv) => (
                   <Card key={itv.id} className="p-4">
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
+                    <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-[minmax(0,1fr)_minmax(280px,1fr)_auto]">
+                      <div className="min-w-0">
                         <div className="space-y-2">
                           {itv.fecharevision ? (
                             <div className="text-sm">
@@ -620,17 +755,32 @@ export function ITVManager({ matricula, isEditing = false }: ITVManagerProps) {
                               {itv.numero_certificado && <span>Certificado: {itv.numero_certificado}</span>}
                             </div>
                           )}
+
                         </div>
                       </div>
 
+                      {itv.id ? (
+                        <ITVDocumentosList
+                          matricula={matricula}
+                          itvId={itv.id}
+                          isEditing={isEditing}
+                          refreshKey={documentosRefreshKey}
+                          onError={setError}
+                          className="mt-0 border-t-0 pt-0 md:border-l md:pl-4"
+                        />
+                      ) : <div />}
+
                       {isEditing && (
-                        <div className="flex space-x-1 ml-4">
+                        <div className="flex shrink-0 gap-1 md:justify-self-end">
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={() => {
                               setEditingITV(itv)
                               setShowForm(true)
+                              setArchivosPendientes([])
+                              setError(null)
+                              setSuccess(null)
                             }}
                           >
                             <Edit2 className="w-3 h-3" />
