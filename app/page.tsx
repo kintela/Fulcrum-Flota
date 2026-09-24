@@ -77,6 +77,7 @@ async function getDashboardData(userRole: string, userEmail?: string) {
       marca,
       modelo,
       donante,
+      eliminado,
       asignadoa
     )
   `)
@@ -125,8 +126,8 @@ async function getDashboardData(userRole: string, userEmail?: string) {
     thirtyDaysFromNow.setDate(today.getDate() + 30)
 
     const itvAlerts = latestItvs.filter((itv) => {
-      // Skip donor vehicles
-      if (itv.coches?.donante === true) return false
+      // Los coches donantes o dados de baja no deben generar alertas
+      if (itv.coches?.donante === true || itv.coches?.eliminado === true) return false
 
       const fechaProximaRevision = new Date(itv.fechaproximarevision)
 
@@ -169,6 +170,7 @@ async function getDashboardData(userRole: string, userEmail?: string) {
       marca,
       modelo,
       donante,
+      eliminado,
       asignadoa
     )
   `)
@@ -187,8 +189,8 @@ async function getDashboardData(userRole: string, userEmail?: string) {
 
     // Calcular alertas de tarjetas SOLRED
     const solredAlerts = (tarjetasSolred || []).filter((asignacion) => {
-      // Skip donor vehicles
-      if (asignacion.coches?.donante === true) return false
+      // Los coches donantes o dados de baja no deben generar alertas
+      if (asignacion.coches?.donante === true || asignacion.coches?.eliminado === true) return false
 
       if (!asignacion.tarjetassolred?.fechavencimiento) return false
       const fechaVencimiento = new Date(asignacion.tarjetassolred.fechavencimiento)
@@ -215,6 +217,7 @@ async function getDashboardData(userRole: string, userEmail?: string) {
           marca,
           modelo,
           donante,
+          eliminado,
           asignadoa
         )
       `)
@@ -236,8 +239,8 @@ async function getDashboardData(userRole: string, userEmail?: string) {
     sixtyDaysFromNow.setDate(today.getDate() + 60)
 
     const alquilerAlerts = (alquileres || []).filter((alquiler) => {
-      // Skip donor vehicles
-      if (alquiler.coches?.donante === true) return false
+      // Los coches donantes o dados de baja no deben generar alertas
+      if (alquiler.coches?.donante === true || alquiler.coches?.eliminado === true) return false
 
       if (!alquiler.fecha_fin) return false
       const fechaFin = new Date(alquiler.fecha_fin)
