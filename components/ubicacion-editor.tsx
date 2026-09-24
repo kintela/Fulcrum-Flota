@@ -18,6 +18,14 @@ interface UbicacionEditorProps {
   onUbicacionGuardada?: () => void
 }
 
+// Coordenadas de la ficha de Fulcrum en Google Maps.
+// No se geocodifica el nombre porque puede devolver otras empresas o direcciones.
+const FULCRUM_SEDE = {
+  lat: 43.3222224,
+  lng: -2.9883105,
+  address: "Aldapa Kalea, 9, 13, 48940 Ondiz, Bizkaia, España",
+}
+
 // Hook personalizado para Google Maps (mejorado)
 function useGoogleMaps() {
   const [isLoaded, setIsLoaded] = useState(false)
@@ -169,13 +177,6 @@ export function UbicacionEditor({
 
   // Estado para el campo de búsqueda
   const [searchQuery, setSearchQuery] = useState<string>("")
-
-  // Coordenadas exactas de Fulcrum, S.A. en Leioa (Calle Aldapa 13) - obtenidas del enlace de Google Maps
-  const FULCRUM_SEDE = {
-    lat: 43.32969,
-    lng: -2.98469,
-    address: "Calle Aldapa, 13, 48940 Leioa, Bizkaia, España",
-  }
 
   // Función para buscar ubicación por dirección o coordenadas
   const handleSearch = useCallback(async () => {
@@ -509,19 +510,22 @@ export function UbicacionEditor({
     )
   }, [updateMarker, geocodeLatLng])
 
-  // Función para centrar en la sede de Fulcrum
-  const handleCenterOnSede = useCallback(() => {
+  // Seleccionar la sede de Fulcrum como ubicación del vehículo
+  const handleCenterOnSede = useCallback(async () => {
     if (mapInstance.current && isGoogleMapsReady()) {
-      mapInstance.current.setCenter(FULCRUM_SEDE)
-      mapInstance.current.setZoom(19)
+      setLatitud(FULCRUM_SEDE.lat.toString())
+      setLongitud(FULCRUM_SEDE.lng.toString())
+      setDireccion(FULCRUM_SEDE.address)
+
       mapInstance.current.setMapTypeId(window.google.maps.MapTypeId.SATELLITE)
+      await updateMarker(FULCRUM_SEDE.lat, FULCRUM_SEDE.lng)
 
       toast({
-        title: "Mapa centrado",
-        description: "Vista centrada en la sede de Fulcrum (modo satélite)",
+        title: "Sede Fulcrum seleccionada",
+        description: FULCRUM_SEDE.address,
       })
     }
-  }, [isGoogleMapsReady])
+  }, [isGoogleMapsReady, updateMarker])
 
   // Función para guardar ubicación
   const handleSave = useCallback(async () => {
@@ -674,7 +678,7 @@ export function UbicacionEditor({
                   handleCoordinateChange(e.target.value, longitud)
                 }
               }}
-              placeholder="Ej: 43.329690"
+              placeholder="Ej: 43.3222224"
             />
           </div>
           <div>
@@ -690,7 +694,7 @@ export function UbicacionEditor({
                   handleCoordinateChange(latitud, e.target.value)
                 }
               }}
-              placeholder="Ej: -2.984690"
+              placeholder="Ej: -2.9883105"
             />
           </div>
         </div>
@@ -737,7 +741,7 @@ export function UbicacionEditor({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyPress={handleSearchKeyPress}
-              placeholder="Introduce una dirección o coordenadas (ej: 43.329690, -2.984690)"
+              placeholder="Introduce una dirección o coordenadas (ej: 43.3222224, -2.9883105)"
               className="flex-1"
             />
             <Button onClick={handleSearch} disabled={isLoading || isSearching || !searchQuery.trim()} variant="outline">
@@ -745,7 +749,7 @@ export function UbicacionEditor({
             </Button>
           </div>
           <p className="text-xs text-gray-500">
-            Puedes buscar por dirección (ej: "Calle Mayor 1, Madrid") o coordenadas (ej: "43.329690, -2.984690")
+            Puedes buscar por dirección (ej: "Calle Mayor 1, Madrid") o coordenadas (ej: "43.3222224, -2.9883105")
           </p>
         </div>
 
@@ -794,7 +798,7 @@ export function UbicacionEditor({
             <li>• Haz clic en el mapa para establecer la ubicación</li>
             <li>• Arrastra el marcador para ajustar la posición</li>
             <li>• Usa "Mi Ubicación" para obtener tu posición actual</li>
-            <li>• Usa "Sede Fulcrum" para centrar en Calle Aldapa 13, Leioa (modo satélite)</li>
+            <li>• Usa "Sede Fulcrum" para seleccionar la sede de Aldapa Kalea, Ondiz (modo satélite)</li>
             <li>• La dirección se completará automáticamente</li>
             <li>• Haz clic en "Guardar Ubicación" para confirmar los cambios</li>
           </ul>
