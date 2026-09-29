@@ -76,8 +76,8 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * - public folder
+     * - PWA public assets
      */
-    "/((?!api/auth|api/cron|api/debug|api/public|_next/static|_next/image|favicon.ico|public/).*)",
+    "/((?!api/auth|api/cron|api/debug|api/public|_next/static|_next/image|favicon.ico|favicon.png|manifest.webmanifest|sw.js|offline.html|icons/).*)",
   ],
 }
