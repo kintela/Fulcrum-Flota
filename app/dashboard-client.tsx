@@ -6,6 +6,7 @@ import { Car, Users, AlertTriangle, CreditCard, Calendar, Navigation, MapPin } f
 import Link from "next/link"
 import { MapaCoches } from "@/components/mapa-coches"
 import { MisReservas } from "@/components/mis-reservas"
+import { MobileActiveReservation } from "@/components/mobile-active-reservation"
 
 function DashboardStats({
   coches,
@@ -735,6 +736,10 @@ export default function DashboardClient({
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
+      <MobileActiveReservation
+        onReservaCancelada={() => setReservasRefreshToken((prev) => prev + 1)}
+        onUbicacionActualizada={handleUbicacionInicial}
+      />
       <div className="max-w-7xl mx-auto">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">

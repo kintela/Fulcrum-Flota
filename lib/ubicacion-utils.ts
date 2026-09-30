@@ -9,8 +9,32 @@ export interface Ubicacion {
   timestamp?: number
 }
 
+const OPCIONES_UBICACION: PositionOptions = {
+  // La alta precisión obliga a muchos móviles a esperar una señal GPS. Una
+  // posición de red/Wi-Fi es suficiente para situar el coche y llega mucho
+  // antes; el navegador seguirá usando GPS si ya está disponible.
+  enableHighAccuracy: false,
+  timeout: 30000,
+  maximumAge: 120000,
+}
+
+function mensajeErrorUbicacion(error: GeolocationPositionError) {
+  // Se usan los códigos estándar porque algunos navegadores no exponen las
+  // constantes PERMISSION_DENIED/POSITION_UNAVAILABLE/TIMEOUT en la instancia.
+  switch (error.code) {
+    case 1:
+      return "No se ha permitido acceder a la ubicación. Activa el permiso de ubicación para este sitio e inténtalo de nuevo."
+    case 2:
+      return "No se puede determinar la ubicación. Comprueba que la ubicación del móvil esté activada e inténtalo de nuevo."
+    case 3:
+      return "La ubicación está tardando demasiado. Comprueba que la ubicación del móvil esté activada y vuelve a intentarlo."
+    default:
+      return "Error al obtener la ubicación"
+  }
+}
+
 /**
- * Obtiene la ubicación actual del dispositivo usando el GPS
+ * Obtiene la ubicación actual del dispositivo.
  */
 export async function obtenerUbicacionActual(): Promise<Ubicacion> {
   return new Promise((resolve, reject) => {
@@ -29,27 +53,9 @@ export async function obtenerUbicacionActual(): Promise<Ubicacion> {
         })
       },
       (error) => {
-        let mensaje = 'Error al obtener la ubicación'
-        
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            mensaje = 'Permiso denegado para acceder a la ubicación'
-            break
-          case error.POSITION_UNAVAILABLE:
-            mensaje = 'Ubicación no disponible'
-            break
-          case error.TIMEOUT:
-            mensaje = 'Tiempo de espera agotado para obtener la ubicación'
-            break
-        }
-        
-        reject(new Error(mensaje))
+        reject(new Error(mensajeErrorUbicacion(error)))
       },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 60000
-      }
+      OPCIONES_UBICACION,
     )
   })
 }
