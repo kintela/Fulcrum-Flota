@@ -15,12 +15,12 @@ Si estas instrucciones parecen contradecir la constitución, AGENTS o la plantil
 
 ## Flujo
 
-Contexto → Constitución → Estado actual (`MEMORY.md`) → Spec → Aprobación de spec → Plan → Aprobación de plan → Implementación → Validación → Actualización de memoria si cambió el estado real.
+Contexto → Constitución → Estado actual (`MEMORY.md`) → Spec → Aprobación de spec → Plan → Aprobación de plan → Tareas (`tasks.md`) → Implementación tarea a tarea → Validación → Actualización de memoria si cambió el estado real.
 
 - No pasar a una fase que requiera aprobación sin aprobación explícita del usuario.
 - La spec aprobada define qué comportamiento se implementa. Si falta una decisión funcional, detenerse y preguntar; no inventar requisitos.
 - Si cambia el alcance, actualizar primero la spec y obtener aprobación; después actualizar y aprobar el plan antes de continuar.
-- Las specs se guardan en `specs/NNN-nombre-funcionalidad/spec.md`; el plan aprobado en `specs/NNN-nombre-funcionalidad/plan.md`.
+- Las specs se guardan en `specs/NNN-nombre-funcionalidad/spec.md`; el plan aprobado en `specs/NNN-nombre-funcionalidad/plan.md`; sus tareas en `specs/NNN-nombre-funcionalidad/tasks.md`, creado tras aprobar el plan y con cada tarea marcada `[x]` solo cuando su validación pase.
 - No actualizar `MEMORY.md` tras cada fase automáticamente. Aplicar las reglas de mantenimiento de `MEMORY.md` y `docs/constitution.md`.
 
 ## Especificación

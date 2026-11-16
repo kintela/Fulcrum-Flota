@@ -41,8 +41,7 @@ Antes de modificar código:
    - Ejecuta nuevamente los tests.
 
 3. Valida la implementación ejecutando:
-   - Los tests afectados.
-   - `node --test` cuando corresponda.
+   - Los tests afectados con Jest (`npx jest --runInBand <ruta de los tests>`).
    - `npx tsc --noEmit`.
    - El lint definido por el proyecto.
 
