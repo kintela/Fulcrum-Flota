@@ -2,7 +2,7 @@
  * @jest-environment node
  */
 /* eslint-disable @typescript-eslint/no-require-imports -- los módulos se cargan con require tras los mocks */
-import { beforeEach, describe, expect, it, jest } from "@jest/globals"
+import { afterAll, beforeEach, describe, expect, it, jest } from "@jest/globals"
 import type * as Autorizacion from "@/lib/autorizacion"
 import type * as SupabaseServer from "@/lib/supabase-server"
 
@@ -231,11 +231,8 @@ describe("acciones de usuario y de cron sin guarda de rol (RF-14, RF-16)", () =>
     ["app/actions/reservas-temporales.ts", "activarReservasPendientes"],
     ["app/actions/reservas.ts", "reservarCoche"],
     ["app/actions/reservas.ts", "liberarCoche"],
-    ["app/actions/ubicacion.ts", "actualizarUbicacionCoche"],
-    ["app/actions/ubicacion.ts", "ubicarCocheEnSede"],
     ["app/actions/coches.ts", "obtenerFichaCoche"],
     ["app/actions/notificaciones.ts", "verificarReservasVencidas"],
-    ["app/actions/notificaciones-v2.ts", "verificarReservasVencidasV2"],
     ["app/actions/itv-notificaciones.ts", "verificarAlertasITV"],
     ["app/actions/mantenimientos-notificaciones.ts", "verificarAlertasMantenimiento"],
   ]
@@ -243,5 +240,67 @@ describe("acciones de usuario y de cron sin guarda de rol (RF-14, RF-16)", () =>
   it.each(sinGuarda)("%s › %s no llama a autorizarAdmin ni autorizarLecturaCoche", (fichero, funcion) => {
     const cuerpo = cuerpoDe(fichero, funcion)
     expect(cuerpo).not.toMatch(/autorizarAdmin|autorizarLecturaCoche|requerirAdminPagina/)
+  })
+})
+
+// Spec 018 (RF-19): las Server Actions de ubicación exigen administrador o usuario relacionado.
+describe("Server Actions de ubicación (spec 018, RF-19)", () => {
+  const fetchOriginal = global.fetch
+  const claveOriginal = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+  const ubicacion = () =>
+    require("@/app/actions/ubicacion") as {
+      actualizarUbicacionCoche: (m: string, lat: number, lng: number) => Promise<{ success: boolean; error?: string }>
+      ubicarCocheEnSede: (m: string) => Promise<{ success: boolean; error?: string }>
+    }
+  const llamadas: Array<[string, () => Promise<{ success: boolean; error?: string }>]> = [
+    ["actualizarUbicacionCoche", () => ubicacion().actualizarUbicacionCoche("1111-AAA", 43.3, -2.9)],
+    ["ubicarCocheEnSede", () => ubicacion().ubicarCocheEnSede("1111-AAA")],
+  ]
+  const mockFetch = jest.fn(async () => ({
+    json: async () => ({
+      status: "OK",
+      results: [{ formatted_address: "Leioa", geometry: { location: { lat: 43.3, lng: -2.9 } } }],
+    }),
+  }))
+
+  beforeEach(() => {
+    process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY = "clave-de-prueba"
+    global.fetch = mockFetch as unknown as typeof fetch
+    mockFetch.mockClear()
+  })
+
+  afterAll(() => {
+    global.fetch = fetchOriginal
+    if (claveOriginal === undefined) delete process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+    else process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY = claveOriginal
+  })
+
+  it.each(llamadas)("%s: usuario no relacionado → rechazo sin geocodificar ni actualizar", async (_nombre, llamar) => {
+    autorizacion.autorizarLecturaCoche.mockResolvedValue({ ok: false, error: "No autorizado" })
+    await expect(llamar()).resolves.toEqual({ success: false, error: "No autorizado" })
+    expect(autorizacion.autorizarLecturaCoche).toHaveBeenCalledWith("1111-AAA")
+    expect(mockFetch).not.toHaveBeenCalled()
+    expect(mockFrom).not.toHaveBeenCalled()
+  })
+
+  it.each(llamadas)("%s: sin sesión → rechazo", async (_nombre, llamar) => {
+    autorizacion.autorizarLecturaCoche.mockResolvedValue({ ok: false, error: "Usuario no autenticado" })
+    await expect(llamar()).resolves.toEqual({ success: false, error: "Usuario no autenticado" })
+    expect(mockFrom).not.toHaveBeenCalled()
+  })
+
+  it.each(llamadas)("%s: usuario relacionado (incluida reserva vencida) → actualiza", async (_nombre, llamar) => {
+    autorizacion.autorizarLecturaCoche.mockResolvedValue({
+      ok: true,
+      ctx: { autenticado: true as const, email: "u@fulcrum.es", empleadoId: 3, esAdmin: false },
+    })
+    await expect(llamar()).resolves.toMatchObject({ success: true })
+    expect(mockFrom).toHaveBeenCalledWith("coches")
+  })
+
+  it.each(llamadas)("%s: administrador → actualiza", async (_nombre, llamar) => {
+    autorizacion.autorizarLecturaCoche.mockResolvedValue({ ok: true, ctx: ctxAdmin })
+    await expect(llamar()).resolves.toMatchObject({ success: true })
+    expect(mockFrom).toHaveBeenCalledWith("coches")
   })
 })

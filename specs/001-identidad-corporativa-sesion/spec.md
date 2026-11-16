@@ -20,7 +20,7 @@ Esta especificación retrospectiva registra el inicio de sesión corporativo y l
 - El nombre puede derivarse de varios atributos y tiene fallback al segmento anterior a `@` del email.
 ## Fuera de alcance
 - Alta/edición administrativa de empleados (002).
-- Autorización por rol de páginas y operaciones de gestión (017). Los endpoints `/api` siguen pendientes de su propia spec.
+- Autorización por rol de páginas y operaciones de gestión (017) y de los endpoints `/api` (018).
 - Cambio de proveedor de identidad o de estrategia de sesión.
 ## Criterios de finalización
 - Verificar que el flujo de autenticación corporativa produce la sesión descrita.

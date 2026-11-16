@@ -7,9 +7,6 @@ import AuthProvider from "@/components/auth-provider"
 import Header from "@/components/header"
 import PwaRegister from "@/components/pwa-register"
 
-// SCHEDULER DESHABILITADO - Solo se ejecuta manualmente o con Vercel Cron
-// import "@/lib/init-scheduler"
-
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {

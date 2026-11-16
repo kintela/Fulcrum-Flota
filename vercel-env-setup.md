@@ -10,8 +10,9 @@ GRAPH_FROM_EMAIL=flota@fulcrum.es
 # Destinatario usado solo por la prueba sin usuario autenticado (opcional)
 EMAIL_TEST_RECIPIENT=rquintela@fulcrum.es
 
-# Token de seguridad para cron jobs (opcional en producción con Vercel Cron)
-CRON_SECRET_TOKEN=tu_token_secreto
+# Secreto de los cron jobs (obligatorio). Vercel lo envía como "Authorization: Bearer <CRON_SECRET>"
+# a los crons de vercel.json solo si la variable se llama exactamente CRON_SECRET.
+CRON_SECRET=tu_secreto
 
 # Configuración de Supabase
 NEXT_PUBLIC_SUPABASE_URL=tu_url_de_supabase

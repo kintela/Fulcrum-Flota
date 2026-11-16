@@ -180,11 +180,42 @@ describe("autorizarLecturaCoche (RF-8, RF-13)", () => {
     jest.clearAllMocks()
   })
 
-  const reservaActiva = (filtros: unknown[][]): Resultado => {
-    const activa = filtros.some((f) => f[0] === "eq" && f[1] === "estado" && f[2] === "activa")
-    const delEmpleado = filtros.some((f) => f[0] === "eq" && f[1] === "empleado_id" && f[2] === 3)
-    return { data: activa && delEmpleado ? [{ id: 10 }] : [], error: null }
-  }
+  // Simula la tabla `reservas` con una reserva del empleado 3 en el estado indicado:
+  // devuelve la fila solo si la consulta filtra por un estado que la incluye (eq o in).
+  const reservaEnEstado =
+    (estadoReserva: string) =>
+    (filtros: unknown[][]): Resultado => {
+      const casaEstado = filtros.some(
+        (f) =>
+          f[1] === "estado" &&
+          ((f[0] === "eq" && f[2] === estadoReserva) ||
+            (f[0] === "in" && Array.isArray(f[2]) && (f[2] as unknown[]).includes(estadoReserva))),
+      )
+      const delEmpleado = filtros.some((f) => f[0] === "eq" && f[1] === "empleado_id" && f[2] === 3)
+      return { data: casaEstado && delEmpleado ? [{ id: 10 }] : [], error: null }
+    }
+  const reservaActiva = reservaEnEstado("activa")
+
+  // Spec 018 (RF-18): la reserva vencida (coche aún no devuelto) también da relación.
+  it("reserva vencida → ok", async () => {
+    sesion("u@fulcrum.es")
+    configurarTablas({
+      empleados: empleado(3, "usuario"),
+      coches: { data: { asignadoa: null }, error: null },
+      reservas: reservaEnEstado("vencida"),
+    })
+    await expect(autorizarLecturaCoche("1111-AAA")).resolves.toMatchObject({ ok: true })
+  })
+
+  it.each(["pendiente", "completada", "cancelada"])("reserva %s → No autorizado", async (estado) => {
+    sesion("u@fulcrum.es")
+    configurarTablas({
+      empleados: empleado(3, "usuario"),
+      coches: { data: { asignadoa: null }, error: null },
+      reservas: reservaEnEstado(estado),
+    })
+    await expect(autorizarLecturaCoche("1111-AAA")).resolves.toEqual({ ok: false, error: "No autorizado" })
+  })
 
   it("sin sesión → Usuario no autenticado", async () => {
     mockSession.mockResolvedValue(null)

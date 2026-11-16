@@ -19,18 +19,14 @@ export default withAuth(
       return NextResponse.next()
     }
 
-    // Si está en una ruta de cron, permitir acceso (se verifica el token dentro del endpoint)
-    if (pathname.startsWith('/api/cron')) {
-      return NextResponse.next()
-    }
-
-    // Si está en una ruta de debug, permitir acceso sin autenticación
-    if (pathname.startsWith('/api/debug') || pathname.startsWith('/api/public')) {
-      return NextResponse.next()
-    }
-
-    // Si no hay token y no está en una ruta de auth, redirigir al login
     if (!token && !hasSessionCookie) {
+      // Spec 018 (RF-13): los endpoints /api responden 401 JSON en lugar de redirigir al login.
+      // /api/auth y /api/cron no pasan por aquí (excluidos en el matcher).
+      if (pathname.startsWith('/api/')) {
+        return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+      }
+
+      // Si no hay token y no está en una ruta de auth, redirigir al login
       const signInUrl = new URL('/auth/signin', req.url)
       signInUrl.searchParams.set('callbackUrl', req.url)
       return NextResponse.redirect(signInUrl)
@@ -50,12 +46,8 @@ export default withAuth(
         if (req.nextUrl.pathname.startsWith('/auth')) {
           return true
         }
-        // Permitir acceso a rutas de cron sin token (se verifica dentro del endpoint)
-        if (req.nextUrl.pathname.startsWith('/api/cron')) {
-          return true
-        }
-        // Permitir acceso a rutas de debug sin token
-        if (req.nextUrl.pathname.startsWith('/api/debug') || req.nextUrl.pathname.startsWith('/api/public')) {
+        // Las peticiones /api pasan a la función para que responda 401 JSON (no redirección)
+        if (req.nextUrl.pathname.startsWith('/api/')) {
           return true
         }
         // Para todas las demás rutas, requerir token
@@ -70,14 +62,12 @@ export const config = {
     /*
      * Match all request paths except for the ones starting with:
      * - api/auth (auth API routes)
-     * - api/cron (cron job API routes)
-     * - api/debug (debug API routes)
-     * - api/public (public API routes)
+     * - api/cron (cron job API routes; se autentican con CRON_SECRET o sesión de administrador)
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - PWA public assets
      */
-    "/((?!api/auth|api/cron|api/debug|api/public|_next/static|_next/image|favicon.ico|favicon.png|manifest.webmanifest|sw.js|offline.html|icons/).*)",
+    "/((?!api/auth|api/cron|_next/static|_next/image|favicon.ico|favicon.png|manifest.webmanifest|sw.js|offline.html|icons/).*)",
   ],
 }
