@@ -11,7 +11,7 @@ Implementar RF-1 a RF-17:
 - aplicar las reglas de la 017 a documentos ITV, ubicación y diagnóstico;
 - hacer que el middleware responda 401 JSON a `/api` sin sesión.
 
-No se tocan las fotos en Storage (spec 019), RLS, el esquema, la lógica de los procesos ni las dependencias.
+No se tocan las fotos en Storage (riesgo aceptado, sin spec planificada), RLS, el esquema, la lógica de los procesos ni las dependencias.
 
 ## 2. Enfoque general
 1. **Eliminación.** Se borran los directorios `app/api/public`, `app/api/debug`, `app/api/test` y las rutas `app/api/diagnostico/reservas` y `app/api/diagnostico/forzar-notificaciones`, junto con `lib/init-scheduler.ts`, `lib/scheduler.ts`, `app/diagnostico.tsx` y la importación comentada de `app/layout.tsx`. Next deja de generar esas rutas (404).

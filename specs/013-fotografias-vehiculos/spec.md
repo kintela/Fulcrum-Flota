@@ -24,6 +24,7 @@ Esta especificación retrospectiva describe la consulta, carga y eliminación de
 - Documentos de ITV (008).
 - Ubicación de vehículos (006).
 - Políticas/buckets desplegados que no son verificables desde el repositorio.
+- Protección de servidor/Storage de las fotos: la interfaz solo ofrece carga y eliminación a administradores (017), pero la carga, el borrado y la lectura se hacen desde el navegador con el cliente anónimo de Supabase y las fotos tienen URL pública. Es un riesgo conocido y aceptado por el responsable el 2026-11-16, por ser una aplicación interna; no hay spec planificada.
 ## Criterios de finalización
 - Verificar el flujo vigente de consulta, carga y eliminación en UI y acciones.
 - Confirmar referencias persistidas, rutas y controles de acceso contra el esquema y políticas desplegadas.
@@ -32,4 +33,3 @@ Esta especificación retrospectiva describe la consulta, carga y eliminación de
 - [NECESITA ACLARACIÓN] ¿Qué flujo de carga/eliminación está vigente y qué tipos/tamaños acepta?
 - [NECESITA ACLARACIÓN] ¿Las fotografías se guardan como URLs, rutas de objetos o ambos?
 - [NECESITA ACLARACIÓN] ¿Qué bucket, visibilidad y políticas RLS/Storage están desplegados?
-- [NECESITA ACLARACIÓN] La interfaz solo ofrece carga y eliminación a administradores (017), pero el acceso a Storage se hace con el cliente anónimo desde el navegador. ¿Qué protección de servidor/Storage se requiere? Pendiente de la spec 019.

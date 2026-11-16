@@ -52,7 +52,7 @@ Un SQL de creación de reservas define restricciones de fechas, claves foráneas
 - No hay tipos generados de Supabase ni evidencia de sincronización automática del esquema con tipos TS.
 - No hay scripts de test/type-check en `package.json`, aunque Jest y TypeScript están disponibles/configurados. `jest.config.js` usa `jest-environment-jsdom`, que no está instalado, y tampoco `@types/jest`: con la configuración por defecto ninguna suite arranca. Las pruebas de lógica funcionan con `--testEnvironment=node` (por ejemplo, las de la spec 016). El build omite sus errores de lint y TS; deben ejecutarse validaciones aparte.
 - No se encontró configuración de CI en los archivos inspeccionados. Esto no descarta automatizaciones externas al repositorio.
-- Las fotos de vehículos se leen, suben y borran desde el navegador con el cliente Supabase anónimo (`lib/storage.ts`); su protección en servidor y Storage queda para la spec 019.
+- Las fotos de vehículos se leen, suben y borran desde el navegador con el cliente Supabase anónimo (`lib/storage.ts`); las fotos tienen URL pública. Es un riesgo conocido y aceptado por el responsable el 2026-11-16, por ser una aplicación interna; no hay spec planificada.
 - No se encontraron `README.md`, `MEMORY.md` (antes de esta creación) ni especificaciones en `specs/`. Tampoco `supabase/`, `supabase/config.toml`, `supabase/migrations/`, `proxy.ts`, `next.config.ts` ni `eslint.config.mjs`; la ausencia en este checkout no prueba que no existan recursos externos.
 
 ## Trabajo en curso

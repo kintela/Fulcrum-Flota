@@ -10,7 +10,7 @@ Esta funcionalidad:
 - autentica los crons con el mecanismo oficial de Vercel y reserva su ejecución manual a administradores;
 - aplica a los endpoints de la interfaz las mismas reglas de la 017: administrador, o usuario relacionado con el coche (asignado, o con reserva activa o vencida; ver RF-18).
 
-El acceso a las fotos en Storage queda para la spec 019.
+El acceso a las fotos en Storage queda fuera (inicialmente previsto como spec 019; después, riesgo conocido y aceptado por el responsable el 2026-11-16, por ser una aplicación interna; no hay spec planificada).
 
 **Ampliación aprobada el 2026-11-16, durante la validación:**
 - se alinean con las mismas reglas las Server Actions de ubicación, que la 017 había dejado como estaban;
@@ -80,7 +80,7 @@ El acceso a las fotos en Storage queda para la spec 019.
 - Ejecución programada y manual simultáneas del mismo proceso: se comportan como hoy; la idempotencia no cambia en esta spec.
 
 ## Fuera de alcance
-- Acceso a fotos en Supabase Storage (cliente anónimo desde el navegador): spec 019.
+- Acceso a fotos en Supabase Storage (cliente anónimo desde el navegador): riesgo conocido y aceptado por el responsable el 2026-11-16, por ser una aplicación interna; no hay spec planificada.
 - Políticas RLS de Supabase.
 - Cambios en la lógica de los procesos de notificación, activación de reservas o alertas, y en su idempotencia.
 - Endpoints de NextAuth (`/api/auth/*`).
@@ -103,7 +103,7 @@ El acceso a las fotos en Storage queda para la spec 019.
 ## Dudas abiertas
 Ninguna. Decisiones del responsable del 2026-11-16:
 - Precisión de RF-1, RF-2 y RF-13 al preparar el plan (aprobada el 2026-11-16): sin sesión, el middleware responde 401 JSON a cualquier `/api` protegido, en lugar de redirigir al login; por eso las rutas eliminadas dan 401 sin sesión y 404 con sesión.
-- Alcance: solo `/api`; las fotos en Storage van en la spec 019.
+- Alcance: solo `/api`; las fotos en Storage quedan fuera (después, riesgo conocido y aceptado por el responsable el 2026-11-16, por ser una aplicación interna; no hay spec planificada).
 - `/api/public`, `/api/debug` y `/api/test`: se eliminan.
 - Crons: secreto oficial de Vercel (`CRON_SECRET`, `Authorization: Bearer`) para las ejecuciones programadas, sin detección por `User-Agent`; las manuales, solo administradores.
 - Endpoints de la interfaz: reglas de la 017 (documentos ITV: leer administrador o relacionado, subir y borrar solo administrador; editor de ubicación solo administrador; aparcar administrador o relacionado).
