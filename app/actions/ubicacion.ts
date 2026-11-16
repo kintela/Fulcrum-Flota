@@ -1,19 +1,16 @@
 "use server"
 
 import { supabaseServer as supabase } from "@/lib/supabase-server"
-import { getServerSession } from "next-auth/next"
-import { authOptions } from "@/lib/auth"
+import { autorizarLecturaCoche } from "@/lib/autorizacion"
 
 export async function actualizarUbicacionCoche(matricula: string, latitud: number, longitud: number) {
   try {
-    // Verificar autenticación
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.email) {
-      return { success: false, error: "No autorizado" }
+    // Spec 018 (RF-19): administrador o usuario relacionado con el coche (asignado, o reserva
+    // activa o vencida).
+    const acceso = await autorizarLecturaCoche(matricula)
+    if (!acceso.ok) {
+      return { success: false, error: acceso.error }
     }
-
-    // Permitir reubicar si estás autenticado (ya sea admin o usuario con sesión).
-    // Las políticas de Supabase controlan el acceso.
 
     // Intentar obtener la dirección usando Geocoding API de Google
     let direccionActual = null
@@ -72,9 +69,10 @@ export async function actualizarUbicacionCoche(matricula: string, latitud: numbe
 
 export async function ubicarCocheEnSede(matricula: string) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.email) {
-      return { success: false, error: "No autorizado" }
+    // Spec 018 (RF-19): administrador o usuario relacionado con el coche.
+    const acceso = await autorizarLecturaCoche(matricula)
+    if (!acceso.ok) {
+      return { success: false, error: acceso.error }
     }
 
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY

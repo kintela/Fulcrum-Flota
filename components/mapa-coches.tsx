@@ -528,10 +528,15 @@ const selectedMatriculaRef = useRef<string>("all")
             fillColor = "#10b981" // Verde para asignados a otros
           }
 
-          // Determinar si el usuario puede reubicar este vehículo
+          // Determinar si el usuario puede reubicar este vehículo (spec 018, RF-20)
           // Administradores: pueden reubicar cualquier vehículo
-          // Resto de usuarios: pueden reubicar sus vehículos asignados o reservados
-          const canRelocate = isAdmin || esMiCoche
+          // Resto de usuarios: sus vehículos asignados o con una reserva suya activa o vencida
+          // (misma regla que aplica el servidor; una reserva pendiente no basta)
+          const tieneReservaActivaOVencida = !!misReservas?.some(
+            (reserva) =>
+              reserva.matricula === coche.matricula && (reserva.estado === "activa" || reserva.estado === "vencida"),
+          )
+          const canRelocate = isAdmin || isUserVehicle || tieneReservaActivaOVencida
 
           // Marcador más grande solo para reservas vencidas del usuario actual
           const markerSize = (miCocheMatricula && coche.matricula === miCocheMatricula) || reservaVencidaMia

@@ -17,7 +17,7 @@ Esta especificación retrospectiva registra la consulta y mantenimiento de revis
 - RF-5: CUANDO se solicita subir un documento, EL SISTEMA valida los parámetros/nombre, genera una URL firmada de carga y el cliente valida tipos admitidos y tamaño máximo observado de 20 MB.
 - RF-6: CUANDO se elimina un documento, EL SISTEMA solo acepta la ruta que corresponde a la carpeta de esa revisión; existe además operación de eliminación de todos los documentos de la revisión.
 - RF-7: CUANDO se procesan alertas ITV, EL SISTEMA evalúa el registro que considera más reciente por matrícula, omite coches donantes y envía email a empleados con rol administrador para alertas vencidas o dentro del plazo configurado de 30 días.
-- RF-8: SI quien crea, edita o borra una ITV no es administrador, o quien consulta las ITV de un coche no es administrador ni está relacionado con él, ENTONCES EL SISTEMA rechaza la operación (017). Los documentos ITV se sirven por `/api/itv-documentos`, que queda fuera de la 017.
+- RF-8: SI quien crea, edita o borra una ITV no es administrador, o quien consulta las ITV de un coche no es administrador ni está relacionado con él, ENTONCES EL SISTEMA rechaza la operación (017). Los documentos ITV se sirven por `/api/itv-documentos`: listarlos, el administrador o un usuario relacionado con el coche (si la ITV es de esa matrícula); subirlos y borrarlos, solo el administrador (018).
 ## Requisitos no funcionales
 - Tipos admitidos en la UI de documentos: PDF, Word e imágenes JPEG/PNG/WebP; límite de archivo observado: 20 MB.
 - No se encontraron objetivos de disponibilidad ni entrega garantizada del email.
@@ -34,7 +34,6 @@ Esta especificación retrospectiva registra la consulta y mantenimiento de revis
 - Verificar validación, carga/listado/enlaces/eliminación de documentos y reglas de ruta.
 - Verificar criterios de selección de alerta y destinatarios solo contra configuración/esquema vigentes.
 ## Dudas abiertas
-- [NECESITA ACLARACIÓN] ¿El endpoint `api/itv-documentos` está protegido por políticas externas? No contiene verificación de sesión visible y usa credenciales de servidor.
 - [NECESITA ACLARACIÓN] ¿Qué criterio definitivo identifica la revisión vigente cuando fechas/ids/resultados están incompletos?
 - [NECESITA ACLARACIÓN] ¿Qué comportamiento se espera ante distintas combinaciones de fecha próxima, fecha realizada y resultado?
 - [NECESITA ACLARACIÓN] ¿Qué bucket y políticas de Storage están realmente desplegados?

@@ -3,7 +3,7 @@
 Esta especificación retrospectiva describe el catálogo de vehículos, su consulta y mantenimiento básico, incluida la baja lógica y restauración. No atribuye una motivación histórica no documentada. Actualizada el 2026-11-16 para reflejar la spec 017 (protección por rol de páginas y operaciones de administración). Incluye también el listado de vencimientos de la spec 016.
 ## Usuarios / actores
 - Administrador: consulta el catálogo, da de alta, edita, da de baja lógica y restaura vehículos (017).
-- Usuario no administrador: solo consulta, en modo lectura, la ficha de los coches con los que está relacionado: asignados a él o con una reserva activa suya (017).
+- Usuario no administrador: solo consulta, en modo lectura, la ficha de los coches con los que está relacionado: asignados a él o con una reserva suya activa o vencida (017, 018).
 - Empleados mostrados como asignados a los vehículos.
 ## Historias de usuario
 - H1: Como administrador quiero localizar vehículos y consultar su ficha para conocer los datos relevantes de la flota.

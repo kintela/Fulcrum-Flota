@@ -1,7 +1,12 @@
 import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { NextResponse } from "next/server"
+import { autorizarAdmin, respuestaRechazoApi } from "@/lib/autorizacion"
 
 export async function GET() {
+  // Spec 018 (RF-14): solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return respuestaRechazoApi(acceso.error)
+
   try {
     // Obtener todos los coches
     const { data: coches, error: cochesError } = await supabase.from("coches").select("*")

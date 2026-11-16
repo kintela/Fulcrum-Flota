@@ -28,7 +28,7 @@ Esta funcionalidad hace que el servidor imponga el rol: las páginas y operacion
 ### Ficha de coche
 - RF-6: CUANDO un administrador solicita la ficha de un coche (`/coches/detalle/<matrícula>`), EL SISTEMA la muestra como hasta ahora, con todas sus acciones.
 - RF-7: CUANDO un usuario sin rol de administrador solicita la ficha de un coche con el que está relacionado, EL SISTEMA muestra todas sus secciones (datos, ubicación, fotos, ITV y sus documentos, mantenimientos, seguro, Solred con PIN, ViaT y alquiler) en modo solo lectura, sin controles para añadir, editar, borrar, subir, restaurar ni dar de baja.
-- RF-8: EL SISTEMA considera que un usuario está relacionado con un coche cuando se cumple al menos una de estas condiciones: (a) el coche le está asignado de forma permanente, es decir, su campo "asignado a" identifica a ese empleado; (b) existe una reserva temporal del coche a ese empleado en estado activa.
+- RF-8: EL SISTEMA considera que un usuario está relacionado con un coche cuando se cumple al menos una de estas condiciones: (a) el coche le está asignado de forma permanente, es decir, su campo "asignado a" identifica a ese empleado; (b) existe una reserva temporal del coche a ese empleado en estado activa. (Modificado por la spec 018, RF-18: también cuenta una reserva vencida, porque el usuario aún no ha devuelto el coche.)
 - RF-9: SI un usuario sin rol de administrador solicita la ficha de un coche con el que no está relacionado, o de una matrícula que no existe, ENTONCES EL SISTEMA aplica RF-2 (redirige a `/` con el aviso), sin revelar si la matrícula existe.
 - RF-10: EL SISTEMA mantiene los enlaces a la ficha que hay en las alertas del dashboard de usuario; para sus coches siguen llevando a la ficha en modo solo lectura.
 
@@ -36,7 +36,7 @@ Esta funcionalidad hace que el servidor imponga el rol: las páginas y operacion
 - RF-11: CUANDO se invoca una operación de servidor de gestión (crear, modificar, borrar, asignar, desasignar, dar de baja, restaurar, subir o eliminar archivos, enviar o configurar notificaciones, y consultar datos de gestión) sin sesión, EL SISTEMA la rechaza con un resultado de error, sin consultar ni modificar datos.
 - RF-12: CUANDO un usuario sin rol de administrador invoca una operación de servidor de gestión, EL SISTEMA la rechaza con un resultado de error de autorización, sin consultar ni modificar datos.
 - RF-13: CUANDO un usuario sin rol de administrador invoca una operación de consulta de datos de un coche con el que está relacionado (RF-8) y que la ficha necesita para mostrarse (RF-7), EL SISTEMA la permite; SI el coche no está relacionado con él, ENTONCES la rechaza como en RF-12.
-- RF-14: EL SISTEMA mantiene disponibles para usuarios no administradores, con las reglas que tienen hoy, las operaciones que usan sus pantallas actuales: crear, consultar, cancelar y finalizar sus reservas temporales; liberar el coche; consultar y actualizar la ubicación de sus coches o ubicarlos en la sede; y consultar la ficha resumida de un coche desde "Mis reservas".
+- RF-14: EL SISTEMA mantiene disponibles para usuarios no administradores, con las reglas que tienen hoy, las operaciones que usan sus pantallas actuales: crear, consultar, cancelar y finalizar sus reservas temporales; liberar el coche; consultar y actualizar la ubicación de sus coches o ubicarlos en la sede (desde la spec 018, RF-19, estas dos operaciones exigen ser administrador o estar relacionado con el coche); y consultar la ficha resumida de un coche desde "Mis reservas".
 - RF-15: EL SISTEMA conserva para cada operación su forma de respuesta actual (por ejemplo, `{ success: false, error }`) al rechazarla, de modo que las pantallas existentes muestren el error sin romperse.
 - RF-16: SI una operación se ejecuta desde un proceso programado autenticado con su mecanismo actual (cron), ENTONCES EL SISTEMA no le exige sesión de usuario y la ejecuta como hasta ahora.
 
@@ -73,7 +73,7 @@ Esta funcionalidad hace que el servidor imponga el rol: las páginas y operacion
 Ninguna. Decisiones del responsable del 2026-11-16:
 - Alcance: páginas y operaciones de servidor; `/api` en otra spec.
 - Ficha de coche para usuarios: solo sus coches, en solo lectura, con todas las secciones.
-- "Sus coches": asignado a él (asignación permanente) o con reserva activa.
+- "Sus coches": asignado a él (asignación permanente) o con reserva activa. (La spec 018 añade la reserva vencida.)
 - Corrección del 2026-11-16, aprobada por el responsable: en RF-8 se unificaron "asignado a" y "asignación permanente", que en los datos son lo mismo (campo `asignadoa` del coche; ver spec 004). El comportamiento no cambia.
 - Denegación: redirigir a `/` con aviso, también en `/analisis` y `/tarjetas`.
 - Páginas de administrador: `/coches` (catálogo, alta y edición), `/empleados/*`, `/reservas`, `/admin` y `/diagnostico`, además de `/analisis` y `/tarjetas`.

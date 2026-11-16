@@ -532,7 +532,7 @@ export default function NotificacionesAdmin() {
             <div><code>GRAPH_CLIENT_ID</code>: ID de la aplicación</div>
             <div><code>GRAPH_CLIENT_SECRET</code>: Secreto de la aplicación</div>
             <div><code>GRAPH_FROM_EMAIL</code>: Buzón remitente (flota@fulcrum.es)</div>
-            <div><code>CRON_SECRET_TOKEN</code>: Token de seguridad para cron jobs</div>
+            <div><code>CRON_SECRET</code>: Secreto que Vercel envía a los cron jobs (Authorization: Bearer)</div>
           </div>
           <div className="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
             <p className="text-sm text-yellow-800 dark:text-yellow-200">

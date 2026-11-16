@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { getAuthSession } from '@/lib/get-session'
+import { autorizarLecturaCoche, respuestaRechazoApi } from '@/lib/autorizacion'
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,6 +23,10 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    // Spec 018 (RF-12): administrador o usuario relacionado con el coche (asignado o reserva activa).
+    const acceso = await autorizarLecturaCoche(matricula)
+    if (!acceso.ok) return respuestaRechazoApi(acceso.error)
 
     // Validar que la matrícula existe
     const { data: coche, error: cocheError } = await supabase

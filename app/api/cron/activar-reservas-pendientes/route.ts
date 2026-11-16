@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { activarReservasPendientes } from '@/app/actions/reservas-temporales'
+import { esPeticionCronAutorizada } from '@/lib/cron-auth'
+import { autorizarAdmin, respuestaRechazoApi } from '@/lib/autorizacion'
 
 export async function GET(request: NextRequest) {
   try {
-    const userAgent = request.headers.get('user-agent')
-    const authHeader = request.headers.get('authorization')
-    const expectedToken = process.env.CRON_SECRET_TOKEN
-    const isVercelCron = userAgent?.includes('vercel-cron') || request.headers.get('x-vercel-cron') === '1'
-
-    if (!isVercelCron && (!expectedToken || authHeader !== `Bearer ${expectedToken}`)) {
+    // Spec 018 (RF-4 a RF-6): solo Vercel Cron con Authorization: Bearer <CRON_SECRET>.
+    if (!esPeticionCronAutorizada(request)) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
@@ -21,6 +19,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // Spec 018 (RF-7, RF-8): la ejecución manual es solo para administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return respuestaRechazoApi(acceso.error)
+
   try {
     const body = request.body ? await request.json().catch(()=>({})) : {}
     if (body.action && body.action !== 'run') {

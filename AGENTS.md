@@ -33,7 +33,7 @@ Consulta `docs/constitution.md` y `MEMORY.md` antes de iniciar trabajo relevante
 - Supabase (`@supabase/supabase-js`) para datos y Storage. `lib/supabase.ts` usa clave anónima; `lib/supabase-server.ts` usa `SUPABASE_SERVICE_ROLE_KEY` en servidor.
 - NextAuth 4 con Azure AD: `lib/auth.ts`, endpoint `app/api/auth/[...nextauth]/route.ts`, protección en `middleware.ts`. El rol se consulta en `empleados` y se añade a la sesión.
 - `app/` contiene páginas, endpoints y Server Actions; `components/` contiene UI y componentes de dominio; `lib/` concentra integraciones, datos y lógica. No se observa una capa uniforme de repositorios.
-- Integraciones: Microsoft Graph para email (`lib/email.ts`), Twilio WhatsApp (`lib/whatsapp.ts`), Google Maps y Supabase Storage. Cron de Vercel en `vercel.json`; también hay scheduler en `lib/`.
+- Integraciones: Microsoft Graph para email (`lib/email.ts`), Twilio WhatsApp (`lib/whatsapp.ts`), Google Maps y Supabase Storage. Cron de Vercel en `vercel.json`, autenticado con `CRON_SECRET` (`lib/cron-auth.ts`).
 
 ## Estructura relevante
 - `app/`: rutas y layouts, `app/api/**/route.ts`, Server Actions y áreas de coches, reservas, empleados, tarjetas, análisis, auth y administración.

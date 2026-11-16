@@ -1,13 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabaseServer as supabase } from "@/lib/supabase-server"
-import { getAuthSession } from "@/lib/get-session"
+import { autorizarAdmin, respuestaRechazoApi } from "@/lib/autorizacion"
 
 export async function POST(request: NextRequest, { params }: { params: { matricula: string } }) {
   try {
-    const session = await getAuthSession()
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
-    }
+    // Spec 018 (RF-11): el editor de ubicación es solo para administradores.
+    const acceso = await autorizarAdmin()
+    if (!acceso.ok) return respuestaRechazoApi(acceso.error)
 
     const { matricula } = params
     const { latitud, longitud, direccion_actual } = await request.json()
@@ -51,10 +50,9 @@ export async function POST(request: NextRequest, { params }: { params: { matricu
 
 export async function DELETE(request: NextRequest, { params }: { params: { matricula: string } }) {
   try {
-    const session = await getAuthSession()
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
-    }
+    // Spec 018 (RF-11): el editor de ubicación es solo para administradores.
+    const acceso = await autorizarAdmin()
+    if (!acceso.ok) return respuestaRechazoApi(acceso.error)
 
     const { matricula } = params
 
