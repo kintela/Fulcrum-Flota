@@ -87,7 +87,7 @@ Antes de terminar, ejecuta pruebas relevantes (o la suite completa si el cambio 
 1. `AGENTS.md`, `docs/constitution.md` y `MEMORY.md` para cambios relevantes; consulta también la spec y el plan aprobados correspondientes cuando existan.
 2. `package.json`, `package-lock.json`, `tsconfig.json`, `.eslintrc.json`, `next.config.mjs` y configuración Jest relevante.
 3. La página/componente de la funcionalidad, sus `actions.ts`/`app/actions/`, API routes y utilidades `lib/` relacionadas.
-4. `middleware.ts`, `lib/auth.ts`, `lib/roles.ts`, `lib/user-role.ts` para cambios con sesión, permisos o acceso a datos.
+4. `middleware.ts`, `lib/auth.ts`, `lib/autorizacion.ts`, `lib/roles.ts`, `lib/user-role.ts` para cambios con sesión, permisos o acceso a datos.
 5. Pruebas relacionadas en `__tests__/`.
 6. SQL pertinente en `scripts/`, documentación operacional y `vercel.json` si afecta datos, notificaciones, variables, cron o despliegue.
 7. Variables necesarias por nombre, sin consultar ni revelar valores secretos.

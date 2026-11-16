@@ -1,9 +1,6 @@
-import { getServerSession } from "next-auth/next"
-import { redirect } from "next/navigation"
 import type { ReactNode } from "react"
-import { authOptions } from "@/lib/auth"
 import { supabaseServer as supabase } from "@/lib/supabase-server"
-import { esRolAdministrador } from "@/lib/user-role"
+import { requerirAdminPagina } from "@/lib/autorizacion"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -258,11 +255,8 @@ async function obtenerReservasParaAnalisis() {
 }
 
 export default async function AnalisisPage() {
-  const session = await getServerSession(authOptions)
-
-  if (!session?.user?.email || !esRolAdministrador(session.user.role)) {
-    redirect("/")
-  }
+  // Spec 017: solo administradores (redirige con aviso si no lo es).
+  await requerirAdminPagina()
 
   const { data: reservas, error, includeFeedbackFields, warning } = await obtenerReservasParaAnalisis()
 

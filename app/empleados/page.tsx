@@ -4,6 +4,7 @@ import { Users, Plus, ShieldCheck } from "lucide-react"
 import Link from "next/link"
 import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { esRolAdministrador } from "@/lib/user-role"
+import { requerirAdminPagina } from "@/lib/autorizacion"
 
 async function getEmpleados() {
   // Obtener empleados
@@ -50,6 +51,7 @@ async function getEmpleados() {
 }
 
 export default async function EmpleadosPage() {
+  await requerirAdminPagina()
   const empleados = await getEmpleados()
 
   return (

@@ -1,8 +1,13 @@
 "use server"
 
 import { supabaseServer as supabase } from "@/lib/supabase-server"
+import { autorizarAdmin, autorizarLecturaCoche } from "@/lib/autorizacion"
 
 export async function obtenerITVsPorMatricula(matricula: string) {
+  // Spec 017: administrador o usuario relacionado con el coche.
+  const acceso = await autorizarLecturaCoche(matricula)
+  if (!acceso.ok) return { success: false, error: acceso.error }
+
   try {
     const { data, error } = await supabase
       .from("itvs")
@@ -23,6 +28,10 @@ export async function obtenerITVsPorMatricula(matricula: string) {
 }
 
 export async function crearITV(formData: FormData) {
+  // Spec 017: solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return { success: false, error: acceso.error }
+
   try {
     const itvData: any = {
       matricula: formData.get("matricula") as string,
@@ -75,6 +84,10 @@ export async function crearITV(formData: FormData) {
 }
 
 export async function actualizarITV(id: number, formData: FormData) {
+  // Spec 017: solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return { success: false, error: acceso.error }
+
   try {
     const tipoRegistro = formData.get("tipoRegistro") as string
 
@@ -143,6 +156,10 @@ export async function actualizarITV(id: number, formData: FormData) {
 }
 
 export async function eliminarITV(id: number) {
+  // Spec 017: solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return { success: false, error: acceso.error }
+
   try {
     const { error } = await supabase.from("itvs").delete().eq("id", id)
 

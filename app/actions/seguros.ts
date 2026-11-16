@@ -3,9 +3,14 @@
 import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { revalidatePath } from "next/cache"
 import { TIPOS_SEGURO, esTipoSeguroValido } from "@/lib/seguros"
+import { autorizarAdmin, autorizarLecturaCoche } from "@/lib/autorizacion"
 
 // Obtener seguro activo por matrícula
 export async function obtenerSeguroActivo(matricula: string) {
+  // Spec 017: administrador o usuario relacionado con el coche.
+  const acceso = await autorizarLecturaCoche(matricula)
+  if (!acceso.ok) return { success: false, error: acceso.error }
+
   try {
     const { data, error } = await supabase
       .from("seguros")
@@ -38,6 +43,10 @@ export async function obtenerSeguroActivo(matricula: string) {
 
 // Obtener historial de seguros por matrícula
 export async function obtenerHistorialSeguros(matricula: string) {
+  // Spec 017: administrador o usuario relacionado con el coche.
+  const acceso = await autorizarLecturaCoche(matricula)
+  if (!acceso.ok) return { success: false, error: acceso.error }
+
   try {
     const { data, error } = await supabase
       .from("seguros")
@@ -68,6 +77,10 @@ export async function obtenerHistorialSeguros(matricula: string) {
 
 // Crear nuevo seguro
 export async function crearSeguro(formData: FormData) {
+  // Spec 017: solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return { success: false, error: acceso.error }
+
   try {
     const matricula = formData.get("matricula") as string
     const activo = formData.get("activo") === "on"
@@ -142,6 +155,10 @@ export async function crearSeguro(formData: FormData) {
 
 // Actualizar seguro existente
 export async function actualizarSeguro(id: number, formData: FormData) {
+  // Spec 017: solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return { success: false, error: acceso.error }
+
   try {
     const matricula = formData.get("matricula") as string
     const activo = formData.get("activo") === "on"
@@ -215,6 +232,10 @@ export async function actualizarSeguro(id: number, formData: FormData) {
 
 // Eliminar seguro
 export async function eliminarSeguro(id: number, matricula: string) {
+  // Spec 017: solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return { success: false, error: acceso.error }
+
   try {
     const { error } = await supabase.from("seguros").delete().eq("id", id)
 

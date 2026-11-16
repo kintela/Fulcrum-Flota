@@ -3,6 +3,7 @@
 import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { enviarEmailReservaVencida } from "@/lib/email"
 import { sendWhatsAppNotification, formatSpanishPhone } from "@/lib/whatsapp"
+import { autorizarAdmin } from "@/lib/autorizacion"
 
 export interface ReservaVencida {
   id: number
@@ -372,6 +373,10 @@ export async function verificarReservasVencidas() {
 
 // Función para obtener estadísticas de notificaciones
 export async function obtenerEstadisticasNotificaciones() {
+  // Spec 017: solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return { success: false, error: acceso.error }
+
   try {
     const ahora = new Date()
     const hace24Horas = new Date(ahora.getTime() - (24 * 60 * 60 * 1000))

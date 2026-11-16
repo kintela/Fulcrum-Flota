@@ -1,19 +1,20 @@
 # Spec 004 — Asignaciones permanentes de vehículos
 ## Contexto y objetivo
-Esta especificación retrospectiva registra la consulta y liberación de vehículos asignados de forma permanente a empleados, capacidad distinta de las reservas por intervalo temporal.
+Esta especificación retrospectiva registra la consulta y liberación de vehículos asignados de forma permanente a empleados, capacidad distinta de las reservas por intervalo temporal. Actualizada el 2026-11-16 para reflejar la spec 017 (protección por rol de páginas y operaciones de administración).
 ## Usuarios / actores
-- Administrador que consulta asignaciones y puede liberar cualquier vehículo según la acción observada.
+- Administrador: único rol que consulta el listado de asignaciones (017) y puede liberar cualquier vehículo.
 - Empleado autenticado que puede liberar su propio vehículo según la acción observada.
 - Empleado relacionado con el vehículo.
 ## Historias de usuario
-- H1: Como usuario autenticado quiero consultar los vehículos asignados para conocer su responsable.
+- H1: Como administrador quiero consultar los vehículos asignados para conocer su responsable.
 - H2: Como empleado quiero liberar mi vehículo asignado y como administrador quiero poder liberar cualquier asignación.
 ## Requisitos funcionales (criterios de aceptación en EARS)
-- RF-1: CUANDO un usuario autenticado consulta asignaciones permanentes, EL SISTEMA lista vehículos con `asignadoa` informado y no marcados como donantes.
+- RF-1: CUANDO un administrador consulta asignaciones permanentes, EL SISTEMA lista vehículos con `asignadoa` informado y no marcados como donantes.
 - RF-2: CUANDO un empleado libera un vehículo, EL SISTEMA verifica que ese vehículo esté asignado al empleado autenticado.
 - RF-3: CUANDO un administrador libera un vehículo, EL SISTEMA permite liberar una asignación existente.
 - RF-4: SI el vehículo no existe, es donante, no está asignado o el usuario no tiene permiso, ENTONCES EL SISTEMA devuelve un resultado de error.
 - RF-5: CUANDO se libera correctamente, EL SISTEMA elimina el valor de asignación del vehículo.
+- RF-6: SI un usuario no administrador intenta consultar el listado de asignaciones, ENTONCES EL SISTEMA rechaza la operación (017).
 ## Requisitos no funcionales
 - No se encontraron requisitos cuantitativos aplicables documentados.
 ## Casos límite

@@ -10,6 +10,8 @@ import { MantenimientoManager } from "@/components/mantenimiento-manager"
 import { SeguroManager } from "@/components/seguro-manager"
 import { ViatManager } from "@/components/viat-manager"
 import { RestoreCocheButton } from "@/components/restore-coche-button"
+import { redirect } from "next/navigation"
+import { autorizarLecturaCoche, URL_SIN_PERMISO } from "@/lib/autorizacion"
 
 async function getCoche(id: string) {
   if (!id || id === "undefined") {
@@ -73,7 +75,19 @@ interface CocheDetailPageProps {
 }
 
 export default async function CocheDetailPage({ params }: CocheDetailPageProps) {
+  // Spec 017: administrador o usuario relacionado con el coche (asignado o con reserva activa).
+  // Para quien no es administrador, coche ajeno o inexistente se tratan igual, sin revelar la matrícula.
+  const acceso = await autorizarLecturaCoche(params.id)
+  if (!acceso.ok) {
+    redirect(URL_SIN_PERMISO)
+  }
+  const esAdmin = acceso.ctx.esAdmin
+
   const coche = await getCoche(params.id)
+
+  if (!coche && !esAdmin) {
+    redirect(URL_SIN_PERMISO)
+  }
 
   if (!coche) {
     return (
@@ -95,11 +109,11 @@ export default async function CocheDetailPage({ params }: CocheDetailPageProps) 
         <div className="grid grid-cols-1 gap-4 mb-8 md:grid-cols-3 md:items-center">
           <div className="flex justify-start">
             <Link
-              href={coche.eliminado ? "/coches?filter=deleted" : "/coches"}
+              href={!esAdmin ? "/" : coche.eliminado ? "/coches?filter=deleted" : "/coches"}
               className="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 hover:text-gray-900"
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
-              {coche.eliminado ? "Volver a coches dados de baja" : "Volver a Coches"}
+              {!esAdmin ? "Volver al inicio" : coche.eliminado ? "Volver a coches dados de baja" : "Volver a Coches"}
             </Link>
           </div>
           <div className="text-center">
@@ -115,7 +129,7 @@ export default async function CocheDetailPage({ params }: CocheDetailPageProps) 
             )}
           </div>
           <div className="flex justify-start md:justify-end">
-            {coche.eliminado ? (
+            {!esAdmin ? null : coche.eliminado ? (
               <RestoreCocheButton matricula={coche.matricula} />
             ) : (
               <Link

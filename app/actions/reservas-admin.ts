@@ -4,6 +4,7 @@ import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
 import { notificarQuejaReservaAdministradores } from "@/lib/reserva-quejas"
+import { autorizarAdmin } from "@/lib/autorizacion"
 
 export interface ReservaTemporal {
   id: number
@@ -53,6 +54,10 @@ export async function obtenerReservasTemporales(): Promise<{
   error?: string;
   reservas?: ReservaTemporal[];
 }> {
+  // Spec 017: solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return { success: false, error: acceso.error }
+
   try {
     const session = await getServerSession(authOptions)
     
@@ -109,6 +114,10 @@ export async function obtenerAsignacionesPermanentes(): Promise<{
   error?: string;
   asignaciones?: AsignacionPermanente[];
 }> {
+  // Spec 017: solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return { success: false, error: acceso.error }
+
   try {
     const session = await getServerSession(authOptions)
     

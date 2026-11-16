@@ -1,8 +1,9 @@
 # Spec 008 — Revisiones ITV y documentos
 ## Contexto y objetivo
-Esta especificación retrospectiva registra la consulta y mantenimiento de revisiones ITV de vehículos y los documentos asociados a cada revisión.
+Esta especificación retrospectiva registra la consulta y mantenimiento de revisiones ITV de vehículos y los documentos asociados a cada revisión. Actualizada el 2026-11-16 para reflejar la spec 017 (protección por rol de páginas y operaciones de administración).
 ## Usuarios / actores
-- Usuario que consulta y mantiene registros ITV en la ficha de vehículo.
+- Administrador: mantiene los registros ITV (alta, edición y borrado) (017).
+- Usuario no administrador: consulta en solo lectura las ITV de los coches con los que está relacionado (017).
 - Administradores que reciben alertas de revisión según el proceso existente.
 ## Historias de usuario
 - H1: Como usuario quiero registrar revisiones realizadas o programadas para conocer la próxima fecha de inspección.
@@ -16,6 +17,7 @@ Esta especificación retrospectiva registra la consulta y mantenimiento de revis
 - RF-5: CUANDO se solicita subir un documento, EL SISTEMA valida los parámetros/nombre, genera una URL firmada de carga y el cliente valida tipos admitidos y tamaño máximo observado de 20 MB.
 - RF-6: CUANDO se elimina un documento, EL SISTEMA solo acepta la ruta que corresponde a la carpeta de esa revisión; existe además operación de eliminación de todos los documentos de la revisión.
 - RF-7: CUANDO se procesan alertas ITV, EL SISTEMA evalúa el registro que considera más reciente por matrícula, omite coches donantes y envía email a empleados con rol administrador para alertas vencidas o dentro del plazo configurado de 30 días.
+- RF-8: SI quien crea, edita o borra una ITV no es administrador, o quien consulta las ITV de un coche no es administrador ni está relacionado con él, ENTONCES EL SISTEMA rechaza la operación (017). Los documentos ITV se sirven por `/api/itv-documentos`, que queda fuera de la 017.
 ## Requisitos no funcionales
 - Tipos admitidos en la UI de documentos: PDF, Word e imágenes JPEG/PNG/WebP; límite de archivo observado: 20 MB.
 - No se encontraron objetivos de disponibilidad ni entrega garantizada del email.

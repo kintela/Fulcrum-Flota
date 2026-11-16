@@ -1,8 +1,9 @@
 # Spec 009 — Mantenimiento de vehículos
 ## Contexto y objetivo
-Esta especificación retrospectiva describe el historial de mantenimientos y la información de fecha y kilometraje recomendados para el siguiente mantenimiento.
+Esta especificación retrospectiva describe el historial de mantenimientos y la información de fecha y kilometraje recomendados para el siguiente mantenimiento. Actualizada el 2026-11-16 para reflejar la spec 017 (protección por rol de páginas y operaciones de administración).
 ## Usuarios / actores
-- Usuario que consulta o mantiene los registros de mantenimiento.
+- Administrador: mantiene los registros de mantenimiento (017).
+- Usuario no administrador: consulta en solo lectura los mantenimientos de los coches con los que está relacionado (017).
 - Administrador destinatario de alertas de mantenimiento.
 ## Historias de usuario
 - H1: Como usuario quiero registrar mantenimientos realizados y el siguiente recomendado para mantener el historial del vehículo.
@@ -14,6 +15,7 @@ Esta especificación retrospectiva describe el historial de mantenimientos y la 
 - RF-4: CUANDO se elimina un mantenimiento, EL SISTEMA intenta borrar el registro por id.
 - RF-5: CUANDO se verifican alertas, EL SISTEMA selecciona el registro considerado más reciente por matrícula, omite vehículos donantes y clasifica la fecha próxima como vencida o dentro de 30 días.
 - RF-6: CUANDO hay alertas y destinatarios administradores con email, EL SISTEMA intenta enviar un resumen por email y marca las alertas correspondientes cuando al menos un envío tiene éxito.
+- RF-7: SI quien crea, actualiza o elimina un mantenimiento no es administrador, o quien consulta los de un coche no es administrador ni está relacionado con él, ENTONCES EL SISTEMA rechaza la operación (017).
 ## Requisitos no funcionales
 - No se encontró objetivo cuantitativo de rendimiento ni cobertura.
 - Los avisos usan email mediante la integración actual de Microsoft Graph; la entrega final no está garantizada por una aceptación del proveedor.
@@ -32,4 +34,4 @@ Esta especificación retrospectiva describe el historial de mantenimientos y la 
 ## Dudas abiertas
 - [NECESITA ACLARACIÓN] ¿El registro más reciente por fecha de mantenimiento es siempre el que determina la alerta vigente?
 - [NECESITA ACLARACIÓN] ¿El sistema debe alertar por umbral de kilómetros? No se encontró esa evaluación en el proceso inspeccionado.
-- [NECESITA ACLARACIÓN] ¿Qué roles pueden ejecutar las acciones CRUD? No hay comprobación de autorización visible en las acciones leídas.
+

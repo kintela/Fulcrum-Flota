@@ -1,13 +1,12 @@
 # Spec 015 — Análisis de reservas
 ## Contexto y objetivo
-Esta especificación retrospectiva describe las vistas analíticas de reservas que agregan registros históricos para mostrar métricas y tendencias. Se limita a consultas e indicadores evidenciados, sin definir métricas nuevas.
+Esta especificación retrospectiva describe las vistas analíticas de reservas que agregan registros históricos para mostrar métricas y tendencias. Se limita a consultas e indicadores evidenciados, sin definir métricas nuevas. Actualizada el 2026-11-16 para reflejar la spec 017 (protección por rol de páginas y operaciones de administración).
 ## Usuarios / actores
-- Usuario de la aplicación con acceso a la sección de análisis.
-- Administrador u otro rol que puede tener acceso diferenciado: pendiente de confirmar.
+- Administrador: único rol con acceso a la sección de análisis; quien no lo es vuelve al dashboard con aviso (017).
 - Registros históricos de reservas y empleados como fuentes de datos.
 ## Historias de usuario
-- H1: Como usuario autorizado quiero consultar métricas y tendencias de reservas para entender el uso registrado de los vehículos.
-- H2: Como usuario quiero filtrar el análisis por los criterios disponibles para explorar los datos mostrados.
+- H1: Como administrador quiero consultar métricas y tendencias de reservas para entender el uso registrado de los vehículos.
+- H2: Como administrador quiero filtrar el análisis por los criterios disponibles para explorar los datos mostrados.
 ## Requisitos funcionales (criterios de aceptación en EARS)
 - RF-1: CUANDO se abre el análisis, EL SISTEMA consulta los datos de reserva que usa la vista actual y calcula las métricas implementadas.
 - RF-2: CUANDO el usuario cambia un filtro disponible, EL SISTEMA actualiza las métricas/listados con el subconjunto que aplica actualmente.
@@ -27,9 +26,9 @@ Esta especificación retrospectiva describe las vistas analíticas de reservas q
 ## Criterios de finalización
 - Verificar cada métrica, agrupación, filtro, orden y estado vacío/error contra la implementación vigente y datos de prueba conocidos.
 - Confirmar definiciones de denominador, periodo, estado y zona horaria antes de tratar cifras como contrato.
-- Verificar el acceso real de servidor a la sección analítica.
+- Acceso de servidor a la sección analítica: verificado en la spec 017 (solo administradores).
 ## Dudas abiertas
 - [NECESITA ACLARACIÓN] ¿Cuáles son las definiciones aprobadas de cada métrica y su denominador?
 - [NECESITA ACLARACIÓN] ¿Qué periodo temporal y zona horaria delimitan los filtros y agregaciones?
 - [NECESITA ACLARACIÓN] ¿Qué conjunto de estados y reservas excluidas aplica al análisis?
-- [NECESITA ACLARACIÓN] ¿Qué roles pueden consultar datos analíticos y con qué granularidad?
+- [NECESITA ACLARACIÓN] ¿Con qué granularidad pueden consultar los administradores los datos analíticos? (El rol ya está fijado por la spec 017.)

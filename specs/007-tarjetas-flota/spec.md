@@ -1,9 +1,9 @@
 # Spec 007 — Gestión de tarjetas Solred y ViaT
 ## Contexto y objetivo
-Esta especificación retrospectiva describe la administración de tarjetas Solred y ViaT y su vinculación histórica o vigente con vehículos.
+Esta especificación retrospectiva describe la administración de tarjetas Solred y ViaT y su vinculación histórica o vigente con vehículos. Actualizada el 2026-11-16 para reflejar la spec 017 (protección por rol de páginas y operaciones de administración).
 ## Usuarios / actores
-- Administrador que administra el inventario de tarjetas en la interfaz de tarjetas.
-- Usuario de aplicación que utiliza las acciones de asignación/desasignación; permisos exactos por aclarar.
+- Administrador: único rol que administra el inventario de tarjetas y asigna o desasigna tarjetas a vehículos (017).
+- Usuario no administrador: puede consultar la tarjeta asignada y el historial de los coches con los que está relacionado (017).
 - Vehículo asociado a una asignación.
 ## Historias de usuario
 - H1: Como administrador quiero consultar y mantener tarjetas para conocer su estado y caducidad.
@@ -14,7 +14,8 @@ Esta especificación retrospectiva describe la administración de tarjetas Solre
 - RF-3: CUANDO se asigna una tarjeta activa a un vehículo, EL SISTEMA comprueba que exista y registra la asignación con la fecha vigente.
 - RF-4: CUANDO se cambia o desasigna una tarjeta, EL SISTEMA cierra o marca inactiva la asignación anterior según el flujo de ese tipo de tarjeta.
 - RF-5: SI una tarjeta ya está asignada a otro vehículo o tiene una asignación vigente, ENTONCES EL SISTEMA devuelve el error correspondiente o impide eliminarla.
-- RF-6: CUANDO se consulta el vehículo, EL SISTEMA puede mostrar las tarjetas actualmente asociadas y sus datos relevantes.
+- RF-6: CUANDO se consulta el vehículo, EL SISTEMA puede mostrar las tarjetas actualmente asociadas y sus datos relevantes; a un usuario no administrador solo para coches con los que está relacionado (017).
+- RF-7: SI quien invoca la creación, edición, eliminación, asignación o desasignación de tarjetas, o el listado completo de tarjetas, no es administrador, ENTONCES EL SISTEMA rechaza la operación (017).
 ## Requisitos no funcionales
 - No se identificaron objetivos cuantitativos ni requisitos externos de procesamiento de transacciones.
 ## Casos límite
@@ -30,6 +31,5 @@ Esta especificación retrospectiva describe la administración de tarjetas Solre
 - Verificar los casos de duplicidad, vigencia y referencias según comportamiento observable actual.
 ## Dudas abiertas
 - [NECESITA ACLARACIÓN] Existen acciones antiguas y acciones `admin` para Solred con validaciones distintas; ¿cuáles son los puntos de entrada vigentes?
-- [NECESITA ACLARACIÓN] ¿Qué roles pueden ejecutar las acciones de asignar/desasignar? Varias acciones no hacen verificación de sesión propia visible.
 - [NECESITA ACLARACIÓN] ¿Cuál es la fuente autoritativa para decidir una asignación activa cuando `activa` y `fecha_desasignacion` no coinciden?
 - [NECESITA ACLARACIÓN] ¿Qué registro debe considerarse vigente en el historial si hay más de una asignación activa?

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { supabaseServer as supabase } from "@/lib/supabase-server"
+import { autorizarAdmin, autorizarLecturaCoche } from "@/lib/autorizacion"
 
 function toUpperMatricula(value: FormDataEntryValue | null) {
   return (typeof value === "string" ? value : "").trim().toUpperCase()
@@ -57,6 +58,10 @@ function revalidateAlquilerPaths(matricula: string) {
 }
 
 export async function obtenerAlquileresPorMatricula(matricula: string) {
+  // Spec 017: administrador o usuario relacionado con el coche.
+  const acceso = await autorizarLecturaCoche(matricula)
+  if (!acceso.ok) return { success: false as const, error: acceso.error }
+
   try {
     const matriculaNormalizada = matricula?.trim().toUpperCase()
     if (!matriculaNormalizada) {
@@ -84,6 +89,10 @@ export async function obtenerAlquileresPorMatricula(matricula: string) {
 }
 
 export async function crearAlquiler(formData: FormData) {
+  // Spec 017: solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return { success: false as const, error: acceso.error }
+
   try {
     const matricula = toUpperMatricula(formData.get("matricula"))
     const fecha_inicio = parseRequiredText(formData.get("fecha_inicio"))
@@ -137,6 +146,10 @@ export async function crearAlquiler(formData: FormData) {
 }
 
 export async function actualizarAlquiler(id: number, formData: FormData) {
+  // Spec 017: solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return { success: false as const, error: acceso.error }
+
   try {
     const fecha_inicio = parseRequiredText(formData.get("fecha_inicio"))
     const fecha_fin = parseRequiredText(formData.get("fecha_fin"))
@@ -186,6 +199,10 @@ export async function actualizarAlquiler(id: number, formData: FormData) {
 }
 
 export async function eliminarAlquiler(id: number, matricula?: string) {
+  // Spec 017: solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return { success: false as const, error: acceso.error }
+
   try {
     const { error } = await supabase.from("alquileres").delete().eq("id", id)
 

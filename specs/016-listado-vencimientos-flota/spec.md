@@ -4,7 +4,7 @@ Hoy las fechas de caducidad del seguro, de la tarjeta Solred y de la próxima IT
 
 ## Usuarios / actores
 - Administrador (empleado con rol `administrador`): único usuario que puede ver y usar el listado.
-- Usuario autenticado sin rol de administrador: sigue usando la página de coches como hoy, pero no ve el acceso al listado.
+- Usuario autenticado sin rol de administrador: no ve el acceso al listado. Desde la spec 017 tampoco puede entrar en la página de coches.
 - Empleado asignado al vehículo, que solo aparece como dato mostrado.
 
 ## Historias de usuario
@@ -15,7 +15,7 @@ Hoy las fechas de caducidad del seguro, de la tarjeta Solred y de la próxima IT
 
 ## Requisitos funcionales (criterios de aceptación en EARS)
 - RF-1: MIENTRAS un administrador está en la página de coches, EL SISTEMA muestra un botón "Listados" en la cabecera, situado entre el título de la página y el botón "+ Nuevo Coche", tanto en la vista principal "Gestión de Coches" como con cualquier filtro rápido activo.
-- RF-2: SI el usuario autenticado no tiene rol de administrador, ENTONCES EL SISTEMA no muestra el botón "Listados" ni le entrega los datos del listado, y la página de coches se comporta para él como hasta ahora.
+- RF-2: SI el usuario autenticado no tiene rol de administrador, ENTONCES EL SISTEMA no muestra el botón "Listados" ni le entrega los datos del listado. (Desde la spec 017, además, la página de coches lo redirige al dashboard con aviso.)
 - RF-3: CUANDO el administrador pulsa "Listados", EL SISTEMA abre una ventana modal sobre la página actual, sin navegar a otra página ni perder los filtros o la búsqueda de la página de coches.
 - RF-4: CUANDO se abre el modal, EL SISTEMA muestra una tabla con una fila por vehículo y las columnas: matrícula, modelo (marca y modelo juntos, por ejemplo "Seat León"), persona asignada, fecha de caducidad del seguro, fecha de caducidad de la tarjeta Solred y fecha de la próxima revisión ITV.
 - RF-5: EL SISTEMA obtiene la fecha de caducidad del seguro a partir de la póliza activa del vehículo; la de la tarjeta Solred, de la tarjeta Solred con asignación activa al vehículo; y la de la próxima ITV, del mismo registro ITV que la página de coches usa hoy como próxima revisión.
@@ -62,7 +62,7 @@ Hoy las fechas de caducidad del seguro, de la tarjeta Solred y de la próxima IT
 - Edición de cualquier dato desde el modal.
 - Exportación a Excel/CSV/PDF o impresión específica.
 - Envío de alertas o notificaciones por vencimiento (ya cubierto por la spec 012).
-- Cambios en las tarjetas de vehículo, filtros rápidos, búsqueda o permisos existentes de la página de coches.
+- Cambios en las tarjetas de vehículo, filtros rápidos, búsqueda o permisos existentes de la página de coches (los permisos de la página se cambiaron después en la spec 017).
 - Cambios de esquema de base de datos.
 
 ## Criterios de finalización
