@@ -5,7 +5,7 @@ Aplicación privada de gestión de flota: vehículos, reservas, empleados, tarje
 
 ## Flujo Spec-Driven obligatorio
 
-- Cada funcionalidad debe tener su especificación en `specs/NNN-nombre-funcionalidad/spec.md` y su plan en `specs/NNN-nombre-funcionalidad/plan.md`. `NNN` y el nombre identifican la funcionalidad; si no hay convención para asignar el número, consúltala antes de crear una carpeta.
+- Cada funcionalidad debe tener su especificación en `specs/NNN-nombre-funcionalidad/spec.md` su plan en `specs/NNN-nombre-funcionalidad/plan.md` y sus tareas en `specs/NNN-nombre-funcionalidad/tasks.md`. `NNN` y el nombre identifican la funcionalidad; si no hay convención para asignar el número, consúltala antes de crear una carpeta.
 - La especificación define qué debe hacer la funcionalidad y sus criterios de aceptación. El plan debe derivarse de una especificación aprobada y describir cómo implementarla.
 - La implementación debe derivarse del plan aprobado. No añadas funcionalidades, decisiones arquitectónicas ni cambios de alcance no respaldados por la especificación y el plan.
 - Antes de implementar una funcionalidad, consulta ambos documentos y confirma que están aprobados. La forma de registrar formalmente una aprobación está pendiente de definir; no la supongas.
@@ -21,7 +21,8 @@ La autoridad documental, de mayor a menor, es:
 3. `MEMORY.md`
 4. `specs/NNN-nombre-funcionalidad/spec.md`
 5. `specs/NNN-nombre-funcionalidad/plan.md`
-6. Implementación
+6. `specs/NNN-nombre-funcionalidad/tasks.md`
+7. Implementación
 
 La constitución gobierna los principios del proyecto. `AGENTS.md` rige la forma de trabajar de los agentes y no puede contradecirla. `MEMORY.md` describe el estado actual y no introduce requisitos. La especificación define qué hace una funcionalidad; el plan define cómo implementar una especificación aprobada. El código debe respetar todos los niveles anteriores. Si hay contradicción entre documentos, no la resuelvas silenciosamente: identifica los documentos y el conflicto y solicita una decisión antes de implementar.
 

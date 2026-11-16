@@ -21,10 +21,12 @@ La estructura documental oficial del proyecto es:
 ├── specs/
 │   ├── 001-nombre-funcionalidad/
 │   │   ├── spec.md
-│   │   └── plan.md
+│   │   ├── plan.md
+│   │   └── tasks.md
 │   ├── 002-nombre-funcionalidad/
 │   │   ├── spec.md
-│   │   └── plan.md
+│   │   ├── plan.md
+│   │   └── tasks.md
 │   └── ...
 ├── README.md
 └── nombre-proyecto/
@@ -38,9 +40,10 @@ Responsabilidades:
 - `docs/constitution.md`: principios, restricciones y decisiones fundamentales que gobiernan el proyecto.
 - `specs/NNN-nombre-funcionalidad/spec.md`: especificación del cambio y sus criterios de aceptación.
 - `specs/NNN-nombre-funcionalidad/plan.md`: plan técnico aprobado para implementar esa especificación.
+- `specs/NNN-nombre-funcionalidad/tasks.md`: desglose del plan aprobado en tareas pequeñas y verificables, con casillas que reflejan el estado real de cada tarea; se marca cada tarea como completada solo cuando su validación ha pasado.
 - `README.md`: documentación general de uso/desarrollo del proyecto; no sustituye especificaciones, planes ni esta constitución.
 
-Las especificaciones y planes se almacenan exclusivamente en `specs/NNN-nombre-funcionalidad/`. No crear `docs/specs/`, `.specify/` ni estructuras alternativas para SDD. La representación anterior fija la organización documental; no requiere mover o reubicar el código existente. En este checkout no se encontró `README.md`, `MEMORY.md` ni carpeta `specs/`; su incorporación y el proceso de aprobación formal deberán resolverse como trabajo explícito, no inferirse de esta constitución.
+Las especificaciones, planes y tareas se almacenan exclusivamente en `specs/NNN-nombre-funcionalidad/`. No crear `docs/specs/`, `.specify/` ni estructuras alternativas para SDD. La representación anterior fija la organización documental; no requiere mover o reubicar el código existente. En este checkout no se encontró `README.md`, `MEMORY.md` ni carpeta `specs/`; su incorporación y el proceso de aprobación formal deberán resolverse como trabajo explícito, no inferirse de esta constitución.
 
 ## 3. Jerarquía de autoridad
 
@@ -51,9 +54,10 @@ De mayor a menor autoridad:
 3. `MEMORY.md`
 4. `specs/NNN-nombre-funcionalidad/spec.md`
 5. `specs/NNN-nombre-funcionalidad/plan.md`
-6. Implementación
+6. `specs/NNN-nombre-funcionalidad/tasks.md`
+7. Implementación
 
-La constitución establece principios y restricciones. `AGENTS.md` determina el procedimiento de trabajo y no puede contradecirla. `MEMORY.md` registra el estado observado y no introduce requisitos. Una spec define qué debe hacer un cambio. Un plan aprobado define cómo implementar una spec aprobada. La implementación debe respetar todos los niveles anteriores.
+La constitución establece principios y restricciones. `AGENTS.md` determina el procedimiento de trabajo y no puede contradecirla. `MEMORY.md` registra el estado observado y no introduce requisitos. Una spec define qué debe hacer un cambio. Un plan aprobado define cómo implementar una spec aprobada. `tasks.md` desglosa el plan en tareas y no puede ampliar su alcance. La implementación debe respetar todos los niveles anteriores.
 
 Una contradicción, omisión material o requisito incompatible no se resuelve silenciosamente ni escogiendo el documento más conveniente: se detiene el trabajo afectado, se identifica el conflicto y se solicita una decisión a la persona responsable. La precedencia no autoriza a reinterpretar ni sobrescribir documentos inferiores sin dejar constancia mediante el proceso correspondiente.
 
@@ -68,13 +72,14 @@ SDD es el principio fundamental para cambios funcionales relevantes. El flujo ob
 5. Aprobación de la especificación.
 6. Elaboración del plan derivado de la especificación aprobada.
 7. Aprobación del plan.
-8. Implementación conforme al plan.
-9. Validación y comunicación de resultados.
-10. Actualización de `MEMORY.md` cuando cambie el estado real del proyecto.
+8. Desglose del plan aprobado en `tasks.md`.
+9. Implementación conforme al plan, tarea a tarea, marcando cada tarea en `tasks.md` cuando su validación pase.
+10. Validación y comunicación de resultados.
+11. Actualización de `MEMORY.md` cuando cambie el estado real del proyecto.
 
-No se implementa una funcionalidad relevante sin una especificación aprobada. La spec se ubica en `specs/NNN-nombre-funcionalidad/spec.md`; el plan correspondiente en `specs/NNN-nombre-funcionalidad/plan.md`. El plan debe derivarse de la spec aprobada y la implementación del plan aprobado. Durante la implementación no se introducen funcionalidades, decisiones arquitectónicas ni cambios de alcance sin respaldo en ambos documentos.
+No se implementa una funcionalidad relevante sin una especificación aprobada. La spec se ubica en `specs/NNN-nombre-funcionalidad/spec.md`; el plan correspondiente en `specs/NNN-nombre-funcionalidad/plan.md` y sus tareas en `specs/NNN-nombre-funcionalidad/tasks.md`. El plan debe derivarse de la spec aprobada, las tareas del plan aprobado y la implementación de ambos. Durante la implementación no se introducen funcionalidades, decisiones arquitectónicas ni cambios de alcance sin respaldo en ambos documentos.
 
-Si aparece una necesidad que contradice o amplía la spec, se detiene el cambio afectado. Primero se actualiza la spec y se obtiene su aprobación; después se actualiza y aprueba el plan, y solo entonces se continúa. Se permiten especificaciones retrospectivas únicamente para describir comportamiento ya existente y verificable como línea base. Deben distinguir hechos observados de dudas, que se marcarán `[NECESITA ACLARACIÓN]`; no justifican cambios anteriores ni autorizan por sí mismas modificaciones del comportamiento. Los planes permanecen prospectivos y se derivan de una especificación aprobada.
+Si aparece una necesidad que contradice o amplía la spec, se detiene el cambio afectado. Primero se actualiza la spec y se obtiene su aprobación; después se actualiza y aprueba el plan, se ajusta `tasks.md` conservando el estado de las tareas ya completadas, y solo entonces se continúa. Se permiten especificaciones retrospectivas únicamente para describir comportamiento ya existente y verificable como línea base. Deben distinguir hechos observados de dudas, que se marcarán `[NECESITA ACLARACIÓN]`; no justifican cambios anteriores ni autorizan por sí mismas modificaciones del comportamiento. Los planes permanecen prospectivos y se derivan de una especificación aprobada.
 
 El criterio de qué tareas menores pueden tratarse como mantenimiento no funcional, y la forma verificable de registrar aprobación, están pendientes de definición. Si existe duda razonable sobre relevancia o alcance, se solicita aclaración antes de editar código.
 
