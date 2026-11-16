@@ -107,11 +107,7 @@ Estrategia:
 - **Jest sin jsdom:** limita la cobertura automática de la interfaz (ver §8). Si quieres, la instalación de `jest-environment-jsdom` como devDependency puede ir en un cambio de mantenimiento aparte, con tu autorización.
 - **Reversión:** basta con revertir el commit o los commits de la rama. No hay migraciones ni datos que restaurar.
 
-## 11. Tareas (en orden)
-1. **T1** — `lib/listado-vencimientos.ts` y `logica.test.ts` (primero las pruebas). RF-10, 12, 14–19.
-2. **T2** — `app/actions/listado-vencimientos.ts` y `actions.test.ts` (primero las pruebas). RF-2, 4–8, 21.
-3. **T3** — `components/listado-vencimientos-modal.tsx`. RF-3, 4, 6, 9–20.
-4. **T4** — Integración en `app/coches/page.tsx`. RF-1, 2.
-5. **T5** — Validación: pruebas, lint, tsc, build y demo manual. Actualizar la issue #6.
+## 11. Tareas
+El desglose en tareas (T1–T5), los RF que cubre cada una, su criterio "Hecho cuando:" y su estado `[x]`/`[ ]` están en [`tasks.md`](tasks.md), que es la única fuente del estado de implementación.
 
 `MEMORY.md` solo se actualizará al final si el estado funcional cambia (se añadirá la mención del listado de vencimientos en "Flota").

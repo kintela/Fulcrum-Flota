@@ -1,6 +1,6 @@
 # Tareas 016 — Listado de vencimientos de la flota
 
-Derivadas de `spec.md` (aprobada el 2026-11-16) y `plan.md` (aprobado el 2026-11-16, §11). Los identificadores T1–T5 coinciden con los del plan.
+Derivadas de `spec.md` (aprobada el 2026-11-16) y `plan.md` (aprobado el 2026-11-16). Este archivo es la única fuente del estado de implementación; el plan remite aquí.
 
 > Nota: este archivo se creó cuando T1–T4 ya estaban implementadas y validadas, en una sola sesión y sin parar entre tareas. Las casillas reflejan el estado real en ese momento. A partir de aquí se actualiza tarea a tarea.
 
