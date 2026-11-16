@@ -1,6 +1,6 @@
 # Spec 001 — Identidad corporativa y sesión
 ## Contexto y objetivo
-Esta especificación retrospectiva registra el inicio de sesión corporativo y la asociación de la identidad autenticada con un empleado, tal como está implementado actualmente. No determina la política de cuentas que no sean corporativas, que no se encontró documentada.
+Esta especificación retrospectiva registra el inicio de sesión corporativo y la asociación de la identidad autenticada con un empleado, tal como está implementado actualmente. No determina la política de cuentas que no sean corporativas, que no se encontró documentada. La autorización por rol de páginas y operaciones se define en la spec 017, que lee el rol vigente del empleado en cada petición en lugar del rol guardado en la sesión.
 ## Usuarios / actores
 - Usuario que inicia sesión mediante el proveedor corporativo.
 - Empleado cuya cuenta se consulta o aprovisiona al establecer la sesión.
@@ -20,7 +20,7 @@ Esta especificación retrospectiva registra el inicio de sesión corporativo y l
 - El nombre puede derivarse de varios atributos y tiene fallback al segmento anterior a `@` del email.
 ## Fuera de alcance
 - Alta/edición administrativa de empleados (002).
-- Matriz de autorización de cada operación de negocio; requiere aclaración transversal.
+- Autorización por rol de páginas y operaciones de gestión (017). Los endpoints `/api` siguen pendientes de su propia spec.
 - Cambio de proveedor de identidad o de estrategia de sesión.
 ## Criterios de finalización
 - Verificar que el flujo de autenticación corporativa produce la sesión descrita.

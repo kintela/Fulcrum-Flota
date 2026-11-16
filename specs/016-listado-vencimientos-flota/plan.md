@@ -21,7 +21,7 @@ Se sigue el patrón existente de `components/historial-reservas-modal.tsx`: un c
 | `lib/listado-vencimientos.ts` | Crear | Tipos (`FilaVencimiento`, `FiltroAlquiler`, `ColumnaOrden`, `EstadoPlazo`) y funciones puras: `filtrarPorAlquiler`, `coincideBusqueda`, `ordenarFilas`, `calcularEstadoPlazo(fecha, hoy)` y `formatearFecha`. Sin imports de servidor, para poder usarlo en el cliente. | RF-10, 12, 14–19 |
 | `app/actions/listado-vencimientos.ts` | Crear (`"use server"`) | `obtenerListadoVencimientos()`: sesión y rol de administrador; consultas a Supabase; composición de filas; resultado `{ success, filas?, error? }`. | RF-2, 4–8, 21 |
 | `components/listado-vencimientos-modal.tsx` | Crear (`"use client"`) | Botón "Listados" y `Dialog`: carga al abrir, estados de carga y error, selector de alquiler, buscador, tabla con cabeceras ordenables e indicadores de plazo. | RF-3, 4, 6, 9–20 |
-| `app/coches/page.tsx` | Modificar (mínimo) | Calcular `esAdmin` con `esAdministradorPorSesion(session)` y renderizar `<ListadoVencimientosModal />` como primer elemento del grupo de botones de la cabecera, antes de "Quitar filtros" y "+ Nuevo Coche", con o sin filtro activo. Nada más cambia. | RF-1, 2 |
+| `app/coches/page.tsx` | Modificar (mínimo) | Calcular `esAdmin` en servidor (implementado con `esAdministradorPorSesion(session)`; desde la spec 017 se toma del contexto que devuelve `requerirAdminPagina()`) y renderizar `<ListadoVencimientosModal />` como primer elemento del grupo de botones de la cabecera, antes de "Quitar filtros" y "+ Nuevo Coche", con o sin filtro activo. Nada más cambia. | RF-1, 2 |
 | `__tests__/listado-vencimientos/logica.test.ts` | Crear | Pruebas de las funciones puras. | ver §8 |
 | `__tests__/listado-vencimientos/actions.test.ts` | Crear | Pruebas de la Server Action con mocks de `next-auth`, `@/lib/roles` y `@/lib/supabase-server`. | ver §8 |
 
@@ -100,7 +100,7 @@ Estrategia:
 - **Selector segmentado en vez de `Select` de Radix.** Las tres opciones quedan visibles con un solo clic y funcionan mejor en móvil. Ambos son UI existente; ninguno añade dependencias.
 
 ## 10. Riesgos, compatibilidad y reversión
-- **Compatibilidad:** el único archivo existente que se modifica es `app/coches/page.tsx`, con una consulta extra de rol por carga (la misma que ya hacen otras pantallas) y un componente añadido. Para quien no es administrador, la página no cambia.
+- **Compatibilidad:** el único archivo existente que se modifica es `app/coches/page.tsx`, con una consulta extra de rol por carga (la misma que ya hacen otras pantallas) y un componente añadido. Para quien no es administrador, la página no cambia. (Desde la spec 017, la página entera es solo de administrador y la consulta de rol es la de su guarda.)
 - **Rendimiento:** la consulta de rol añade una lectura a `empleados` por cada carga de `/coches`. El listado solo consulta al abrir el modal.
 - **Datos incoherentes** (varios seguros o Solred activos): se muestra un único valor, el mismo que en la página (caso límite de la spec).
 - **Excepción de coches de prueba:** depende de un email fijo en `page.tsx` que la acción tendrá que replicar. Se documenta en el código remitiendo a la regla de la página (duda abierta de la spec 003).

@@ -1,6 +1,6 @@
 # Spec 014 — Panel operativo
 ## Contexto y objetivo
-Esta especificación retrospectiva registra la información agregada y accesos rápidos que el panel principal presenta para apoyar la consulta diaria de la flota y sus actividades próximas.
+Esta especificación retrospectiva registra la información agregada y accesos rápidos que el panel principal presenta para apoyar la consulta diaria de la flota y sus actividades próximas. Actualizada el 2026-11-16 para reflejar la spec 017 (protección por rol de páginas y operaciones de administración).
 ## Usuarios / actores
 - Usuario autenticado que accede al panel.
 - Administradores, cuyos datos o alertas pueden tener tratamiento diferenciado.
@@ -13,7 +13,8 @@ Esta especificación retrospectiva registra la información agregada y accesos r
 - RF-2: CUANDO hay reservas futuras, EL SISTEMA presenta el subconjunto y ordenamiento aplicados por el panel.
 - RF-3: CUANDO hay elementos próximos o vencidos de dominios con alertas en el panel, EL SISTEMA los presenta conforme a las reglas de selección actuales.
 - RF-4: CUANDO falla una consulta de un dominio, EL SISTEMA muestra el resultado parcial o error que el panel actual implementa.
-- RF-5: CUANDO el usuario selecciona un acceso del panel, EL SISTEMA navega a la vista configurada para ese acceso.
+- RF-5: CUANDO el usuario selecciona un acceso del panel, EL SISTEMA navega a la vista configurada para ese acceso; los enlaces de las alertas de un usuario no administrador abren la ficha de sus coches en solo lectura (017).
+- RF-6: CUANDO se llega al panel redirigido desde una página sin permiso, EL SISTEMA muestra una sola vez el aviso "No tienes permiso para acceder a esa página" (017).
 ## Requisitos no funcionales
 - El panel observado está en español. No se encontró requisito de frescura de datos ni latencia cuantificado.
 ## Casos límite

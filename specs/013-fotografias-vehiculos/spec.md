@@ -1,9 +1,9 @@
 # Spec 013 — Fotografías de vehículos
 ## Contexto y objetivo
-Esta especificación retrospectiva describe la consulta, carga y eliminación de fotografías de vehículos guardadas en almacenamiento asociado a la aplicación.
+Esta especificación retrospectiva describe la consulta, carga y eliminación de fotografías de vehículos guardadas en almacenamiento asociado a la aplicación. Actualizada el 2026-11-16 para reflejar la spec 017 (protección por rol de páginas y operaciones de administración).
 ## Usuarios / actores
-- Usuario que consulta fotografías en la ficha del vehículo.
-- Usuario que carga o elimina fotografías mediante las operaciones disponibles.
+- Usuario que consulta fotografías en la ficha del vehículo: administrador, o usuario relacionado con el coche (017).
+- Administrador, que carga o elimina fotografías desde la edición del vehículo (la ficha en modo lectura no muestra esos controles).
 - Supabase Storage como servicio de almacenamiento.
 ## Historias de usuario
 - H1: Como usuario quiero ver fotografías de un vehículo para reconocerlo y consultar su estado visual.
@@ -32,4 +32,4 @@ Esta especificación retrospectiva describe la consulta, carga y eliminación de
 - [NECESITA ACLARACIÓN] ¿Qué flujo de carga/eliminación está vigente y qué tipos/tamaños acepta?
 - [NECESITA ACLARACIÓN] ¿Las fotografías se guardan como URLs, rutas de objetos o ambos?
 - [NECESITA ACLARACIÓN] ¿Qué bucket, visibilidad y políticas RLS/Storage están desplegados?
-- [NECESITA ACLARACIÓN] ¿Qué roles pueden consultar, cargar y eliminar imágenes?
+- [NECESITA ACLARACIÓN] La interfaz solo ofrece carga y eliminación a administradores (017), pero el acceso a Storage se hace con el cliente anónimo desde el navegador. ¿Qué protección de servidor/Storage se requiere? Pendiente de la spec de `/api` y Storage.
