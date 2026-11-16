@@ -2,8 +2,13 @@
 
 import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { revalidatePath } from "next/cache"
+import { autorizarAdmin, autorizarLecturaCoche } from "@/lib/autorizacion"
 
 export async function obtenerTarjetasSolred() {
+  // Spec 017: solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return []
+
   try {
     const { data, error } = await supabase.from("tarjetassolred").select("*").eq("activa", true).order("numero_tarjeta")
 
@@ -20,6 +25,10 @@ export async function obtenerTarjetasSolred() {
 }
 
 export async function asignarTarjetaSolred(matricula: string, numeroTarjeta: string) {
+  // Spec 017: solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return { success: false, error: acceso.error }
+
   try {
     // Si ya está asignada exactamente esa tarjeta, no hacer nada
     const { data: asignacionActual, error: asignacionActualError } = await supabase
@@ -127,6 +136,10 @@ export async function asignarTarjetaSolred(matricula: string, numeroTarjeta: str
 }
 
 export async function desasignarTarjetaSolred(matricula: string) {
+  // Spec 017: solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return { success: false, error: acceso.error }
+
   try {
     const { data: asignacionActiva, error: asignacionActivaError } = await supabase
       .from("solred_coches")
@@ -194,6 +207,10 @@ export async function desasignarTarjetaSolred(matricula: string) {
 }
 
 export async function obtenerTarjetaAsignada(matricula: string) {
+  // Spec 017: administrador o usuario relacionado con el coche.
+  const acceso = await autorizarLecturaCoche(matricula)
+  if (!acceso.ok) return null
+
   try {
     const { data, error } = await supabase
       .from("solred_coches")
@@ -222,6 +239,10 @@ export async function obtenerTarjetaAsignada(matricula: string) {
 }
 
 export async function crearTarjetaSolred(numeroTarjeta: string, pin: string, fechaVencimiento: string) {
+  // Spec 017: solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return { success: false, error: acceso.error }
+
   try {
     // Validaciones
     if (!numeroTarjeta || numeroTarjeta.length !== 17 || !/^\d{17}$/.test(numeroTarjeta)) {

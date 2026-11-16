@@ -17,6 +17,7 @@ import { ITVManager } from "@/components/itv-manager"
 import { MantenimientoManager } from "@/components/mantenimiento-manager"
 import { FotosManager } from "@/components/fotos-manager"
 import { AlquilerManager } from "@/components/alquiler-manager"
+import { requerirAdminPagina } from "@/lib/autorizacion"
 
 async function getCoche(matricula: string) {
   const { data, error } = await supabase.from("coches").select("*").eq("matricula", matricula).single()
@@ -40,6 +41,7 @@ async function getEmpleados() {
 }
 
 export default async function EditarCochePage({ params }: { params: { id: string } }) {
+  await requerirAdminPagina()
   const coche = await getCoche(params.id)
   const empleados = await getEmpleados()
 

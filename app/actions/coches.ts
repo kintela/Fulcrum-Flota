@@ -4,6 +4,7 @@ import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
 import { revalidatePath } from "next/cache"
+import { autorizarAdmin, ERROR_NO_AUTENTICADO } from "@/lib/autorizacion"
 
 interface TarjetaSolredInfo {
   numero_tarjeta?: string | null
@@ -155,20 +156,12 @@ export async function eliminarCoche(matricula: string) {
       return { success: false, error: "Usuario no autenticado" as const }
     }
 
-    const { data: empleado, error: empleadoError } = await supabase
-      .from("empleados")
-      .select("role")
-      .eq("email", session.user.email)
-      .single()
-
-    const roleValue = String(empleado?.role || "").toLowerCase()
-    const isAdmin = roleValue === "admin" || roleValue === "administrador"
-
-    if (empleadoError || !empleado || !isAdmin) {
-      return {
-        success: false,
-        error: "Acceso no autorizado - Solo administradores pueden eliminar coches" as const,
-      }
+    // Spec 017: rol vigente con la guarda común; se conservan los mensajes de esta acción.
+    const acceso = await autorizarAdmin()
+    if (!acceso.ok) {
+      return acceso.error === ERROR_NO_AUTENTICADO
+        ? { success: false, error: "Usuario no autenticado" as const }
+        : { success: false, error: "Acceso no autorizado - Solo administradores pueden eliminar coches" as const }
     }
 
     const matriculaNormalizada = (matricula || "").trim().toUpperCase()
@@ -237,20 +230,12 @@ export async function restaurarCoche(matricula: string) {
       return { success: false, error: "Usuario no autenticado" as const }
     }
 
-    const { data: empleado, error: empleadoError } = await supabase
-      .from("empleados")
-      .select("role")
-      .eq("email", session.user.email)
-      .single()
-
-    const roleValue = String(empleado?.role || "").toLowerCase()
-    const isAdmin = roleValue === "admin" || roleValue === "administrador"
-
-    if (empleadoError || !empleado || !isAdmin) {
-      return {
-        success: false,
-        error: "Acceso no autorizado - Solo administradores pueden dar de alta coches" as const,
-      }
+    // Spec 017: rol vigente con la guarda común; se conservan los mensajes de esta acción.
+    const acceso = await autorizarAdmin()
+    if (!acceso.ok) {
+      return acceso.error === ERROR_NO_AUTENTICADO
+        ? { success: false, error: "Usuario no autenticado" as const }
+        : { success: false, error: "Acceso no autorizado - Solo administradores pueden dar de alta coches" as const }
     }
 
     const matriculaNormalizada = (matricula || "").trim().toUpperCase()

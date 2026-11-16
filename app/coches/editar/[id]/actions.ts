@@ -3,8 +3,13 @@
 import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
+import { autorizarAdmin } from "@/lib/autorizacion"
 
 export async function editarCoche(formData: FormData) {
+  // Spec 017: solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) throw new Error(acceso.error)
+
   try {
     const matriculaOriginal = (formData.get("matricula_original") as string)?.toUpperCase()
     const matriculaNueva = (formData.get("matricula") as string)?.toUpperCase()

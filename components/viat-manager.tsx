@@ -68,7 +68,9 @@ export function ViatManager({ matricula, isEditing = false }: ViatManagerProps) 
     try {
       setIsLoading(true)
       setError(null)
-      const tarjetas = await obtenerTarjetasViat(matriculaNormalizada || null)
+      // La lista completa de tarjetas solo hace falta para asignar (modo edición) y su
+      // acción es solo de administrador (spec 017); en lectura no se solicita.
+      const tarjetas = isEditing ? await obtenerTarjetasViat(matriculaNormalizada || null) : []
       setTarjetasViat(tarjetas)
 
       if (matriculaNormalizada) {

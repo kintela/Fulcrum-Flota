@@ -1,8 +1,13 @@
 "use server"
 
 import { supabaseServer as supabase } from "@/lib/supabase-server"
+import { autorizarAdmin } from "@/lib/autorizacion"
 
 export async function obtenerEmpleados() {
+  // Spec 017: solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return []
+
   try {
     const { data, error } = await supabase.from("empleados").select("*").order("nombre", { ascending: true })
 
@@ -19,6 +24,10 @@ export async function obtenerEmpleados() {
 }
 
 export async function obtenerEmpleadoPorId(id: number) {
+  // Spec 017: solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return null
+
   try {
     const { data, error } = await supabase.from("empleados").select("*").eq("id", id).single()
 

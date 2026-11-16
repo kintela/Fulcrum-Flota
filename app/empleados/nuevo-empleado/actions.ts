@@ -3,8 +3,13 @@
 import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { normalizarRolUsuario } from "@/lib/user-role"
 import { revalidatePath } from "next/cache"
+import { autorizarAdmin } from "@/lib/autorizacion"
 
 export async function crearEmpleado(formData: FormData) {
+  // Spec 017: solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return { success: false, error: acceso.error }
+
   try {
     const getValue = (key: string) => {
       const value = formData.get(key)

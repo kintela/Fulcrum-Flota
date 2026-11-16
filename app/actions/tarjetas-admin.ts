@@ -1,9 +1,8 @@
 "use server"
 
-import { getServerSession } from "next-auth/next"
 import { revalidatePath } from "next/cache"
-import { authOptions } from "@/lib/auth"
 import { supabaseServer as supabase } from "@/lib/supabase-server"
+import { autorizarAdmin, ERROR_NO_AUTENTICADO } from "@/lib/autorizacion"
 
 export interface TarjetaSolredAdmin {
   numero_tarjeta: string
@@ -24,48 +23,22 @@ export interface TarjetaViatAdmin {
   updated_at: string | null
 }
 
-function normalizarEmail(email: string) {
-  return email.trim().toLowerCase()
-}
-
-function esAdminRole(role: string | null | undefined) {
-  const roleNormalizado = String(role || "").toLowerCase()
-  return roleNormalizado === "administrador" || roleNormalizado === "admin"
-}
-
 function esFechaValida(fecha: string) {
   const parsed = new Date(fecha)
   return Number.isFinite(parsed.getTime())
 }
 
 async function validarAdmin() {
-  const session = await getServerSession(authOptions)
-
-  if (!session?.user?.email) {
-    return { success: false as const, error: "Usuario no autenticado" }
-  }
-
-  if (esAdminRole(session.user.role)) {
+  // Spec 017: rol vigente leído de la BD con la guarda común (antes se aceptaba el rol del JWT,
+  // que no se refresca). Se conservan los mensajes y la forma de respuesta de esta acción.
+  const acceso = await autorizarAdmin()
+  if (acceso.ok) {
     return { success: true as const }
   }
-
-  const emailNormalizado = normalizarEmail(session.user.email)
-  const { data: empleados, error: empleadosError } = await supabase
-    .from("empleados")
-    .select("email, role")
-    .ilike("email", emailNormalizado)
-
-  if (empleadosError) {
-    console.error("Error verificando permisos admin:", empleadosError)
-    return { success: false as const, error: "Error verificando permisos de usuario" }
+  if (acceso.error === ERROR_NO_AUTENTICADO) {
+    return { success: false as const, error: "Usuario no autenticado" }
   }
-
-  const empleado = (empleados || []).find((e) => normalizarEmail(String(e.email || "")) === emailNormalizado)
-  if (!empleado || !esAdminRole(empleado.role)) {
-    return { success: false as const, error: "Acceso no autorizado - Solo administradores" }
-  }
-
-  return { success: true as const }
+  return { success: false as const, error: "Acceso no autorizado - Solo administradores" }
 }
 
 export async function obtenerTarjetasSolredAdmin() {

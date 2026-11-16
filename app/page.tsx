@@ -2,6 +2,8 @@ import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
 import DashboardClient from "./dashboard-client"
+import { Suspense } from "react"
+import { AvisoSinPermiso } from "@/components/aviso-sin-permiso"
 import { obtenerFotosCoche } from "@/lib/storage"
 
 const COCHES_NO_ELIMINADOS_FILTER = "eliminado.is.null,eliminado.eq.false"
@@ -330,15 +332,20 @@ export default async function HomePage() {
   const { coches, todosLosCoches, empleados, itvAlerts, solredAlerts, alquilerAlerts } = await getDashboardData(userRole, userEmail)
 
   return (
-    <DashboardClient 
-      coches={coches}
-      todosLosCoches={todosLosCoches}
-      empleados={empleados}
-      itvAlerts={itvAlerts}
-      solredAlerts={solredAlerts}
-      alquilerAlerts={alquilerAlerts}
-      userRole={userRole}
-      userEmail={userEmail}
-    />
+    <>
+      <Suspense fallback={null}>
+        <AvisoSinPermiso />
+      </Suspense>
+      <DashboardClient 
+        coches={coches}
+        todosLosCoches={todosLosCoches}
+        empleados={empleados}
+        itvAlerts={itvAlerts}
+        solredAlerts={solredAlerts}
+        alquilerAlerts={alquilerAlerts}
+        userRole={userRole}
+        userEmail={userEmail}
+      />
+    </>
   )
 }

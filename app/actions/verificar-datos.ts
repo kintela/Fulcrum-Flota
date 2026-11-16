@@ -1,8 +1,13 @@
 "use server"
 
 import { supabaseServer as supabase } from "@/lib/supabase-server"
+import { autorizarAdmin } from "@/lib/autorizacion"
 
 export async function verificarDatos() {
+  // Spec 017: solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return { success: false, error: acceso.error }
+
   console.log("=== VERIFICANDO DATOS EN LAS TABLAS ===")
   
   try {

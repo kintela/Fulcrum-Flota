@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ArrowLeft, User, Mail } from "lucide-react"
 import Link from "next/link"
 import { supabaseServer as supabase } from "@/lib/supabase-server"
+import { requerirAdminPagina } from "@/lib/autorizacion"
 
 async function getEmpleado(id: string) {
   if (!id || id === "undefined" || isNaN(Number(id))) {
@@ -28,6 +29,7 @@ interface EmpleadoDetailPageProps {
 }
 
 export default async function EmpleadoDetailPage({ params }: EmpleadoDetailPageProps) {
+  await requerirAdminPagina()
   const empleado = await getEmpleado(params.id)
 
   if (!empleado) {
