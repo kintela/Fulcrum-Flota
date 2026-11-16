@@ -7,7 +7,7 @@ El repositorio es **Fulcrum Flota**, aplicación web existente para gestionar ve
 ## Estado funcional actual
 
 - **Acceso e identidad:** inicio de sesión corporativo mediante Azure AD/NextAuth. En callbacks se consulta o registra automáticamente un empleado a partir del email. La aplicación maneja roles `usuario` y `administrador`.
-- **Flota:** consulta, alta, edición, detalle, búsqueda y actualización de coches; existen asignaciones permanentes y ubicaciones.
+- **Flota:** consulta, alta, edición, detalle, búsqueda y actualización de coches; existen asignaciones permanentes y ubicaciones. Los administradores tienen en `/coches` un modal "Listados" con los vencimientos de seguro activo, tarjeta Solred e ITV de la flota activa (sin donantes), con filtro por alquiler, búsqueda, ordenación y resaltado de fechas vencidas o próximas (spec 016).
 - **Reservas:** creación y gestión de reservas temporales, estados activa/completada/cancelada, reservas pendientes y activación programada. Hay vistas de reservas y análisis con información de uso/feedback.
 - **Empleados:** listado, alta, edición y detalle; existen operaciones de administración y estado de bloqueo.
 - **Datos asociados a vehículos:** ITV y alertas/documentos, mantenimiento y alertas, seguros, tarjetas Solred y VIAT, alquileres y fotografías/documentación.
@@ -49,7 +49,7 @@ Un SQL de creación de reservas define restricciones de fechas, claves foráneas
 
 - El repositorio no contiene una fuente canónica del esquema Supabase ni un directorio formal de migraciones; `scripts/` contiene SQL manual diverso. El estado aplicado en entornos es desconocido.
 - No hay tipos generados de Supabase ni evidencia de sincronización automática del esquema con tipos TS.
-- No hay scripts de test/type-check en `package.json`, aunque Jest y TypeScript están disponibles/configurados. El build omite sus errores de lint y TS; deben ejecutarse validaciones aparte.
+- No hay scripts de test/type-check en `package.json`, aunque Jest y TypeScript están disponibles/configurados. `jest.config.js` usa `jest-environment-jsdom`, que no está instalado, y tampoco `@types/jest`: con la configuración por defecto ninguna suite arranca. Las pruebas de lógica funcionan con `--testEnvironment=node` (por ejemplo, las de la spec 016). El build omite sus errores de lint y TS; deben ejecutarse validaciones aparte.
 - No se encontró configuración de CI en los archivos inspeccionados. Esto no descarta automatizaciones externas al repositorio.
 - Hay rutas `api/public`, `api/debug` y `api/test`, y excepciones de middleware relacionadas; su exposición/uso y configuración de entorno deben verificarse antes de cambios de seguridad.
 - No se encontraron `README.md`, `MEMORY.md` (antes de esta creación) ni especificaciones en `specs/`. Tampoco `supabase/`, `supabase/config.toml`, `supabase/migrations/`, `proxy.ts`, `next.config.ts` ni `eslint.config.mjs`; la ausencia en este checkout no prueba que no existan recursos externos.

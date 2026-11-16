@@ -9,6 +9,8 @@ import { CarThumbnail } from "@/components/car-thumbnail"
 import { DeleteCocheButton } from "@/components/delete-coche-button"
 import { RestoreCocheButton } from "@/components/restore-coche-button"
 import { coincideBusquedaLibre } from "@/lib/coches-busqueda"
+import { esAdministradorPorSesion } from "@/lib/roles"
+import { ListadoVencimientosModal } from "@/components/listado-vencimientos-modal"
 
 // Tipo para los parámetros de búsqueda
 interface SearchParams {
@@ -273,7 +275,7 @@ export default async function CochesPage({ searchParams }: { searchParams: Searc
   // Obtener el filtro de los parámetros de búsqueda
   const filter = searchParams.filter
   const q = searchParams.q?.trim() || ""
-  const coches = await getCoches(userEmail, filter, q)
+  const [coches, esAdmin] = await Promise.all([getCoches(userEmail, filter, q), esAdministradorPorSesion(session)])
   const hasSearch = q.length > 0
 
   // Determinar el título según el filtro
@@ -310,6 +312,7 @@ export default async function CochesPage({ searchParams }: { searchParams: Searc
             <p className="text-gray-600">{subtitle}</p>
           </div>
           <div className="flex gap-2">
+            {esAdmin && <ListadoVencimientosModal />}
             {filter && (
               <Link
                 href={buildCochesHref(undefined, q)}
