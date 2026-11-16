@@ -32,4 +32,4 @@ Esta especificación retrospectiva describe la consulta, carga y eliminación de
 - [NECESITA ACLARACIÓN] ¿Qué flujo de carga/eliminación está vigente y qué tipos/tamaños acepta?
 - [NECESITA ACLARACIÓN] ¿Las fotografías se guardan como URLs, rutas de objetos o ambos?
 - [NECESITA ACLARACIÓN] ¿Qué bucket, visibilidad y políticas RLS/Storage están desplegados?
-- [NECESITA ACLARACIÓN] La interfaz solo ofrece carga y eliminación a administradores (017), pero el acceso a Storage se hace con el cliente anónimo desde el navegador. ¿Qué protección de servidor/Storage se requiere? Pendiente de la spec de `/api` y Storage.
+- [NECESITA ACLARACIÓN] La interfaz solo ofrece carga y eliminación a administradores (017), pero el acceso a Storage se hace con el cliente anónimo desde el navegador. ¿Qué protección de servidor/Storage se requiere? Pendiente de la spec 019.
