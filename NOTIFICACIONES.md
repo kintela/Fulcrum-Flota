@@ -31,8 +31,9 @@ GRAPH_FROM_EMAIL=flota@fulcrum.es
 # Destinatario de la prueba automática (opcional)
 EMAIL_TEST_RECIPIENT=rquintela@fulcrum.es
 
-# Token de seguridad para cron jobs
-CRON_SECRET_TOKEN=genera_un_token_muy_seguro_aqui
+# Secreto de los cron jobs. Vercel lo envía automáticamente como
+# "Authorization: Bearer <CRON_SECRET>" a los crons de vercel.json.
+CRON_SECRET=genera_un_secreto_muy_seguro_aqui
 ```
 
 ### 2. Configuración de Microsoft Graph
@@ -87,22 +88,27 @@ npm install node-cron @types/node-cron
 Accede a `/admin` para:
 
 - ✅ **Probar configuración** de email
-- ✅ **Ejecutar verificaciones** manualmente
+- ✅ **Ejecutar verificaciones** manualmente (solo administradores)
 - ✅ **Ver estadísticas** del sistema
 - ✅ **Monitorear** el estado general
 
 ### API Endpoints
 
+Los 4 endpoints `/api/cron/*` (`notificaciones`, `activar-reservas-pendientes`, `itv-alertas`, `mantenimiento-alertas`) siguen las mismas reglas:
+
+- **GET** (ejecución programada): solo con el secreto `CRON_SECRET`. Sin él, o con otro valor, responde 401. No se acepta la detección por `User-Agent`.
+- **POST** (ejecución manual desde `/admin`): solo administradores con sesión. Sin sesión, 401; con un usuario no administrador, 403.
+
 #### GET `/api/cron/notificaciones`
-Endpoint para cron jobs automáticos (requiere autenticación)
+Endpoint para cron jobs automáticos (requiere `CRON_SECRET`)
 
 **Headers requeridos:**
 ```
-Authorization: Bearer tu_cron_secret_token
+Authorization: Bearer <CRON_SECRET>
 ```
 
 #### POST `/api/cron/notificaciones`
-Endpoint para ejecución manual
+Endpoint para ejecución manual (solo administradores con sesión)
 
 **Acciones disponibles:**
 ```json
@@ -112,30 +118,16 @@ Endpoint para ejecución manual
 
 ## Programación Automática
 
-### Desarrollo Local
+### Producción (Vercel Cron)
 
-El sistema incluye un scheduler que se ejecuta automáticamente:
+Los procesos se programan en `vercel.json` (cada 30 minutos). Vercel envía la cabecera `Authorization: Bearer <CRON_SECRET>` solo si existe la variable de entorno `CRON_SECRET` en el proyecto.
 
-```typescript
-// En tu servidor de desarrollo
-import { iniciarCronJob } from '@/lib/scheduler'
+### Desarrollo local
 
-// Inicia el sistema de notificaciones
-iniciarCronJob()
-```
-
-### Horarios Programados
-
-- **Cada hora** (minuto 0): Verificación general
-- **Cada 15 minutos** (8:00-20:00, L-V): Verificación intensiva en horario laboral
-
-### Producción
-
-Para producción, configura un cron job externo que llame al endpoint:
+No hay scheduler local. Para lanzar un proceso a mano se usan los botones de `/admin` (como administrador) o una llamada con el secreto:
 
 ```bash
-# Cada hora
-0 * * * * curl -H "Authorization: Bearer tu_token" https://tu-dominio.com/api/cron/notificaciones
+curl -H "Authorization: Bearer <CRON_SECRET>" http://localhost:3000/api/cron/notificaciones
 ```
 
 ## Estructura del Sistema
@@ -143,7 +135,7 @@ Para producción, configura un cron job externo que llame al endpoint:
 ```
 lib/
 ├── email.ts                 # Sistema de email con Office 365
-├── scheduler.ts             # Programador de tareas automáticas
+├── cron-auth.ts             # Validación del secreto CRON_SECRET
 
 app/
 ├── actions/
@@ -189,8 +181,8 @@ scripts/
 - Revisa que la autenticación de dos factores esté habilitada
 
 ### Cron jobs no se ejecutan
-- Verifica que `CRON_SECRET_TOKEN` esté configurado
-- Confirma que el servidor esté corriendo continuamente
+- Verifica que la variable `CRON_SECRET` exista en Vercel (con otro nombre, Vercel no envía la cabecera y los crons responden 401)
+- Revisa en los logs de Vercel la respuesta de cada cron
 - Revisa los logs del sistema para errores
 
 ### Emails no se envían

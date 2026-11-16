@@ -4,6 +4,7 @@
 
 import { getServerSession } from "next-auth/next"
 import { redirect } from "next/navigation"
+import { NextResponse } from "next/server"
 import { authOptions } from "@/lib/auth"
 import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { esRolAdministrador } from "@/lib/user-role"
@@ -87,8 +88,9 @@ function idAsignado(asignadoa: unknown): number | null {
 }
 
 /**
- * RF-8: el usuario está relacionado con el coche si (a) se le ha asignado de forma
- * permanente (`coches.asignadoa` es su id) o (b) tiene una reserva temporal activa.
+ * Spec 018 (RF-18, sustituye a 017 RF-8): el usuario está relacionado con el coche si (a) se le
+ * ha asignado de forma permanente (`coches.asignadoa` es su id) o (b) tiene una reserva temporal
+ * activa o vencida (terminada pero aún sin completar: todavía tiene el coche).
  * La matrícula se compara con el mismo valor que usa la ficha, sin normalizar.
  */
 export async function estaRelacionadoConCoche(empleadoId: number, matricula: string): Promise<boolean> {
@@ -109,7 +111,7 @@ export async function estaRelacionadoConCoche(empleadoId: number, matricula: str
     .select("id")
     .eq("matricula", matricula)
     .eq("empleado_id", empleadoId)
-    .eq("estado", "activa")
+    .in("estado", ["activa", "vencida"])
     .limit(1)
 
   if (reservasError) {
@@ -138,4 +140,9 @@ export async function autorizarLecturaCoche(matricula: string): Promise<Resultad
   }
 
   return { ok: false, error: ERROR_NO_AUTORIZADO }
+}
+
+/** Respuesta HTTP de un endpoint /api rechazado (spec 018, RF-16): 401 sin sesión, 403 sin permiso. */
+export function respuestaRechazoApi(error: string): NextResponse {
+  return NextResponse.json({ error }, { status: error === ERROR_NO_AUTENTICADO ? 401 : 403 })
 }

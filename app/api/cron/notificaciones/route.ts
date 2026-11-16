@@ -4,31 +4,24 @@ import { probarConfiguracionEmail, enviarEmailPrueba } from '@/lib/email'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import { obtenerEmpleadoPorEmail } from '@/lib/roles'
+import { esPeticionCronAutorizada } from '@/lib/cron-auth'
+import { autorizarAdmin, respuestaRechazoApi } from '@/lib/autorizacion'
 
 export async function GET(request: NextRequest) {
   try {
-    // Verificar autorización: puede ser nuestro token o headers de Vercel Cron
-  const authHeader = request.headers.get('authorization')
-    const userAgent = request.headers.get('user-agent')
-    
-    const expectedToken = process.env.CRON_SECRET_TOKEN
-    const isVercelCron = userAgent?.includes('vercel-cron') || 
-                        request.headers.get('x-vercel-cron') === '1'
-    
-    // Permitir si es Vercel Cron o si tiene nuestro token
-    if (!isVercelCron && (!expectedToken || authHeader !== `Bearer ${expectedToken}`)) {
+    // Spec 018 (RF-4 a RF-6): solo Vercel Cron con Authorization: Bearer <CRON_SECRET>.
+    if (!esPeticionCronAutorizada(request)) {
       return NextResponse.json(
         { 
           error: 'No autorizado',
-          timestamp: new Date().toISOString(),
-          source: isVercelCron ? 'vercel-cron' : 'manual'
+          timestamp: new Date().toISOString()
         }, 
         { status: 401 }
       )
     }
 
     console.log('🚀 Iniciando verificación programada de reservas vencidas')
-    console.log(`📍 Fuente: ${isVercelCron ? 'Vercel Cron' : 'Manual/Local'}`)
+    console.log('📍 Fuente: Vercel Cron')
     
     // Verificar configuración de email
     const emailConfig = await probarConfiguracionEmail()
@@ -54,7 +47,7 @@ export async function GET(request: NextRequest) {
         erroresEnvio: resultado.erroresEnvio || 0
       },
       timestamp: new Date().toISOString(),
-      source: isVercelCron ? 'cron' : 'manual'
+      source: 'cron'
     }, { headers: { 'Cache-Control': 'no-store' } })
 
   } catch (error) {
@@ -69,8 +62,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // Spec 018 (RF-7, RF-8): la ejecución manual es solo para administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return respuestaRechazoApi(acceso.error)
+
   try {
-    // Permitir ejecución manual desde la interfaz (requiere autenticación)
     const body = await request.json()
     
     if (body.action === 'test') {
