@@ -2,6 +2,7 @@
 
 import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { revalidatePath } from "next/cache"
+import { autorizarAdmin } from "@/lib/autorizacion"
 
 interface CocheData {
   matricula: string
@@ -29,6 +30,10 @@ interface CocheData {
 }
 
 export async function crearCoche(formData: FormData) {
+  // Spec 017: solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return { success: false, error: acceso.error }
+
   try {
     const matricula = formData.get("matricula") as string
     const marca = formData.get("marca") as string

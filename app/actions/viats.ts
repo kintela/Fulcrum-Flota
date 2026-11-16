@@ -2,12 +2,17 @@
 
 import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { revalidatePath } from "next/cache"
+import { autorizarAdmin, autorizarLecturaCoche } from "@/lib/autorizacion"
 
 function normalizarMatricula(matricula: string) {
   return matricula.trim().toUpperCase()
 }
 
 export async function obtenerTarjetasViat(matricula?: string | null) {
+  // Spec 017: solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) throw new Error(acceso.error)
+
   try {
     const matriculaNormalizada = normalizarMatricula(matricula || "")
     const { data, error } = await supabase.from("viats").select("*").eq("activo", true).order("id", { ascending: true })
@@ -53,6 +58,10 @@ export async function obtenerTarjetasViat(matricula?: string | null) {
 }
 
 export async function obtenerTarjetaViatAsignada(matricula: string) {
+  // Spec 017: administrador o usuario relacionado con el coche.
+  const acceso = await autorizarLecturaCoche(matricula)
+  if (!acceso.ok) return null
+
   try {
     const matriculaNormalizada = normalizarMatricula(matricula || "")
     if (!matriculaNormalizada) return null
@@ -84,6 +93,10 @@ export async function obtenerTarjetaViatAsignada(matricula: string) {
 }
 
 export async function asignarTarjetaViat(matricula: string, viatId: string, observaciones?: string) {
+  // Spec 017: solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return { success: false, error: acceso.error }
+
   try {
     const matriculaNormalizada = normalizarMatricula(matricula || "")
     const viatIdNormalizado = (viatId || "").trim()
@@ -238,6 +251,10 @@ export async function asignarTarjetaViat(matricula: string, viatId: string, obse
 }
 
 export async function desasignarTarjetaViat(matricula: string) {
+  // Spec 017: solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return { success: false, error: acceso.error }
+
   try {
     const matriculaNormalizada = normalizarMatricula(matricula || "")
     if (!matriculaNormalizada) {
@@ -281,6 +298,10 @@ export async function desasignarTarjetaViat(matricula: string) {
 }
 
 export async function crearTarjetaViat(numeroTarjeta: string, fechaCaducidad: string) {
+  // Spec 017: solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return { success: false, error: acceso.error }
+
   try {
     // Validar número de tarjeta
     if (!numeroTarjeta) {
@@ -372,6 +393,10 @@ export async function crearTarjetaViat(numeroTarjeta: string, fechaCaducidad: st
 }
 
 export async function obtenerHistorialViatCoche(matricula: string) {
+  // Spec 017: administrador o usuario relacionado con el coche.
+  const acceso = await autorizarLecturaCoche(matricula)
+  if (!acceso.ok) return []
+
   try {
     const matriculaNormalizada = normalizarMatricula(matricula || "")
     if (!matriculaNormalizada) return []

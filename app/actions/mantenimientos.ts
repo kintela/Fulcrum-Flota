@@ -1,8 +1,13 @@
 "use server"
 
 import { supabaseServer as supabase } from "@/lib/supabase-server"
+import { autorizarAdmin, autorizarLecturaCoche } from "@/lib/autorizacion"
 
 export async function obtenerMantenimientosPorMatricula(matricula: string) {
+  // Spec 017: administrador o usuario relacionado con el coche.
+  const acceso = await autorizarLecturaCoche(matricula)
+  if (!acceso.ok) return { success: false, error: acceso.error }
+
   try {
     const { data, error } = await supabase
       .from("mantenimientos")
@@ -23,6 +28,10 @@ export async function obtenerMantenimientosPorMatricula(matricula: string) {
 }
 
 export async function crearMantenimiento(formData: FormData) {
+  // Spec 017: solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return { success: false, error: acceso.error }
+
   try {
     const matricula = (formData.get("matricula") as string) || ""
     const fecha_mantenimiento = (formData.get("fecha_mantenimiento") as string) || ""
@@ -75,6 +84,10 @@ export async function crearMantenimiento(formData: FormData) {
 }
 
 export async function actualizarMantenimiento(id: number, formData: FormData) {
+  // Spec 017: solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return { success: false, error: acceso.error }
+
   try {
     const fecha_mantenimiento = (formData.get("fecha_mantenimiento") as string) || ""
     const fecha_proximo = (formData.get("fecha_proximo") as string) || ""
@@ -117,6 +130,10 @@ export async function actualizarMantenimiento(id: number, formData: FormData) {
 }
 
 export async function eliminarMantenimiento(id: number) {
+  // Spec 017: solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return { success: false, error: acceso.error }
+
   try {
     const { error } = await supabase.from("mantenimientos").delete().eq("id", id)
 

@@ -1,15 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Archive, Car, Plus, Filter, Users, Calendar, AlertTriangle, Clock, CreditCard, Truck, Search } from "lucide-react"
 import Link from "next/link"
-import { getServerSession } from "next-auth/next"
 import { supabaseServer as supabase } from "@/lib/supabase-server"
-import { authOptions } from "@/lib/auth"
 import { obtenerFotosCoche } from "@/lib/storage"
 import { CarThumbnail } from "@/components/car-thumbnail"
 import { DeleteCocheButton } from "@/components/delete-coche-button"
 import { RestoreCocheButton } from "@/components/restore-coche-button"
 import { coincideBusquedaLibre } from "@/lib/coches-busqueda"
-import { esAdministradorPorSesion } from "@/lib/roles"
+import { requerirAdminPagina } from "@/lib/autorizacion"
 import { ListadoVencimientosModal } from "@/components/listado-vencimientos-modal"
 
 // Tipo para los parámetros de búsqueda
@@ -269,13 +267,15 @@ async function getCoches(userEmail?: string, filter?: string, q?: string) {
 }
 
 export default async function CochesPage({ searchParams }: { searchParams: SearchParams }) {
-  const session = await getServerSession(authOptions)
-  const userEmail = String(session?.user?.email || "")
+  // Spec 017: solo administradores (redirige con aviso si no lo es).
+  const ctx = await requerirAdminPagina()
+  const userEmail = ctx.email
 
   // Obtener el filtro de los parámetros de búsqueda
   const filter = searchParams.filter
   const q = searchParams.q?.trim() || ""
-  const [coches, esAdmin] = await Promise.all([getCoches(userEmail, filter, q), esAdministradorPorSesion(session)])
+  const coches = await getCoches(userEmail, filter, q)
+  const esAdmin = ctx.esAdmin
   const hasSearch = q.length > 0
 
   // Determinar el título según el filtro

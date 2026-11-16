@@ -3,8 +3,13 @@
 import { supabaseServer as supabase } from "@/lib/supabase-server"
 import { esRolAdministrador, normalizarRolUsuario } from "@/lib/user-role"
 import { revalidatePath } from "next/cache"
+import { autorizarAdmin } from "@/lib/autorizacion"
 
 export async function editarEmpleado(id: number, formData: FormData) {
+  // Spec 017: solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return { success: false, error: acceso.error }
+
   try {
     // Validar que el ID sea un número válido
     if (isNaN(id)) {
@@ -116,6 +121,10 @@ export async function editarEmpleado(id: number, formData: FormData) {
 }
 
 export async function obtenerEmpleado(id: number) {
+  // Spec 017: solo administradores.
+  const acceso = await autorizarAdmin()
+  if (!acceso.ok) return null
+
   if (isNaN(id)) {
     return null
   }

@@ -7,6 +7,7 @@ El repositorio es **Fulcrum Flota**, aplicación web existente para gestionar ve
 ## Estado funcional actual
 
 - **Acceso e identidad:** inicio de sesión corporativo mediante Azure AD/NextAuth. En callbacks se consulta o registra automáticamente un empleado a partir del email. La aplicación maneja roles `usuario` y `administrador`.
+- **Autorización (spec 017):** las páginas de gestión (`/coches` y su alta y edición, `/empleados/*`, `/reservas`, `/admin`, `/diagnostico`, `/analisis`, `/tarjetas`) son solo de administrador; quien no lo es vuelve al dashboard con el aviso "No tienes permiso para acceder a esa página". Un usuario solo ve en solo lectura la ficha de sus coches (asignados o con reserva activa). Las Server Actions de gestión rechazan sin sesión o sin rol; las de reservas, ubicación, liberar coche, ficha resumida de "Mis reservas" y las de cron no cambian.
 - **Flota:** consulta, alta, edición, detalle, búsqueda y actualización de coches; existen asignaciones permanentes y ubicaciones. Los administradores tienen en `/coches` un modal "Listados" con los vencimientos de seguro activo, tarjeta Solred e ITV de la flota activa (sin donantes), con filtro por alquiler, búsqueda, ordenación y resaltado de fechas vencidas o próximas (spec 016).
 - **Reservas:** creación y gestión de reservas temporales, estados activa/completada/cancelada, reservas pendientes y activación programada. Hay vistas de reservas y análisis con información de uso/feedback.
 - **Empleados:** listado, alta, edición y detalle; existen operaciones de administración y estado de bloqueo.
@@ -18,7 +19,7 @@ El repositorio es **Fulcrum Flota**, aplicación web existente para gestionar ve
 
 - Next.js 14.2.16 (App Router), React 18, TypeScript 5 y Tailwind CSS 3 según `package.json`; `tsconfig.json` tiene `strict: true`.
 - Páginas y layouts en `app/`; componentes en `components/`; lógica e integraciones en `lib/`; Server Actions en `app/actions/` y junto a algunas rutas; API Route Handlers en `app/api/`.
-- NextAuth 4 con sesión JWT y proveedor Azure AD; middleware en `middleware.ts`. No se encontró Supabase Auth. El middleware deja pasar rutas de auth, cron, debug y public, y varias acciones implementan comprobaciones de sesión/rol por separado; verificar autorización en el punto concreto antes de cambiarlo.
+- NextAuth 4 con sesión JWT y proveedor Azure AD; middleware en `middleware.ts` (solo exige sesión). No se encontró Supabase Auth. El middleware deja pasar rutas de auth, cron, debug y public. La autorización por rol se centraliza en `lib/autorizacion.ts` (`requerirAdminPagina`, `autorizarAdmin`, `autorizarLecturaCoche`), que lee el rol vigente de `empleados` en cada petición; las páginas cliente de gestión se protegen con un `layout.tsx` de servidor en su segmento.
 - Supabase/PostgreSQL accedido con `@supabase/supabase-js`: cliente con clave anónima en `lib/supabase.ts` y cliente servidor con service role en `lib/supabase-server.ts`. El uso real de service role implica acceso privilegiado en servidor.
 - Storage de Supabase se utiliza para fotos y documentos. La configuración de buckets se describe en scripts SQL, pero el estado remoto no es verificable.
 - Despliegue configurado para Vercel en `vercel.json`, que declara cron jobs de notificaciones y activación de reservas cada 30 minutos.
@@ -51,7 +52,7 @@ Un SQL de creación de reservas define restricciones de fechas, claves foráneas
 - No hay tipos generados de Supabase ni evidencia de sincronización automática del esquema con tipos TS.
 - No hay scripts de test/type-check en `package.json`, aunque Jest y TypeScript están disponibles/configurados. `jest.config.js` usa `jest-environment-jsdom`, que no está instalado, y tampoco `@types/jest`: con la configuración por defecto ninguna suite arranca. Las pruebas de lógica funcionan con `--testEnvironment=node` (por ejemplo, las de la spec 016). El build omite sus errores de lint y TS; deben ejecutarse validaciones aparte.
 - No se encontró configuración de CI en los archivos inspeccionados. Esto no descarta automatizaciones externas al repositorio.
-- Hay rutas `api/public`, `api/debug` y `api/test`, y excepciones de middleware relacionadas; su exposición/uso y configuración de entorno deben verificarse antes de cambios de seguridad.
+- Los endpoints `/api` no tienen control de rol: hay rutas `api/public`, `api/debug`, `api/test` y `api/diagnostico` (algunas invocan procesos de notificación y activación de reservas) y excepciones de middleware relacionadas, además de `/api/itv-documentos`. Las fotos se leen y suben desde el navegador con el cliente Supabase anónimo. Su protección queda para una spec posterior.
 - No se encontraron `README.md`, `MEMORY.md` (antes de esta creación) ni especificaciones en `specs/`. Tampoco `supabase/`, `supabase/config.toml`, `supabase/migrations/`, `proxy.ts`, `next.config.ts` ni `eslint.config.mjs`; la ausencia en este checkout no prueba que no existan recursos externos.
 
 ## Trabajo en curso
