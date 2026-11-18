@@ -77,6 +77,7 @@ El acceso a las fotos en Storage queda fuera (inicialmente previsto como spec 01
 - Reserva vencida (terminada pero sin completar): el usuario puede ubicar el coche y ver su ficha hasta que la complete (RF-18).
 - Reserva pendiente (aún no empezada): no da relación; el usuario no puede reubicar ese coche ni ver su ficha por esa reserva.
 - Reserva completada o cancelada: no da relación.
+- Usuario con varios registros en `empleados` con el mismo email (o cuyo id de sesión no coincide con el del registro encontrado por email): cuenta la asignación o reserva de cualquiera de esos registros, con el mismo criterio que "Mis reservas" (aclaración del 2026-11-18, tras un fallo en producción: el mapa permitía arrastrar el coche y el servidor lo rechazaba).
 - Ejecución programada y manual simultáneas del mismo proceso: se comportan como hoy; la idempotencia no cambia en esta spec.
 
 ## Fuera de alcance

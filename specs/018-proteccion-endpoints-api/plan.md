@@ -126,3 +126,12 @@ Se quitan las ramas de `/api/cron`, `/api/debug` y `/api/public` de la función 
 
 ## 10. Tareas
 El desglose en tareas (T1–T12), con sus RF, su "Hecho cuando:" y su estado `[x]`/`[ ]`, está en [`tasks.md`](tasks.md), que es la única fuente del estado de implementación.
+
+## 12. Corrección del 2026-11-18: usuario con varios registros de empleado
+**Fallo en producción:** un usuario con una reserva activa no podía reubicar su coche en el mapa. El marcador volvía a su sitio y aparecía "No autorizado". El módulo de reservas (`obtenerEmpleadosSesion` en `app/actions/reservas-temporales.ts`) admite que un usuario tenga varios registros en `empleados` con el mismo email, más el `empleadoId` de la sesión, y busca sus reservas en todos ellos. `lib/autorizacion.ts` solo usaba el primer registro encontrado.
+
+**Corrección** (`lib/autorizacion.ts`):
+- `obtenerContexto` reúne los mismos candidatos que `obtenerEmpleadosSesion`: coincidencia exacta normalizada sobre `ilike`; si no hay ninguna, recorrido completo de `empleados`; y el `empleadoId` de la sesión. Devuelve `empleadoIds` (todos) y `empleadoId` (el principal: el de la sesión si está entre los candidatos y, si no, el de menor id). El rol (`esAdmin`) es el del principal, igual que el principal de reservas.
+- `estaRelacionadoConCoche` recibe todos los ids: `asignadoa` en cualquiera de ellos, y reservas con `.in("empleado_id", ids)`.
+
+También se comentan los `console.log` del arrastre en `components/mapa-coches.tsx`, como ya están los demás logs de depuración de ese archivo.

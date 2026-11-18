@@ -86,6 +86,7 @@ describe("obtenerContexto (RF-4)", () => {
       autenticado: true,
       email: "admin@fulcrum.es",
       empleadoId: 1,
+      empleadoIds: [1],
       esAdmin: true,
     })
     expect(consultas[0].filtros).toContainEqual(["ilike", "email", "admin@fulcrum.es"])
@@ -191,7 +192,9 @@ describe("autorizarLecturaCoche (RF-8, RF-13)", () => {
           ((f[0] === "eq" && f[2] === estadoReserva) ||
             (f[0] === "in" && Array.isArray(f[2]) && (f[2] as unknown[]).includes(estadoReserva))),
       )
-      const delEmpleado = filtros.some((f) => f[0] === "eq" && f[1] === "empleado_id" && f[2] === 3)
+      const delEmpleado = filtros.some(
+        (f) => f[1] === "empleado_id" && ((f[0] === "eq" && f[2] === 3) || (f[0] === "in" && (f[2] as number[]).includes(3))),
+      )
       return { data: casaEstado && delEmpleado ? [{ id: 10 }] : [], error: null }
     }
   const reservaActiva = reservaEnEstado("activa")
@@ -298,6 +301,116 @@ describe("autorizarLecturaCoche (RF-8, RF-13)", () => {
     sesion("x@fulcrum.es")
     const consultas = configurarTablas({ empleados: { data: [], error: null } })
     await expect(autorizarLecturaCoche("1111-AAA")).resolves.toEqual({ ok: false, error: "No autorizado" })
-    expect(consultas.map((c) => c.tabla)).toEqual(["empleados"])
+    // Busca en empleados (ilike y recorrido completo) pero no llega a consultar el coche ni reservas.
+    expect(consultas.map((c) => c.tabla).every((t) => t === "empleados")).toBe(true)
+  })
+})
+
+// Corrección del 2026-11-18 (spec 018, casos límite de RF-18): un usuario puede tener varios
+// registros en `empleados` con el mismo email; cuenta la reserva o asignación de cualquiera.
+describe("usuario con varios registros de empleado", () => {
+  type Fila = { id: number; role: string; email: string }
+
+  // Tabla `empleados` simulada: ilike = igualdad sin distinguir mayúsculas (sin recortar espacios,
+  // como la BD); eq id = esa fila; sin filtros = todas.
+  const tablaEmpleados = (filas: Fila[]) => (filtros: unknown[][]): Resultado => {
+    const ilike = filtros.find((f) => f[0] === "ilike")
+    const eqId = filtros.find((f) => f[0] === "eq" && f[1] === "id")
+    if (ilike) {
+      const buscado = String(ilike[2]).toLowerCase()
+      return { data: filas.filter((f) => f.email.toLowerCase() === buscado), error: null }
+    }
+    if (eqId) return { data: filas.find((f) => f.id === eqId[2]) ?? null, error: null }
+    return { data: filas, error: null }
+  }
+
+  const reservaDe = (empleadoIdReserva: number) => (filtros: unknown[][]): Resultado => {
+    const ids = filtros.find((f) => f[0] === "in" && f[1] === "empleado_id")?.[2] as number[] | undefined
+    const estados = filtros.find((f) => f[0] === "in" && f[1] === "estado")?.[2] as string[] | undefined
+    const casa = !!ids?.includes(empleadoIdReserva) && !!estados?.includes("activa")
+    return { data: casa ? [{ id: 10 }] : [], error: null }
+  }
+
+  const sesionCon = (email: string, empleadoId?: number) =>
+    mockSession.mockResolvedValue({ user: { email, empleadoId }, expires: "" } as never)
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it("reserva activa con el segundo registro del mismo email → ok", async () => {
+    sesionCon("ione@fulcrum.es")
+    const consultas = configurarTablas({
+      empleados: tablaEmpleados([
+        { id: 3, role: "usuario", email: "ione@fulcrum.es" },
+        { id: 8, role: "usuario", email: "Ione@Fulcrum.es" },
+      ]),
+      coches: { data: { asignadoa: null }, error: null },
+      reservas: reservaDe(8),
+    })
+    await expect(autorizarLecturaCoche("6869-LMB")).resolves.toMatchObject({ ok: true })
+    const reservas = consultas.find((c) => c.tabla === "reservas")
+    expect(reservas?.filtros).toContainEqual(["in", "empleado_id", [3, 8]])
+  })
+
+  it("coche asignado al segundo registro → ok", async () => {
+    sesionCon("ione@fulcrum.es")
+    configurarTablas({
+      empleados: tablaEmpleados([
+        { id: 3, role: "usuario", email: "ione@fulcrum.es" },
+        { id: 8, role: "usuario", email: "ione@fulcrum.es" },
+      ]),
+      coches: { data: { asignadoa: "8" }, error: null },
+      reservas: { data: [], error: null },
+    })
+    await expect(autorizarLecturaCoche("6869-LMB")).resolves.toMatchObject({ ok: true })
+  })
+
+  it("reserva con el empleadoId de la sesión aunque su email no coincida → ok", async () => {
+    sesionCon("ione@fulcrum.es", 8)
+    configurarTablas({
+      empleados: tablaEmpleados([
+        { id: 3, role: "usuario", email: "ione@fulcrum.es" },
+        { id: 8, role: "usuario", email: "ione.ortega@fulcrum.es" },
+      ]),
+      coches: { data: { asignadoa: null }, error: null },
+      reservas: reservaDe(8),
+    })
+    await expect(autorizarLecturaCoche("6869-LMB")).resolves.toMatchObject({ ok: true })
+  })
+
+  it("email guardado con espacios (ilike no lo encuentra) → se localiza recorriendo la tabla", async () => {
+    sesionCon("ione@fulcrum.es")
+    configurarTablas({
+      empleados: tablaEmpleados([{ id: 3, role: "usuario", email: " ione@fulcrum.es " }]),
+      coches: { data: { asignadoa: null }, error: null },
+      reservas: reservaDe(3),
+    })
+    await expect(obtenerContexto()).resolves.toMatchObject({ empleadoId: 3, empleadoIds: [3] })
+    await expect(autorizarLecturaCoche("6869-LMB")).resolves.toMatchObject({ ok: true })
+  })
+
+  it("reserva de otro empleado distinto → No autorizado", async () => {
+    sesionCon("ione@fulcrum.es")
+    configurarTablas({
+      empleados: tablaEmpleados([{ id: 3, role: "usuario", email: "ione@fulcrum.es" }]),
+      coches: { data: { asignadoa: null }, error: null },
+      reservas: reservaDe(99),
+    })
+    await expect(autorizarLecturaCoche("6869-LMB")).resolves.toEqual({ ok: false, error: "No autorizado" })
+  })
+
+  it("el rol es el del registro principal: el de la sesión o, si no, el de menor id", async () => {
+    const filas = [
+      { id: 8, role: "administrador", email: "x@fulcrum.es" },
+      { id: 3, role: "usuario", email: "x@fulcrum.es" },
+    ]
+    sesionCon("x@fulcrum.es")
+    configurarTablas({ empleados: tablaEmpleados(filas) })
+    await expect(obtenerContexto()).resolves.toMatchObject({ empleadoId: 3, empleadoIds: [3, 8], esAdmin: false })
+
+    sesionCon("x@fulcrum.es", 8)
+    configurarTablas({ empleados: tablaEmpleados(filas) })
+    await expect(obtenerContexto()).resolves.toMatchObject({ empleadoId: 8, empleadoIds: [3, 8], esAdmin: true })
   })
 })

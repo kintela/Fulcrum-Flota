@@ -64,3 +64,9 @@ Comando de pruebas: `npx jest --runInBand --testEnvironment=node __tests__/prote
 - [x] **T12 — Eliminar `notificaciones-v2`** (`app/actions/notificaciones-v2.ts` + `rutas-eliminadas.test.ts`)
   RF: RF-21
   Hecho cuando: el archivo no existe, no queda ninguna referencia y la prueba lo comprueba.
+
+## Corrección del 2026-11-18
+
+- [x] **T13 — Relación con varios registros de empleado del mismo usuario** (`lib/autorizacion.ts` + `__tests__/permisos-admin/autorizacion.test.ts`; logs de arrastre en `components/mapa-coches.tsx`)
+  RF: RF-18 (aclaración en Casos límite)
+  Hecho cuando: las pruebas verifican relación por reserva o asignación de cualquiera de los registros del usuario, por el `empleadoId` de la sesión y por el recorrido completo cuando `ilike` no encuentra el email; el rol es el del registro principal; las suites de 016, 017 y 018 siguen en verde; lint y tsc sin errores nuevos; los logs del arrastre no aparecen en consola.
