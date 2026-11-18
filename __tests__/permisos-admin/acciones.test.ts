@@ -32,7 +32,7 @@ const autorizacion = require("@/lib/autorizacion") as jest.Mocked<typeof Autoriz
 const { supabaseServer } = require("@/lib/supabase-server") as typeof SupabaseServer
 const mockFrom = jest.mocked(supabaseServer.from)
 
-const ctxAdmin = { autenticado: true as const, email: "admin@fulcrum.es", empleadoId: 1, esAdmin: true }
+const ctxAdmin = { autenticado: true as const, email: "admin@fulcrum.es", empleadoId: 1, empleadoIds: [1], esAdmin: true }
 
 function supabaseVacio() {
   mockFrom.mockImplementation((() => {
@@ -292,7 +292,7 @@ describe("Server Actions de ubicación (spec 018, RF-19)", () => {
   it.each(llamadas)("%s: usuario relacionado (incluida reserva vencida) → actualiza", async (_nombre, llamar) => {
     autorizacion.autorizarLecturaCoche.mockResolvedValue({
       ok: true,
-      ctx: { autenticado: true as const, email: "u@fulcrum.es", empleadoId: 3, esAdmin: false },
+      ctx: { autenticado: true as const, email: "u@fulcrum.es", empleadoId: 3, empleadoIds: [3], esAdmin: false },
     })
     await expect(llamar()).resolves.toMatchObject({ success: true })
     expect(mockFrom).toHaveBeenCalledWith("coches")

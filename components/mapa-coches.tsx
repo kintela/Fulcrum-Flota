@@ -636,14 +636,14 @@ const selectedMatriculaRef = useRef<string>("all")
             marker.addListener("dragstart", () => {
               isDragging = true
               originalPosition = marker.getPosition()?.toJSON() || position
-              console.log(`🎯 Iniciando reubicación de ${coche.matricula}`)
+              //console.log(`🎯 Iniciando reubicación de ${coche.matricula}`)
             })
 
             // Durante el arrastre
             marker.addListener("drag", () => {
               const currentPos = marker.getPosition()
               if (currentPos) {
-                console.log(`🔄 Arrastrando ${coche.matricula} a:`, currentPos.toJSON())
+                //console.log(`🔄 Arrastrando ${coche.matricula} a:`, currentPos.toJSON())
               }
             })
 
@@ -664,7 +664,7 @@ const selectedMatriculaRef = useRef<string>("all")
                 return
               }
               
-              console.log(`🎯 Finalizando reubicación de ${coche.matricula} en:`, { lat: newLat, lng: newLng })
+              //console.log(`🎯 Finalizando reubicación de ${coche.matricula} en:`, { lat: newLat, lng: newLng })
               
               try {
                 const resultado = await actualizarUbicacionCoche(coche.matricula, newLat, newLng)
@@ -750,7 +750,7 @@ const selectedMatriculaRef = useRef<string>("all")
 
   // Función para actualizar la ubicación de un vehículo
   const updateVehicleLocation = useCallback(async (matricula: string, lat: number, lng: number) => {
-    console.log(`🎯 Actualizando ubicación de ${matricula} en:`, { lat, lng })
+    //console.log(`🎯 Actualizando ubicación de ${matricula} en:`, { lat, lng })
     setVehicleMessage(`📍 Guardando nueva ubicación para ${matricula}...`)
 
     try {

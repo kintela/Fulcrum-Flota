@@ -26,8 +26,8 @@ const { supabaseServer } = require("@/lib/supabase-server") as {
   supabaseServer: { from: jest.Mock; storage: { from: jest.Mock } }
 }
 
-const ctxAdmin = { autenticado: true as const, email: "admin@fulcrum.es", empleadoId: 1, esAdmin: true }
-const ctxUsuario = { autenticado: true as const, email: "u@fulcrum.es", empleadoId: 3, esAdmin: false }
+const ctxAdmin = { autenticado: true as const, email: "admin@fulcrum.es", empleadoId: 1, empleadoIds: [1], esAdmin: true }
+const ctxUsuario = { autenticado: true as const, email: "u@fulcrum.es", empleadoId: 3, empleadoIds: [3], esAdmin: false }
 
 // Storage simulado: registra operaciones.
 const storage = {

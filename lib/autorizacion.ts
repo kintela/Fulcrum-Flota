@@ -16,7 +16,15 @@ export const ERROR_NO_AUTORIZADO = "No autorizado"
 
 export type ContextoAutorizacion =
   | { autenticado: false }
-  | { autenticado: true; email: string; empleadoId: number | null; esAdmin: boolean }
+  | {
+      autenticado: true
+      email: string
+      /** Registro principal: el de la sesión si está entre los candidatos; si no, el de menor id. */
+      empleadoId: number | null
+      /** Todos los registros de `empleados` del usuario (mismo email y/o id de la sesión). */
+      empleadoIds: number[]
+      esAdmin: boolean
+    }
 
 export type ContextoAutenticado = Extract<ContextoAutorizacion, { autenticado: true }>
 
@@ -24,43 +32,83 @@ export type ResultadoAutorizacion =
   | { ok: true; ctx: ContextoAutenticado }
   | { ok: false; error: typeof ERROR_NO_AUTENTICADO | typeof ERROR_NO_AUTORIZADO }
 
+type FilaEmpleado = { id: number | string | null; role: unknown; email?: unknown }
+
+function normalizarEmail(value: unknown): string {
+  return String(value ?? "").trim().toLowerCase()
+}
+
+/**
+ * Registros de `empleados` del usuario, con el mismo criterio que `obtenerEmpleadosSesion`
+ * (app/actions/reservas-temporales.ts), para que la autorización vea las mismas reservas que
+ * "Mis reservas" (spec 018, corrección del 2026-11-18):
+ * - coincidencia exacta normalizada sobre una búsqueda `ilike` por email;
+ * - si no hay ninguna (p. ej. email guardado con espacios), recorrido completo de la tabla;
+ * - el `empleadoId` de la sesión, aunque su email no coincida.
+ */
+async function obtenerEmpleadosDelUsuario(email: string, empleadoIdSesion: number | null): Promise<FilaEmpleado[]> {
+  const { data, error } = await supabase.from("empleados").select("id, role, email").ilike("email", email)
+  if (error) throw error
+
+  let candidatos = ((data ?? []) as FilaEmpleado[]).filter((fila) => normalizarEmail(fila.email) === email)
+
+  if (candidatos.length === 0) {
+    const { data: todos, error: todosError } = await supabase.from("empleados").select("id, role, email")
+    if (todosError) throw todosError
+    candidatos = ((todos ?? []) as FilaEmpleado[]).filter((fila) => normalizarEmail(fila.email) === email)
+  }
+
+  if (empleadoIdSesion !== null && !candidatos.some((fila) => Number(fila.id) === empleadoIdSesion)) {
+    const { data: filaSesion } = await supabase
+      .from("empleados")
+      .select("id, role, email")
+      .eq("id", empleadoIdSesion)
+      .maybeSingle()
+    if (filaSesion) candidatos.push(filaSesion as FilaEmpleado)
+  }
+
+  return candidatos
+}
+
 /**
  * Resuelve la sesión y el rol vigente del empleado consultando `empleados` en cada
  * llamada (RF-4): no se usa el rol guardado en el JWT, que no se refresca.
  */
 export async function obtenerContexto(): Promise<ContextoAutorizacion> {
   const session = await getServerSession(authOptions)
-  const email = String(session?.user?.email || "").trim().toLowerCase()
+  const email = normalizarEmail(session?.user?.email)
 
   if (!email) {
     return { autenticado: false }
   }
 
+  const idSesion = Number((session?.user as { empleadoId?: unknown } | undefined)?.empleadoId)
+  const empleadoIdSesion = Number.isInteger(idSesion) ? idSesion : null
+
   try {
-    // Búsqueda sin distinguir mayúsculas (los emails guardados pueden no estar normalizados)
-    // y comparación exacta posterior para que `_` o `%` de ilike no casen con otro email.
-    const { data, error } = await supabase.from("empleados").select("id, role, email").ilike("email", email)
+    const filas = (await obtenerEmpleadosDelUsuario(email, empleadoIdSesion))
+      .map((fila) => ({ ...fila, id: Number(fila.id) }))
+      .filter((fila) => Number.isInteger(fila.id))
 
-    const empleado = (Array.isArray(data) ? data : []).find(
-      (fila: { email?: unknown }) => String(fila.email ?? "").trim().toLowerCase() === email,
-    ) as { id: number | string | null; role: unknown } | undefined
+    const porId = new Map(filas.map((fila) => [fila.id, fila]))
+    const empleadoIds = Array.from(porId.keys()).sort((a, b) => a - b)
 
-    if (error || !empleado) {
-      if (error) console.error("Error al obtener el rol del empleado:", error)
-      return { autenticado: true, email, empleadoId: null, esAdmin: false }
+    if (empleadoIds.length === 0) {
+      return { autenticado: true, email, empleadoId: null, empleadoIds: [], esAdmin: false }
     }
 
-    const empleadoId = Number(empleado.id)
+    const empleadoId = empleadoIdSesion !== null && porId.has(empleadoIdSesion) ? empleadoIdSesion : empleadoIds[0]
 
     return {
       autenticado: true,
       email,
-      empleadoId: Number.isFinite(empleadoId) ? empleadoId : null,
-      esAdmin: esRolAdministrador(empleado.role),
+      empleadoId,
+      empleadoIds,
+      esAdmin: esRolAdministrador(porId.get(empleadoId)?.role),
     }
   } catch (error) {
     console.error("Error en obtenerContexto:", error)
-    return { autenticado: true, email, empleadoId: null, esAdmin: false }
+    return { autenticado: true, email, empleadoId: null, empleadoIds: [], esAdmin: false }
   }
 }
 
@@ -93,7 +141,9 @@ function idAsignado(asignadoa: unknown): number | null {
  * activa o vencida (terminada pero aún sin completar: todavía tiene el coche).
  * La matrícula se compara con el mismo valor que usa la ficha, sin normalizar.
  */
-export async function estaRelacionadoConCoche(empleadoId: number, matricula: string): Promise<boolean> {
+export async function estaRelacionadoConCoche(empleadoIds: number[], matricula: string): Promise<boolean> {
+  if (empleadoIds.length === 0) return false
+
   const { data: coche, error: cocheError } = await supabase
     .from("coches")
     .select("asignadoa")
@@ -102,15 +152,16 @@ export async function estaRelacionadoConCoche(empleadoId: number, matricula: str
 
   if (cocheError) {
     console.error("Error al comprobar la asignación del coche:", cocheError)
-  } else if (coche && idAsignado((coche as { asignadoa: unknown }).asignadoa) === empleadoId) {
-    return true
+  } else if (coche) {
+    const asignado = idAsignado((coche as { asignadoa: unknown }).asignadoa)
+    if (asignado !== null && empleadoIds.includes(asignado)) return true
   }
 
   const { data: reservas, error: reservasError } = await supabase
     .from("reservas")
     .select("id")
     .eq("matricula", matricula)
-    .eq("empleado_id", empleadoId)
+    .in("empleado_id", empleadoIds)
     .in("estado", ["activa", "vencida"])
     .limit(1)
 
@@ -129,10 +180,10 @@ export async function autorizarLecturaCoche(matricula: string): Promise<Resultad
   if (ctx.esAdmin) return { ok: true, ctx }
 
   const matriculaTexto = String(matricula ?? "")
-  if (ctx.empleadoId === null || !matriculaTexto) return { ok: false, error: ERROR_NO_AUTORIZADO }
+  if (ctx.empleadoIds.length === 0 || !matriculaTexto) return { ok: false, error: ERROR_NO_AUTORIZADO }
 
   try {
-    if (await estaRelacionadoConCoche(ctx.empleadoId, matriculaTexto)) {
+    if (await estaRelacionadoConCoche(ctx.empleadoIds, matriculaTexto)) {
       return { ok: true, ctx }
     }
   } catch (error) {
