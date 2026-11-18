@@ -73,7 +73,7 @@ function post(nombre: string, body: unknown) {
   })
 }
 
-const ctxAdmin = { autenticado: true as const, email: "admin@fulcrum.es", empleadoId: 1, esAdmin: true }
+const ctxAdmin = { autenticado: true as const, email: "admin@fulcrum.es", empleadoId: 1, empleadoIds: [1], esAdmin: true }
 
 beforeEach(() => {
   jest.clearAllMocks()

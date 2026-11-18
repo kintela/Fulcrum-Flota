@@ -35,7 +35,7 @@ const autorizacion = require("@/lib/autorizacion") as jest.Mocked<typeof Autoriz
 const { supabaseServer } = require("@/lib/supabase-server") as typeof SupabaseServer
 const mockFrom = jest.mocked(supabaseServer.from)
 
-const ctxAdmin = { autenticado: true as const, email: "admin@fulcrum.es", empleadoId: 1, esAdmin: true }
+const ctxAdmin = { autenticado: true as const, email: "admin@fulcrum.es", empleadoId: 1, empleadoIds: [1], esAdmin: true }
 
 function comoUsuario() {
   autorizacion.requerirAdminPagina.mockImplementation(async () => {
@@ -180,7 +180,7 @@ function supabaseConCoche(coche: Record<string, unknown> | null) {
 describe("ficha de coche /coches/detalle/[id] (RF-6, RF-7, RF-9)", () => {
   const cargarFicha = () => require("@/app/coches/detalle/[id]/page").default as Pagina
   const coche = { matricula: "1111-AAA", marca: "Seat", modelo: "León", asignadoa: 3, eliminado: false }
-  const ctxUsuario = { autenticado: true as const, email: "u@fulcrum.es", empleadoId: 3, esAdmin: false }
+  const ctxUsuario = { autenticado: true as const, email: "u@fulcrum.es", empleadoId: 3, empleadoIds: [3], esAdmin: false }
 
   beforeEach(() => {
     jest.clearAllMocks()
